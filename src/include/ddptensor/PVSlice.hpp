@@ -1,0 +1,263 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include "NDSlice.hpp"
+#include "Transceiver.hpp"  // rank_type
+
+using offsets_type = std::vector<uint64_t>;
+
+class BasePVSlice
+{
+    uint64_t   _offset;
+    shape_type _shape;
+    int        _split_dim;
+
+public:
+    BasePVSlice() = delete;
+    BasePVSlice(const BasePVSlice &) = delete;
+    BasePVSlice(BasePVSlice &&) = default;
+    BasePVSlice(const shape_type & shape, int split=0)
+        : _offset((shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+          _shape(shape),
+          _split_dim(split)
+    {
+    }
+    BasePVSlice(shape_type && shape, int split=0)
+        : _offset((shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+          _shape(std::move(shape)),
+          _split_dim(split)
+    {
+    }
+
+    uint64_t offset() const { return _offset; }
+    int split_dim() const { return _split_dim; }
+    const shape_type & shape() const { return _shape; }
+    shape_type shape(rank_type rank) const
+    {
+        shape_type shp(_shape);
+        auto end = (rank+1) * _offset;
+        if(end <= _shape[_split_dim]) shp[_split_dim] = _offset;
+        else shp[_split_dim] = end - _shape[_split_dim];
+        return shp;
+    }
+    rank_type owner(const NDSlice & slice) const
+    {
+        return slice.dim(split_dim()).start_ / offset();
+    }
+};
+
+using BasePVSlicePtr = std::shared_ptr<BasePVSlice>;
+
+class PVSlice
+{
+    NDSlice     _slice;  // must go before _base
+    BasePVSlicePtr _base;   
+    mutable shape_type  _shape;
+
+public:
+    PVSlice() = delete;
+    PVSlice(const PVSlice &) = default;
+    PVSlice(PVSlice &&) = default;
+    PVSlice(const shape_type & shp, int split=0)
+        : _slice(shp),
+          _base(std::make_shared<BasePVSlice>(shp, split)),
+          _shape()
+    {
+    }
+
+    PVSlice(shape_type && shp, int split=0)
+        : _slice(shp), // std::move in next line
+          _base(std::make_shared<BasePVSlice>(std::move(shp), split)),
+          _shape()
+    {
+    }
+
+    PVSlice(const shape_type & shp, const NDSlice & slc, int split=0)
+        : _slice(slc),
+          _base(std::make_shared<BasePVSlice>(shp, split)),
+          _shape()
+    {
+    }
+
+    PVSlice(shape_type && shp, NDSlice && slc, int split=0)
+        : _slice(std::move(slc)),
+          _base(std::make_shared<BasePVSlice>(std::move(shp), split)),
+          _shape()
+    {
+    }
+
+    PVSlice(const PVSlice & org, const NDSlice & slice)
+        : _slice(std::move(org._slice.slice(slice))),
+          _base(org._base),
+          _shape()
+    {
+    }
+
+    PVSlice(const PVSlice & org, rank_type rank)
+        : _slice(std::move(org.slice_of_rank(rank))),
+          _base(org._base),
+          _shape()
+    {
+    }
+
+private:
+    PVSlice(BasePVSlicePtr bp, const NDSlice & slice)
+        : _slice(slice),
+          _base(bp),
+          _shape()
+    {
+    }
+
+public:
+    uint64_t ndims() const
+    {
+        return _slice.ndims();
+    }
+
+    const int split_dim() const
+    {
+        return _base->split_dim();
+    }
+
+    const shape_type & shape() const
+    {
+        if(_shape.size() != _slice.ndims()) {
+            _shape.resize(_slice.ndims());
+            int i = -1;
+            for(auto & shp : _shape) shp = _slice.dim(++i).size();
+        }
+        return _shape;
+    }
+
+    const shape_type tile_shape(rank_type rank = theTransceiver->rank()) const
+    {
+        return slice_of_rank(rank).shape();
+    }
+
+    const shape_type & base_shape() const
+    {
+        return _base->shape();
+    }
+
+    rank_type owner(const NDSlice & slice) const
+    {
+        return _base->owner(slice);
+    }
+
+    const NDSlice & slice() const
+    {
+        return _slice;
+    }
+
+    NDSlice normalized_slice() const
+    {
+        return _slice.normalize(_base->split_dim());
+    }
+
+    NDSlice map_slice(const NDSlice & slc) const
+    {
+        return _slice.map(slc);
+    }
+
+    NDSlice slice_of_rank(rank_type rank) const
+    {
+        return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
+    }
+
+    NDSlice local_slice_of_rank(rank_type rank) const
+    {
+        return _slice.trim_shift(_base->split_dim(),
+                                 rank * _base->offset(),
+                                 (rank+1) * _base->offset(),
+                                 rank * _base->offset());
+    }
+
+    bool need_reduce(const dim_vec_type & dims) const
+    {
+        auto nd = dims.size();
+        // Reducing to a single scalar or over a subset of dimensions *including* the split axis.
+        if(nd == 0
+           || nd == _slice.ndims()
+           || std::find(dims.begin(), dims.end(), _base->split_dim()) != dims.end()) return true;
+
+        // *not* reducing over split axis
+        return false;
+    }  ///
+
+    
+    /// STL-like iterator for iterating through the pvslice.
+    /// Supports pre-increment ++, unequality check != and dereference *
+    ///
+    class iterator {
+        // we keep a reference to the pvslice
+        const PVSlice * _pvslice;
+        // and the current position
+        NDIndex _curr_pos;
+        // and the current flattened index
+        uint64_t _curr_idx;
+
+    public:
+        iterator(const PVSlice * pvslice = nullptr)
+            : _pvslice(pvslice), _curr_pos(pvslice ? pvslice->ndims() : 0), _curr_idx(-1)
+        {
+            if(pvslice) {
+                _curr_idx = 0;
+                auto const bshp = _pvslice->base_shape();
+                uint64_t tsz = 1;
+                for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
+                    auto const & cs = _pvslice->slice().dim(d);
+                    _curr_pos[d] = cs.start_;
+                    _curr_idx += cs.start_ * tsz;
+                    tsz *= bshp[d];
+                }
+            }
+        }
+
+        iterator& operator++() noexcept
+        {
+            auto const bshp = _pvslice->base_shape();
+            uint64_t tsz = 1;
+            for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
+                auto const & cs = _pvslice->slice().dim(d);
+                auto x = _curr_pos[d] + cs.step_;
+                if(x < cs.end_) {
+                    _curr_pos[d] = x;
+                    _curr_idx += cs.step_ * tsz;
+                    return *this;
+                }
+                _curr_idx += (bshp[d] - (_curr_pos[d] - cs.start_)) * tsz;
+                _curr_pos[d] = cs.start_;
+                tsz *= bshp[d];
+            }
+            *this = iterator();
+            return *this;
+        }
+
+        bool operator!=(const iterator & other) const noexcept
+        {
+            return  _pvslice != other._pvslice && _curr_idx != other._curr_idx;
+        }
+
+        uint64_t operator*() const noexcept
+        {
+            return _curr_idx;
+        }
+    };
+
+    ///
+    /// @return STL-like Iterator pointing to first element
+    ///
+    iterator begin() const noexcept
+    {
+        return slice().size() ? iterator(this) : end();
+    }
+
+    ///
+    /// @return STL-like Iterator pointing to first element after end
+    ///
+    iterator end() const noexcept
+    {
+        return iterator();
+    }
+};
