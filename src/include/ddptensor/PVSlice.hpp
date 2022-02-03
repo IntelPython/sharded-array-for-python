@@ -43,7 +43,7 @@ public:
     }
     rank_type owner(const NDSlice & slice) const
     {
-        return slice.dim(split_dim()).start_ / offset();
+        return slice.dim(split_dim())._start / offset();
     }
 };
 
@@ -207,8 +207,8 @@ public:
                 uint64_t tsz = 1;
                 for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
                     auto const & cs = _pvslice->slice().dim(d);
-                    _curr_pos[d] = cs.start_;
-                    _curr_idx += cs.start_ * tsz;
+                    _curr_pos[d] = cs._start;
+                    _curr_idx += cs._start * tsz;
                     tsz *= bshp[d];
                 }
             }
@@ -220,14 +220,14 @@ public:
             uint64_t tsz = 1;
             for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
                 auto const & cs = _pvslice->slice().dim(d);
-                auto x = _curr_pos[d] + cs.step_;
-                if(x < cs.end_) {
+                auto x = _curr_pos[d] + cs._step;
+                if(x < cs._end) {
                     _curr_pos[d] = x;
-                    _curr_idx += cs.step_ * tsz;
+                    _curr_idx += cs._step * tsz;
                     return *this;
                 }
-                _curr_idx += (bshp[d] - (_curr_pos[d] - cs.start_)) * tsz;
-                _curr_pos[d] = cs.start_;
+                _curr_idx += (bshp[d] - (_curr_pos[d] - cs._start)) * tsz;
+                _curr_pos[d] = cs._start;
                 tsz *= bshp[d];
             }
             *this = iterator();

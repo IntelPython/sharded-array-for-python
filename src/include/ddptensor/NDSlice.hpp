@@ -24,42 +24,42 @@ class NDSlice {
 
 
     // vector with one Slice per dimension, e.g. our nd-slice
-    ndslice_t slice_vec_;
+    ndslice_t _slice_vec;
     // helper, holding sizes of each dimensions's slice
-    mutable std::vector<uint64_t> sizes_;
+    mutable std::vector<uint64_t> _sizes;
 
 public:
     NDSlice() = default;
     NDSlice(NDSlice &&) = default;
-    NDSlice(const NDSlice & o) : slice_vec_(o.slice_vec_), sizes_() {}
-    NDSlice(const std::initializer_list<Slice> & slc) : slice_vec_(slc), sizes_() {}
-    NDSlice(const ndslice_t & sv) : slice_vec_(sv), sizes_() {}
-    NDSlice(ndslice_t && sv) : slice_vec_(std::move(sv)), sizes_() {}
+    NDSlice(const NDSlice & o) : _slice_vec(o._slice_vec), _sizes() {}
+    NDSlice(const std::initializer_list<Slice> & slc) : _slice_vec(slc), _sizes() {}
+    NDSlice(const ndslice_t & sv) : _slice_vec(sv), _sizes() {}
+    NDSlice(ndslice_t && sv) : _slice_vec(std::move(sv)), _sizes() {}
     template<typename T>
     NDSlice(const std::vector<T> & v)
-        : slice_vec_(v.size()), sizes_()
+        : _slice_vec(v.size()), _sizes()
     {
         uint32_t i = -1;
-        for(auto s : v) slice_vec_[++i] = Slice(s);
+        for(auto s : v) _slice_vec[++i] = Slice(s);
     }
     NDSlice(const NDIndex & idx)
-        : slice_vec_(idx.size()), sizes_()
+        : _slice_vec(idx.size()), _sizes()
     {
         uint32_t i = -1;
-        for(auto s : idx) slice_vec_[++i] = Slice(s, s+1);
+        for(auto s : idx) _slice_vec[++i] = Slice(s, s+1);
     }
 
     NDSlice & operator=(NDSlice &&) = default;
     NDSlice & operator=(const NDSlice &) = default;
 
-    // inits helper attribute sizes_ (for lazy computation)
+    // inits helper attribute _sizes (for lazy computation)
     // [i] holds the number of elements for dimensions [i,N[
     void init_sizes() const
     {
-        sizes_.resize(slice_vec_.size());
-        auto v = sizes_.rbegin();
+        _sizes.resize(_slice_vec.size());
+        auto v = _sizes.rbegin();
         value_type::value_type sz = 1;
-        for(auto i = slice_vec_.rbegin(); i != slice_vec_.rend(); ++i, ++v) {
+        for(auto i = _slice_vec.rbegin(); i != _slice_vec.rend(); ++i, ++v) {
             sz *= (*i).size();
             *v = sz;
         }
@@ -70,7 +70,7 @@ public:
     ///
     bool is_block() const
     {
-        for(auto s : slice_vec_) {
+        for(auto s : _slice_vec) {
             if(! s.is_block()) return false;
         }
         return true;
@@ -81,9 +81,9 @@ public:
     ///
     shape_type shape() const
     {
-        std::vector<uint64_t> ret(slice_vec_.size());
+        std::vector<uint64_t> ret(_slice_vec.size());
         auto v = ret.begin();
-        for(auto i = slice_vec_.begin(); i != slice_vec_.end(); ++i, ++v) {
+        for(auto i = _slice_vec.begin(); i != _slice_vec.end(); ++i, ++v) {
             *v = (*i).size();
         }
         return ret;
@@ -94,8 +94,8 @@ public:
     ///
     value_type::value_type size() const
     {
-        if(sizes_.empty()) init_sizes();
-        return sizes_[0];
+        if(_sizes.empty()) init_sizes();
+        return _sizes[0];
     }
 
     ///
@@ -103,7 +103,7 @@ public:
     ///
     size_t ndims() const
     {
-        return slice_vec_.size();
+        return _slice_vec.size();
     }
 
     ///
@@ -111,8 +111,8 @@ public:
     ///
     void set(uint64_t dim, const Slice & slc)
     {
-        slice_vec_[dim] = slc;
-        sizes_.resize(0);
+        _slice_vec[dim] = slc;
+        _sizes.resize(0);
     }
 
     ///
@@ -120,13 +120,13 @@ public:
     /// does not check bounds, e.g. can return indices beyond end of slice
     ///
     value_type operator[](value_type::value_type i) const {
-        if(sizes_.empty()) init_sizes();
-        value_type ret(slice_vec_.size(), 0);
-        auto sz = ++(sizes_.begin());
-        auto slc = slice_vec_.rbegin();
+        if(_sizes.empty()) init_sizes();
+        value_type ret(_slice_vec.size(), 0);
+        auto sz = ++(_sizes.begin());
+        auto slc = _slice_vec.rbegin();
         // iterate over dimensions to compute ith index
         for(auto v = ret.begin(); v != ret.end(); ++v, ++slc) {
-            if(sz != sizes_.end()) {
+            if(sz != _sizes.end()) {
                 auto idx = i / (*sz);
                 *v = (*slc)[idx];
                 i -= idx * (*sz);
@@ -142,8 +142,8 @@ public:
     NDSlice _convert(const C & conv) const
     {
         ndslice_t sv;
-        sv.reserve(slice_vec_.size());
-        for(auto i = 0; i != slice_vec_.size(); ++i) {
+        sv.reserve(_slice_vec.size());
+        for(auto i = 0; i != _slice_vec.size(); ++i) {
             sv.push_back(conv(i));
         }
         return NDSlice(std::move(sv));
@@ -155,24 +155,24 @@ public:
     NDSlice slice(const NDSlice & slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].slice(slc.dim(i));
+                return _slice_vec[i].slice(slc.dim(i));
             } );
     }
 
     NDSlice normalize() const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].normalize();
+                return _slice_vec[i].normalize();
             } );
     }
 
     ///
-    /// @return NDSlice with same same, shifted left by start_ in each dimension and with strides 1
+    /// @return NDSlice with same same, shifted left by _start in each dimension and with strides 1
     ///
     NDSlice deflate(const NDSlice & slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].deflate(slc.dim(i).start_);
+                return _slice_vec[i].deflate(slc.dim(i)._start);
             } );
     }
 
@@ -182,40 +182,40 @@ public:
     NDSlice inflate(const NDSlice & slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].inflate(slc.dim(i).start_, slc.dim(i).step_);
+                return _slice_vec[i].inflate(slc.dim(i)._start, slc.dim(i)._step);
             } );
     }
 
     ///
-    /// @return Copy of NDSlice which was shifted left by start_ in each dim of slc
+    /// @return Copy of NDSlice which was shifted left by _start in each dim of slc
     ///
     NDSlice shift(const NDSlice & slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].shift(slc.dim(i).start_);
+                return _slice_vec[i].shift(slc.dim(i)._start);
             } );
     }
 
     ///
-    /// @return Copy of NDSlice which was trimmed by t_slc and shifted by s_slc.start_'s
+    /// @return Copy of NDSlice which was trimmed by t_slc and shifted by s_slc._start's
     ///
     NDSlice trim_shift(const NDSlice & t_slc, const NDSlice & s_slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].trim(t_slc.dim(i).start_, t_slc.dim(i).end_, s_slc.dim(i).start_);
+                return _slice_vec[i].trim(t_slc.dim(i)._start, t_slc.dim(i)._end, s_slc.dim(i)._start);
             } );
     }
 
     NDSlice map(const NDSlice & slc) const
     {
         return _convert([&](uint64_t i) {
-                return slice_vec_[i].map(slc.dim(i));
+                return _slice_vec[i].map(slc.dim(i));
             } );
     }
 
     NDSlice normalize(uint32_t D) const
     {
-        ndslice_t slc(slice_vec_);
+        ndslice_t slc(_slice_vec);
         slc[D] = slc[D].normalize();
         return NDSlice(slc);
     }
@@ -225,7 +225,7 @@ public:
     ///
     NDSlice deflate(uint32_t D, uint64_t offset) const
     {
-        ndslice_t slc(slice_vec_);
+        ndslice_t slc(_slice_vec);
         slc[D] = slc[D].deflate(offset);
         return NDSlice(slc);
     }
@@ -235,7 +235,7 @@ public:
     ///
     NDSlice trim(uint32_t D, const value_type::value_type start, const value_type::value_type end) const
     {
-        ndslice_t slc(slice_vec_);
+        ndslice_t slc(_slice_vec);
         slc[D] = slc[D].trim(start, end);
         return NDSlice(std::move(slc));
     }
@@ -245,7 +245,7 @@ public:
     ///
     NDSlice shift(uint32_t D, value_type::value_type s) const
     {
-        ndslice_t slc(slice_vec_);
+        ndslice_t slc(_slice_vec);
         slc[D] = slc[D].shift(s);
         return NDSlice(std::move(slc));
     }
@@ -255,7 +255,7 @@ public:
     ///
     NDSlice trim_shift(uint32_t D, const value_type::value_type start, const value_type::value_type end, const value_type::value_type shft) const
     {
-        ndslice_t slc(slice_vec_);
+        ndslice_t slc(_slice_vec);
         slc[D] = slc[D].trim(start, end).shift(shft);
         return NDSlice(std::move(slc));
     }
@@ -265,8 +265,8 @@ public:
     ///
     value_type::value_type size_upto(value_type::value_type end) const
     {
-        ndslice_t slc(slice_vec_);
-        slc[0] = Slice(slc[0].start_, end, slc[0].step_);
+        ndslice_t slc(_slice_vec);
+        slc[0] = Slice(slc[0]._start, end, slc[0]._step);
         return NDSlice(std::move(slc)).size();
     }
 
@@ -275,7 +275,7 @@ public:
     ///
     const ndslice_t::value_type & dim(size_t d) const
     {
-        return slice_vec_[d];
+        return _slice_vec[d];
     }
 
     ///
@@ -284,7 +284,7 @@ public:
     bool covers(const value_type & idx) const
     {
         auto i = idx.begin();
-        for(auto x : slice_vec_) {
+        for(auto x : _slice_vec) {
             if(!x.covers(*i)) return false;
             ++i;
         }
@@ -294,12 +294,12 @@ public:
     template<typename S>
     void serialize(S & ser)
     {
-        ser.container(slice_vec_, 8);
+        ser.container(_slice_vec, 8);
     }
 
     friend std::ostream &operator<<(std::ostream &output, const NDSlice & slc) {
         output << "[";
-        for(auto x : slc.slice_vec_) output << x << ", ";
+        for(auto x : slc._slice_vec) output << x << ", ";
         output << "]";
         return output;
     }
@@ -368,7 +368,7 @@ public:
     ///
     iterator begin() const noexcept
     {
-        return size() ? iterator(&slice_vec_) : end();
+        return size() ? iterator(&_slice_vec) : end();
     }
 
     ///

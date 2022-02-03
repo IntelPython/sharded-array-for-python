@@ -17,10 +17,10 @@ struct Slice
   // the type of elements, e.g. indices
   typedef ssize_t value_type;
   // the slice representation
-  value_type start_, end_, step_;
+  value_type _start, _end, _step;
 
   Slice()
-    : start_(0), end_(-1), step_(1)
+    : _start(0), _end(-1), _step(1)
   {}
 
   ///
@@ -28,7 +28,7 @@ struct Slice
   /// @param end first index out of range
   ///
   Slice(value_type end)
-    : start_(0), end_(end), step_(1)
+    : _start(0), _end(end), _step(1)
   {
   }
 
@@ -39,7 +39,7 @@ struct Slice
   /// @param step step between values in the slice
   ///
   Slice(value_type start, value_type end, value_type step=1)
-    : start_(start), end_(end), step_(step)
+    : _start(start), _end(end), _step(step)
   {
   }
 
@@ -49,7 +49,7 @@ struct Slice
   Slice(const py::slice & slc, int64_t len=std::numeric_limits<int64_t>::max())
   {
     ssize_t slc_len;
-    slc.compute(len, &start_, &end_, &step_, &slc_len);
+    slc.compute(len, &_start, &_end, &_step, &slc_len);
   }
 
   ///
@@ -57,7 +57,7 @@ struct Slice
   ///
   Slice slice(const Slice & slice) const
   {
-    return {start_ + slice.start_ * step_, start_ + slice.end_ * step_, step_ * slice.step_};
+    return {_start + slice._start * _step, _start + slice._end * _step, _step * slice._step};
   }
 
   ///
@@ -65,7 +65,7 @@ struct Slice
   ///
   py::slice pyslice() const
   {
-    return py::slice(start_, end_, step_);
+    return py::slice(_start, _end, _step);
   }
 
   Slice normalize() const
@@ -76,14 +76,14 @@ struct Slice
   ///
   /// @return Slice with same shape, shifted left by off ignorig index space
   ///         and then normalized to stride 1
-  /// Note: (end_-off) is the new zero before scaling down. start_ will also be scaled down by stride_
+  /// Note: (_end-off) is the new zero before scaling down. _start will also be scaled down by stride_
   ///
   Slice deflate(value_type off = 0) const
   {
-    auto strt = start_ - off;
-    return {strt/step_, strt + size(), 1};
-    // if(step_ > 1) return {start_/step_, (end_+step_-1)/step_, 1};
-    // return {start_, end_, step_};
+    auto strt = _start - off;
+    return {strt/_step, strt + size(), 1};
+    // if(_step > 1) return {_start/_step, (_end+_step-1)/_step, 1};
+    // return {_start, _end, _step};
   }
 
   ///
@@ -91,10 +91,10 @@ struct Slice
   ///
   Slice inflate(value_type off, value_type strd) const
   {
-    auto strt = start_ + off;
+    auto strt = _start + off;
     return {strt, strt + size() * strd, strd};
-    // if(step_ > 1) return {start_*strd, (end_+step_-1)/step_, 1};
-    // return {start_, end_, step_};
+    // if(_step > 1) return {_start*strd, (_end+_step-1)/_step, 1};
+    // return {_start, _end, _step};
   }
 
   ///
@@ -102,7 +102,7 @@ struct Slice
   ///
   bool is_block() const
   {
-    return step_ == 1;
+    return _step == 1;
   }
 
   ///
@@ -110,7 +110,7 @@ struct Slice
   ///
   void check() const
   {
-    assert((start_ > end_ && step_ <= 0) || (start_ < end_ && step_ >= 0));
+    assert((_start > _end && _step <= 0) || (_start < _end && _step >= 0));
   }
 
   ///
@@ -118,9 +118,9 @@ struct Slice
   ///
   value_type size() const
   {
-    if((end_ <= start_ && step_ >= 0)
-       || (end_ >= start_ && step_ <= 0)) return 0;
-    return (end_ - start_ + step_ - (step_ > 0 ? 1 : -1)) / step_;
+    if((_end <= _start && _step >= 0)
+       || (_end >= _start && _step <= 0)) return 0;
+    return (_end - _start + _step - (_step > 0 ? 1 : -1)) / _step;
   }
 
   ///
@@ -128,7 +128,7 @@ struct Slice
   /// does not check bounds, e.g. can return indices beyond end of slice
   ///
   value_type operator[](value_type i) const {
-    return start_ + i * step_;
+    return _start + i * _step;
   }
 
   ///
@@ -138,13 +138,13 @@ struct Slice
   struct iterator
   {
     iterator(const Slice * slice = nullptr)
-      : slice_(slice), curr_(slice_ ? slice_->start_ : 0)
+      : slice_(slice), curr_(slice_ ? slice_->_start : 0)
     {}
 
     iterator& operator++() noexcept
     {
-      curr_ += slice_->step_;
-      if(curr_ >= slice_->end_) {
+      curr_ += slice_->_step;
+      if(curr_ >= slice_->_end) {
         *this = iterator();
       }
       return *this;
@@ -189,11 +189,11 @@ struct Slice
   ///
   bool covers(const value_type & i) const
   {
-    assert(step_ > 0 && start_ >= 0);
-    // std::cerr << "\t\t\t" << i << " " << start_ << " " << end_ << " " << step_ << " " << ((i - (start_ % step_)) % step_) << std::endl;
-    return (i >= start_
-            && i < end_
-            && ((i - (start_ % step_)) % step_) == 0);
+    assert(_step > 0 && _start >= 0);
+    // std::cerr << "\t\t\t" << i << " " << _start << " " << _end << " " << _step << " " << ((i - (_start % _step)) % _step) << std::endl;
+    return (i >= _start
+            && i < _end
+            && ((i - (_start % _step)) % _step) == 0);
   }
 
   ///
@@ -203,23 +203,23 @@ struct Slice
   ///
   Slice trim(value_type s, value_type e, value_type shift = 0) const
   {
-    assert(step_ > 0);
-    auto start = start_;
-    if(s > start_) {
-      auto m = (s - start) % step_;
-      if(m) start = s + step_ - m;
+    assert(_step > 0);
+    auto start = _start;
+    if(s > _start) {
+      auto m = (s - start) % _step;
+      if(m) start = s + _step - m;
       else start = s;
     }
-    auto end = std::min(e, end_);
-    return {start-shift, end-shift, step_};
+    auto end = std::min(e, _end);
+    return {start-shift, end-shift, _step};
   }
 
   Slice map(const Slice & slc) const
   {
-    value_type diff = slc.start_ - start_;
-    value_type start = diff / step_;
-    assert(diff % step_ == 0);
-    assert((slc.step_ == step_));
+    value_type diff = slc._start - _start;
+    value_type start = diff / _step;
+    assert(diff % _step == 0);
+    assert((slc._step == _step));
     return {start, start + slc.size(), 1};
   }
 
@@ -228,11 +228,11 @@ struct Slice
   ///
   Slice shift(value_type s) const
   {
-    return {start_ - s, end_ - s, step_};
+    return {_start - s, _end - s, _step};
   }
 
   friend std::ostream &operator<<(std::ostream &output, const Slice & slc) {
-    output << "(" << slc.start_ << ":" << slc.end_ << ":" << slc.step_ << ")";
+    output << "(" << slc._start << ":" << slc._end << ":" << slc._step << ")";
     return output;
   }
 
@@ -240,8 +240,8 @@ struct Slice
   template<typename S>
   void serialize(S & ser)
   {
-    ser.value8b(start_);
-    ser.value8b(end_);
-    ser.value8b(step_);
+    ser.value8b(_start);
+    ser.value8b(_end);
+    ser.value8b(_step);
   }
 };
