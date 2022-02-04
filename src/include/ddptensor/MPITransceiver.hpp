@@ -19,6 +19,8 @@ public:
         return _rank;
     }
     
+
+    virtual void barrier();
     virtual void bcast(void * ptr, size_t N, rank_type root);
     virtual void reduce_all(void * inout, DType T, size_t N, RedOpType op);
 

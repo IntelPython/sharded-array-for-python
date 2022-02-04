@@ -56,6 +56,13 @@ static MPI_Op to_mpi(RedOpType o)
     }
 }
 
+
+
+void MPITransceiver::barrier()
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
 void MPITransceiver::bcast(void * ptr, size_t N, rank_type root)
 {
     MPI_Bcast(ptr, N, MPI_CHAR, root, MPI_COMM_WORLD);

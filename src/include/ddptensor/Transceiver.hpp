@@ -12,6 +12,9 @@ public:
     virtual rank_type nranks() const = 0;
     virtual rank_type rank() const = 0;
 
+    // Barrier
+    virtual void barrier() = 0;
+
     // Broadcast data from root to all other processes
     // @param[inout] ptr   on root: pointer to data to be sent
     //                     on all other processes: pointer to buffer to store received data

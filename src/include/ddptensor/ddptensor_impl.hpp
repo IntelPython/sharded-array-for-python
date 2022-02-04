@@ -292,7 +292,7 @@ public:
             auto ptr = buff.ptr;
             auto pylen = VPROD(buff.shape);
             assert(buff.itemsize == sizeof(T));
-            theTransceiver->reduce_all(ptr, DTYPE<T>::value, pylen, red_op(op));
+            theTransceiver->reduce_all(ptr, dtype(), pylen, red_op(op));
             return create_dtensor(pvslice(), new_shape, ary, REPLICATED);
         }
 
@@ -404,6 +404,7 @@ public:
         NDSlice my_norm_slice = g_slc_view.map_slice(my_slice);
         std::cerr << "my_norm_slice: " << my_norm_slice << std::endl;
 
+        theTransceiver->barrier();
         _set_slice(cast(val), my_norm_slice, this, my_slice);
     }
 
@@ -431,9 +432,13 @@ public:
     py::object get_slice(const NDSlice & slice) const
     {
         auto shp = slice.shape();
-        auto out = create_dtensor(PVSlice(shp, NOSPLIT), shp, DTYPE<T>::value, "empty");
-        _set_slice(this, slice, cast(out), {shp});
-        return cast(out)->_pyarray;
+        // Create dtensor without creating id: do not use create_dtensor
+        py::dict kwa;
+        kwa["dtype"] = get_impl_dtype<T>();
+        auto ary = _array_ns.attr("empty")(_make_tuple(shp), kwa);
+        auto out = dtensor_impl<T>(PVSlice(shp, NOSPLIT), shp, ary, theTransceiver->rank());
+        _set_slice(this, slice, &out, {shp});
+        return out._pyarray;
     }
 
     std::string __repr__() const

@@ -4,6 +4,7 @@
 #include <thread>
 #include <iostream>
 #include <unordered_map>
+#include <mutex>
 #include <bitsery/bitsery.h>
 #include <bitsery/adapter/buffer.h>
 #include <bitsery/traits/vector.h>
@@ -15,12 +16,13 @@
 using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
 using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
 using array_keeper_type = std::unordered_map<uint64_t, tensor_i::ptr_type>;
+using locker = std::lock_guard<std::mutex>;
 
 static array_keeper_type s_ak;
 static uint64_t s_last_id = 0;
 constexpr static int PULL_TAG = 4711;
 constexpr static int PUSH_TAG = 4712;
-
+static std::mutex ak_mutex;
 
 MPIMediator::MPIMediator()
     : _listener(&MPIMediator::listen, this)
@@ -40,11 +42,13 @@ MPIMediator::~MPIMediator()
     ser.adapter().flush();
     MPI_Send(buff.data(), buff.size(), MPI_CHAR, rank, PULL_TAG, MPI_COMM_WORLD);
     _listener.join();
+    locker _l(ak_mutex);
     s_ak.clear();
 }
 
 uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
 {
+    locker _l(ak_mutex);
     s_ak[++s_last_id] = ary;
     return s_last_id;
 }
@@ -114,6 +118,7 @@ void MPIMediator::listen()
         MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, PULL_TAG, comm, &request_in);
 
         // Now find the array in question and send back its bufferized slice
+        locker _l(ak_mutex);
         auto x = s_ak.find(id);
         if(x == s_ak.end()) throw(std::runtime_error("Encountered pull request for unknown tensor."));
         // Wait for previous answer to complete so that we can re-use the buffer
