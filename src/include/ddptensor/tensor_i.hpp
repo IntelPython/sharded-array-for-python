@@ -44,4 +44,6 @@ public:
     virtual void _ew_binary_op_inplace(const char * op, const ptr_type & b) = 0;
     virtual void _ew_binary_op_inplace(const char * op, const py::object & b) = 0;
     virtual ptr_type _reduce_op(const char * op, const dim_vec_type & dims) const = 0;
+
+    virtual py::object get_slice(const NDSlice & slice) const = 0;
 };

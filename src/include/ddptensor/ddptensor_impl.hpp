@@ -224,12 +224,16 @@ public:
     }
 
     // since the API works on tensor_i we need to downcast to the actual type
-    const dtensor_impl<T> * cast(const ptr_type & b) const
+    static dtensor_impl<T> * cast(ptr_type & b)
     {
         // FIXME; use attribute/vfunction + reinterpret_cast for better performance
-        auto ptr = dynamic_cast<const dtensor_impl<T>*>(b.get());
+        auto ptr = dynamic_cast<dtensor_impl<T>*>(b.get());
         // if(ptr == nullptr) throw(std::runtime_error("Incompatible tensor types."));
         return ptr;
+    }
+    static const dtensor_impl<T> * cast(const ptr_type & b)
+    {
+        return cast(const_cast<ptr_type &>(b));
     }
 
     ptr_type _ew_op(const char * op, const char * mod, py::args args, const py::kwargs & kwargs)
@@ -331,42 +335,28 @@ public:
         }
     }
 
-    // FIXME We use a generic SPMD/PGAS mechanism to pull elements from remote
-    // on all procs simultaneously.  Since __setitem__ is collective we could
-    // implement a probaly more efficient mechanism which pushes data and/or using RMA.
-    void __setitem__(const NDSlice & slice, const ptr_type & val)
+    // copy data from val into (*dest)[slice]
+    // this is a non-collective call.
+    static void _set_slice(const dtensor_impl<T> * val, const NDSlice & val_slice, dtensor_impl<T> * dest, const NDSlice & dest_slice)
     {
-        std::cerr << " __setitem__ " << slice << " " << val->pvslice().slice() << std::endl;
-        auto nd = shape().size();
-        if(owner() == REPLICATED && nd > 0)
+        std::cerr << "_set_slice " << val_slice << " " << dest_slice << std::endl;
+        auto nd = dest->shape().size();
+        if(dest->owner() == REPLICATED && nd > 0)
             std::cerr << "Warning: __setitem__ on replicated data updates local tile only" << std::endl;
-        if(nd != slice.ndims())
+        if(nd != dest_slice.ndims())
             throw std::runtime_error("Index dimensionality must match array dimensionality");
+        if(val_slice.size() != dest_slice.size())
+            throw std::runtime_error("Input and output slices must be of same size");
 
-        auto slc_sz = slice.size();
-        auto val_sz = VPROD(val->shape());
-        if(slc_sz != val_sz)
-            throw std::runtime_error("Given tensor does not match: it has different size than 'slice'");
-
-        NDSlice norm_slice = pvslice().normalized_slice();
-        std::cerr << "norm_slice: " << norm_slice << std::endl;
         // Use given slice to create a global view into orig array
-        PVSlice g_slc_view(pvslice(), slice);
+        PVSlice g_slc_view(dest->pvslice(), dest_slice);
         std::cerr << "g_slice: " << g_slc_view.slice() << std::endl;
-        PVSlice my_view(g_slc_view, theTransceiver->rank());
-        NDSlice my_slice = my_view.slice();
-        std::cerr << "my_slice: " << my_slice << std::endl;
-        NDSlice my_norm_slice = g_slc_view.map_slice(my_slice);
-        std::cerr << "my_norm_slice: " << my_norm_slice << std::endl;
-
         // Create a view into val
-        PVSlice needed_val_view(val->pvslice(), my_norm_slice);
+        PVSlice needed_val_view(val->pvslice(), val_slice);
         std::cerr << "needed_val_view: " << needed_val_view.slice() << " (was " << val->pvslice().slice() << ")" << std::endl;
 
         // Get the pointer to the local buffer
-        auto ns = get_array_impl(_pyarray);
-        //auto my_binfo = _pyarray.cast<py::buffer>().request();
-        // T * my_buffer = reinterpret_cast<T*>(my_binfo.ptr);
+        auto ns = get_array_impl(dest->_pyarray);
 
         // we can now compute which ranks actually hold which piece of the data from val that we need locally
         for(rank_type i=0; i<theTransceiver->nranks(); ++i ) {
@@ -377,7 +367,7 @@ public:
             std::cerr << i << " curr_needed_val_slice: " << curr_needed_val_slice << std::endl;
             NDSlice curr_local_val_slice = val_local_view.map_slice(curr_needed_val_slice);
             std::cerr << i << " curr_local_val_slice: " << curr_local_val_slice << std::endl;
-            NDSlice curr_needed_norm_slice = val->pvslice().map_slice(curr_needed_val_slice);
+            NDSlice curr_needed_norm_slice = needed_val_view.map_slice(curr_needed_val_slice);
             std::cerr << i << " curr_needed_norm_slice: " << curr_needed_norm_slice << std::endl;
             PVSlice my_curr_needed_view = PVSlice(g_slc_view, curr_needed_norm_slice);
             std::cerr << i << " my_curr_needed_slice: " << my_curr_needed_view.slice() << std::endl;
@@ -387,23 +377,39 @@ public:
                 py::tuple tpl = _make_tuple(my_curr_local_slice); //my_curr_view.slice());
                 if(i == theTransceiver->rank()) {
                     // copy locally
-                    auto rhs = cast(val)->_pyarray.attr("__getitem__")(_make_tuple(curr_local_val_slice));
+                    auto rhs = val->_pyarray.attr("__getitem__")(_make_tuple(curr_local_val_slice));
                     std::cerr << py::str(rhs).cast<std::string>() << std::endl;
-                    _pyarray.attr("__setitem__")(tpl, rhs);
+                    dest->_pyarray.attr("__setitem__")(tpl, rhs);
                 } else {
                     // pull slice directly into new array
                     auto obj = ns.attr("empty")(_make_tuple(curr_local_val_slice.shape()));
                     auto binfo = obj.cast<py::buffer>().request();
                     theMediator->pull(i, val, curr_local_val_slice, binfo.ptr);
-                    _pyarray.attr("__setitem__")(tpl, obj);
+                    dest->_pyarray.attr("__setitem__")(tpl, obj);
                 }
             }
         }
     }
 
+    // FIXME We use a generic SPMD/PGAS mechanism to pull elements from remote
+    // on all procs simultaneously.  Since __setitem__ is collective we could
+    // implement a probaly more efficient mechanism which pushes data and/or using RMA.
+    void __setitem__(const NDSlice & slice, const ptr_type & val)
+    {
+        // Use given slice to create a global view into orig array
+        PVSlice g_slc_view(this->pvslice(), slice);
+        std::cerr << "g_slice: " << g_slc_view.slice() << std::endl;
+        NDSlice my_slice = g_slc_view.slice_of_rank(theTransceiver->rank());
+        std::cerr << "my_slice: " << my_slice << std::endl;
+        NDSlice my_norm_slice = g_slc_view.map_slice(my_slice);
+        std::cerr << "my_norm_slice: " << my_norm_slice << std::endl;
+
+        _set_slice(cast(val), my_norm_slice, this, my_slice);
+    }
+
     void bufferize(const NDSlice & slice, Buffer & buff)
     {
-        PVSlice my_local_view = PVSlice(tile_shape()); // pvslice().view_normalized_by_rank(theTransceiver->rank());
+        PVSlice my_local_view = PVSlice(tile_shape());
         PVSlice lview = PVSlice(my_local_view, slice);
         NDSlice lslice = lview.slice();
 
@@ -420,6 +426,14 @@ public:
             std::cerr << o << " <- " << *i << std::endl;
             out[o] = ary[*i];
         }
+    }
+
+    py::object get_slice(const NDSlice & slice) const
+    {
+        auto shp = slice.shape();
+        auto out = create_dtensor(PVSlice(shp, NOSPLIT), shp, DTYPE<T>::value, "empty");
+        _set_slice(this, slice, cast(out), {shp});
+        return cast(out)->_pyarray;
     }
 
     std::string __repr__() const

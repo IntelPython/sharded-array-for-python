@@ -50,6 +50,11 @@ public:
         return _tensor->dtype();
     }
 
+    py::object get_slice(const std::vector<py::slice> & v)
+    {
+        return _tensor->get_slice(NDSlice(v));
+    }
+        
     dtensor __getitem__(const NDIndex & v)
     {
         return dtensor(_tensor->__getitem__(NDSlice(v)));
@@ -224,7 +229,8 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("__getitem__", py::overload_cast<const std::vector<py::slice> &>(&dtensor::__getitem__))
         .def("__getitem__", py::overload_cast<const py::slice &>(&dtensor::__getitem__))
         .def("__getitem__", py::overload_cast<int64_t>(&dtensor::__getitem__))
-        .def("__setitem__", &dtensor::__setitem__);
+        .def("__setitem__", &dtensor::__setitem__)
+        .def("get_slice", &dtensor::get_slice);
 
     //py::class_<dpdlpack>(m, "dpdlpack")
     //    .def("__dlpack__", &dpdlpack.__dlpack__);

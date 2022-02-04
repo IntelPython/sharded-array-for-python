@@ -7,6 +7,8 @@
 
 using offsets_type = std::vector<uint64_t>;
 
+constexpr static int NOSPLIT = -1;
+
 class BasePVSlice
 {
     uint64_t   _offset;
@@ -18,13 +20,13 @@ public:
     BasePVSlice(const BasePVSlice &) = delete;
     BasePVSlice(BasePVSlice &&) = default;
     BasePVSlice(const shape_type & shape, int split=0)
-        : _offset((shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+        : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
           _shape(shape),
           _split_dim(split)
     {
     }
     BasePVSlice(shape_type && shape, int split=0)
-        : _offset((shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+        : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
           _shape(std::move(shape)),
           _split_dim(split)
     {
@@ -35,6 +37,9 @@ public:
     const shape_type & shape() const { return _shape; }
     shape_type shape(rank_type rank) const
     {
+        if(split_dim() == NOSPLIT) {
+            return rank == theTransceiver->rank() ? _shape : shape_type();
+        }
         shape_type shp(_shape);
         auto end = (rank+1) * _offset;
         if(end <= _shape[_split_dim]) shp[_split_dim] = _offset;
@@ -43,7 +48,7 @@ public:
     }
     rank_type owner(const NDSlice & slice) const
     {
-        return slice.dim(split_dim())._start / offset();
+        return split_dim() == NOSPLIT ? theTransceiver->rank() : slice.dim(split_dim())._start / offset();
     }
 };
 
@@ -150,10 +155,12 @@ public:
         return _slice;
     }
 
+#if 0
     NDSlice normalized_slice() const
     {
         return _slice.normalize(_base->split_dim());
     }
+#endif
 
     NDSlice map_slice(const NDSlice & slc) const
     {
@@ -162,11 +169,17 @@ public:
 
     NDSlice slice_of_rank(rank_type rank) const
     {
+        if(_base->split_dim() == NOSPLIT) {
+            return rank == theTransceiver->rank() ? slice() : NDSlice();
+        }
         return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
     }
 
     NDSlice local_slice_of_rank(rank_type rank) const
     {
+        if(_base->split_dim() == NOSPLIT) {
+            return rank == theTransceiver->rank() ? slice() : NDSlice();
+        }
         return _slice.trim_shift(_base->split_dim(),
                                  rank * _base->offset(),
                                  (rank+1) * _base->offset(),
@@ -175,6 +188,7 @@ public:
 
     bool need_reduce(const dim_vec_type & dims) const
     {
+        if(_base->split_dim() == NOSPLIT) return false;
         auto nd = dims.size();
         // Reducing to a single scalar or over a subset of dimensions *including* the split axis.
         if(nd == 0

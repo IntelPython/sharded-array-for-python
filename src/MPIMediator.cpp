@@ -30,6 +30,7 @@ MPIMediator::MPIMediator()
 MPIMediator::~MPIMediator()
 {
     std::cerr << "MPIMediator::~MPIMediator()" << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     Buffer buff;
@@ -40,7 +41,6 @@ MPIMediator::~MPIMediator()
     MPI_Send(buff.data(), buff.size(), MPI_CHAR, rank, PULL_TAG, MPI_COMM_WORLD);
     _listener.join();
     s_ak.clear();
-    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
@@ -49,7 +49,7 @@ uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
     return s_last_id;
 }
 
-void MPIMediator::pull(rank_type from, const tensor_i::ptr_type & ary, const NDSlice & slice, void * rbuff)
+void MPIMediator::pull(rank_type from, const tensor_i * ary, const NDSlice & slice, void * rbuff)
 {
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Request request[2];

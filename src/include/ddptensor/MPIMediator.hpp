@@ -13,7 +13,7 @@ public:
     MPIMediator();
     virtual ~MPIMediator();
     virtual uint64_t register_array(tensor_i::ptr_type ary);
-    virtual void pull(rank_type from, const tensor_i::ptr_type & ary, const NDSlice & slice, void * buffer);
+    virtual void pull(rank_type from, const tensor_i * ary, const NDSlice & slice, void * buffer);
 
 protected:
     void listen();

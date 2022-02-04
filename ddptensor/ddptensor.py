@@ -116,3 +116,6 @@ class dtensor:
 
     def __setitem__(self, key, value):
         x = self._t.__setitem__(key, value._t if isinstance(value, dtensor) else value)
+
+    def get_slice(self, *args):
+        return self._t.get_slice(*args)
