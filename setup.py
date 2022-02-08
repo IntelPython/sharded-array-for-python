@@ -18,7 +18,7 @@ ext_modules = [
         extra_compile_args = ["-DUSE_MKL", "-DXTENSOR_USE_XSIMD=1", "-DXTENSOR_USE_OPENMP=1",
                               "-std=c++17", "-fopenmp",
                               "-Wno-unused-but-set-variable", "-Wno-sign-compare", "-Wno-unused-local-typedefs", "-Wno-reorder",
-                              "-march=native", "-O0", "-g"],
+                              "-march=native",], # "-O0", "-g"],
         libraries = ["mpi", "mkl_intel_lp64", "mkl_intel_thread", "mkl_core", "iomp5", "pthread", "rt", "dl", "m"],
         library_dirs = [jp(mpiroot, "lib")],
         language = 'c++'

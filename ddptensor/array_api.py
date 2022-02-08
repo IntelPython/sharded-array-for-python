@@ -134,3 +134,13 @@ ew_binary_ops = [
     "remainder",  # (x1, x2, /)
     "subtract",  # (x1, x2, /)
 ]
+
+statisticals = [
+    "max",   # (x, /, *, axis=None, keepdims=False)
+    "mean",  # (x, /, *, axis=None, keepdims=False)
+    "min",   # (x, /, *, axis=None, keepdims=False)
+    "prod",  # (x, /, *, axis=None, keepdims=False)
+    "sum",   # (x, /, *, axis=None, keepdims=False)
+    "std",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
+    "var",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
+]

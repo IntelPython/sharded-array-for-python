@@ -42,16 +42,16 @@ static MPI_Datatype to_mpi(DType T)
 static MPI_Op to_mpi(RedOpType o)
 {
     switch(o) {
-    case OP_MAX:  return MPI_MAX;
-    case OP_MIN:  return MPI_MIN;
-    case OP_SUM:  return MPI_SUM;
-    case OP_PROD: return MPI_PROD;
-    case OP_LAND: return MPI_LAND;
-    case OP_BAND: return MPI_BAND;
-    case OP_LOR:  return MPI_LOR;
-    case OP_BOR:  return MPI_BOR;
-    case OP_LXOR: return MPI_LXOR;
-    case OP_BXOR: return MPI_BXOR;
+    case MAX:  return MPI_MAX;
+    case MIN:  return MPI_MIN;
+    case SUM:  return MPI_SUM;
+    case PROD: return MPI_PROD;
+    // case OP_LAND: return MPI_LAND;
+    // case OP_BAND: return MPI_BAND;
+    // case OP_LOR:  return MPI_LOR;
+    // case OP_BOR:  return MPI_BOR;
+    // case OP_LXOR: return MPI_LXOR;
+    // case OP_BXOR: return MPI_BXOR;
     default: throw std::logic_error("unsupported operation type");
     }
 }

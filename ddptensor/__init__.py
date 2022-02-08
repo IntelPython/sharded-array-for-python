@@ -22,17 +22,7 @@ for func in api.creators:
             f"{func} = lambda shape, *args, **kwargs: dtensor(_cdt.create(shape, '{func}', '{__impl_str}', *args, **kwargs))"
         )
 
-statisticals = [
-    "max",   # (x, /, *, axis=None, keepdims=False)
-    "mean",  # (x, /, *, axis=None, keepdims=False)
-    "min",   # (x, /, *, axis=None, keepdims=False)
-    "prod",  # (x, /, *, axis=None, keepdims=False)
-    "sum",   # (x, /, *, axis=None, keepdims=False)
-    "std",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
-    "var",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
-]
-
-for func in statisticals:
+for func in api.statisticals:
     exec(
         f"{func} = lambda this, **kwargs: dtensor(_cdt.reduce_op(this._t, '{func}', **kwargs))"
     )

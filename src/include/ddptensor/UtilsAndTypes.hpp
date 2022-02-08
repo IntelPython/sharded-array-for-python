@@ -8,6 +8,7 @@
 
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
+#include "p2c_ids.hpp"
 
 using shape_type = std::vector<uint64_t>;
 using dim_vec_type = std::vector<int>;
@@ -81,32 +82,17 @@ inline const py::object & get_impl_dtype(const DType dt)
     return _dtypes[dt];
 }
 
-// identifies reduction operation
-enum RedOpType {
-    OP_MAX = 100,
-    OP_MIN,
-    OP_SUM,
-    OP_PROD,
-    OP_MEAN,
-    OP_STD,
-    OP_VAR,
-    OP_LAND,
-    OP_BAND,
-    OP_LOR,
-    OP_BOR,
-    OP_LXOR,
-    OP_BXOR
-};
+using RedOpType = ReduceOpId;
 
 inline RedOpType red_op(const char * op)
 {
-    if(!strcmp(op, "max")) return OP_MAX;
-    if(!strcmp(op, "min")) return OP_MIN;
-    if(!strcmp(op, "sum")) return OP_SUM;
-    if(!strcmp(op, "prod")) return OP_PROD;
-    if(!strcmp(op, "mean")) return OP_MEAN;
-    if(!strcmp(op, "std")) return OP_STD;
-    if(!strcmp(op, "var")) return OP_VAR;
+    if(!strcmp(op, "max")) return MAX;
+    if(!strcmp(op, "min")) return MIN;
+    if(!strcmp(op, "sum")) return SUM;
+    if(!strcmp(op, "prod")) return PROD;
+    if(!strcmp(op, "mean")) return MEAN;
+    if(!strcmp(op, "std")) return STD;
+    if(!strcmp(op, "var")) return VAR;
     throw std::logic_error("unsupported reduction operation");
 }
 

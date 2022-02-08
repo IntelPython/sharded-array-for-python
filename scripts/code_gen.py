@@ -36,7 +36,14 @@ for x in bops:
 print("    EWBINOP_LAST")
 print("};\n")
 
-print("void def_enums(py::module_ & m)\n{")
+print("enum ReduceOpId : int {")
+for x in api.statisticals:
+    x = x + " = EWBINOP_LAST" if x == api.statisticals[0] else x
+    print(f"    {x.upper()},")
+print("    REDUCEOP_LAST")
+print("};\n")
+
+print("static void def_enums(py::module_ & m)\n{")
 
 print('    py::enum_<CreatorId>(m, "CreatorId")')
 for x in api.creators:
@@ -55,6 +62,11 @@ print("        .export_values();\n")
 
 print('    py::enum_<EWBinOpId>(m, "EWBinOpId")')
 for x in bops:
+    print(f'        .value("{x.upper()}", {x.upper()})')
+print("        .export_values();\n")
+
+print('    py::enum_<ReduceOpId>(m, "ReduceOpId")')
+for x in api.statisticals:
     print(f'        .value("{x.upper()}", {x.upper()})')
 print("        .export_values();\n")
 

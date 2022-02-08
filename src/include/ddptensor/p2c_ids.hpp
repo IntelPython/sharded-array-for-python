@@ -137,7 +137,18 @@ enum EWBinOpId : int {
     EWBINOP_LAST
 };
 
-void def_enums(py::module_ & m)
+enum ReduceOpId : int {
+    MAX = EWBINOP_LAST,
+    MEAN,
+    MIN,
+    PROD,
+    SUM,
+    STD,
+    VAR,
+    REDUCEOP_LAST
+};
+
+static void def_enums(py::module_ & m)
 {
     py::enum_<CreatorId>(m, "CreatorId")
         .value("ARANGE", ARANGE)
@@ -266,6 +277,16 @@ void def_enums(py::module_ & m)
         .value("POW", POW)
         .value("REMAINDER", REMAINDER)
         .value("SUBTRACT", SUBTRACT)
+        .export_values();
+
+    py::enum_<ReduceOpId>(m, "ReduceOpId")
+        .value("MAX", MAX)
+        .value("MEAN", MEAN)
+        .value("MIN", MIN)
+        .value("PROD", PROD)
+        .value("SUM", SUM)
+        .value("STD", STD)
+        .value("VAR", VAR)
         .export_values();
 
 }
