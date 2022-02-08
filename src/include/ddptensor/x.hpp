@@ -125,29 +125,29 @@ namespace x
         template<typename A, typename B, typename U = T, std::enable_if_t<std::is_floating_point<U>::value, bool> = true>
         static void integral_iop(IEWBinOpId iop, A && a, B && b)
         {
-                throw std::runtime_error("Illegal or unknown inplace elementwise binary operation");
+            throw std::runtime_error("Illegal or unknown inplace elementwise binary operation");
         }
 
         template<typename A, typename B, typename U = T, std::enable_if_t<std::is_integral<U>::value, bool> = true>
         static void integral_iop(IEWBinOpId iop, A && a, B && b)
         {
             switch(iop) {
-            case IMOD:
+            case __IMOD__:
                 a %= b;
                 return;
-            case IOR:
+            case __IOR__:
                 a |= b;
                 return;
-            case IAND:
+            case __IAND__:
                 a &= b;
                 return;
-            case ILSHIFT:
+            case __ILSHIFT__:
                 a = xt::left_shift(a, b);
                 return;
-            case IRSHIFT:
+            case __IRSHIFT__:
                 a = xt::right_shift(a, b);
                 return;
-            case IXOR:
+            case __IXOR__:
                 a ^= b;
                 return;
             default:
@@ -165,26 +165,23 @@ namespace x
             auto const & b = _b->xarray();
             
             switch(iop) {
-            case IADD:
+            case __IADD__:
                 a += b;
                 return;
-            case IFLOORDIV:
+            case __IFLOORDIV__:
                 a = xt::floor(a / b);
                 return;
-            case IMUL:
+            case __IMUL__:
                 a *= b;
                 return;
-                /* FIXME
-            case IPOW:
-                a = xt::pow(a, b);
-                return;
-                */
-            case ISUB:
+            case __ISUB__:
                 a -= b;
                 return;
-            case ITRUEDIV:
+            case __ITRUEDIV__:
                 a /= b;
                 return;
+            case __IPOW__:
+                throw std::runtime_error("Binary inplace operation not implemented");
             }
             integral_iop(iop, a, b);
         }
@@ -193,6 +190,11 @@ namespace x
 
     };
 
+    template<typename X>
+    inline DPTensorBaseX::ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
+    {
+        return std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), x);
+    }
     
     template<typename T>
     class EWBinOp
@@ -200,44 +202,47 @@ namespace x
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
-        template<typename X>
-        static ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
-        {
-            return std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), x);
-        }
-
 #pragma GCC diagnostic ignored "-Wswitch"
 
         template<typename A, typename B, typename U = T, std::enable_if_t<std::is_floating_point<U>::value, bool> = true>
         static ptr_type integral_op(EWBinOpId iop, const DPTensorX<T> & tx, A && a, B && b)
         {
-                throw std::runtime_error("Illegal or unknown inplace elementwise binary operation");
+            throw std::runtime_error("Illegal or unknown inplace elementwise binary operation");
         }
 
         template<typename A, typename B, typename U = T, std::enable_if_t<std::is_integral<U>::value, bool> = true>
         static ptr_type integral_op(EWBinOpId iop, const DPTensorBaseX & tx, A && a, B && b)
         {
             switch(iop) {
-            case AND:
-            case RAND:
+            case __AND__:
+            case BITWISE_AND:
                 return mk_tx(tx, a & b);
-            case LSHIFT:
+            case __RAND__:
+                return mk_tx(tx, b & a);
+            case __LSHIFT__:
+            case BITWISE_LEFT_SHIFT:
                 return mk_tx(tx, a << b);
-            case MOD:
+            case __MOD__:
+            case REMAINDER:
                 return mk_tx(tx, a % b);
-            case OR:
-            case ROR:
+            case __OR__:
+            case BITWISE_OR:
                 return mk_tx(tx, a | b);
-            case RSHIFT:
+            case __ROR__:
+                return mk_tx(tx, b | a);
+            case __RSHIFT__:
+            case BITWISE_RIGHT_SHIFT:
                 return mk_tx(tx, a >> b);
-            case XOR:
-            case RXOR:
+            case __XOR__:
+            case BITWISE_XOR:
                 return mk_tx(tx, a ^ b);
-            case RLSHIFT:
+            case __RXOR__:
+                return mk_tx(tx, b ^ a);
+            case __RLSHIFT__:
                 return mk_tx(tx, b << a);
-            case RMOD:
+            case __RMOD__:
                 return mk_tx(tx, b % a);
-            case RRSHIFT:
+            case __RRSHIFT__:
                 return mk_tx(tx, b >> a);
             default:
                 throw std::runtime_error("Unknown elementwise binary operation");
@@ -246,56 +251,69 @@ namespace x
 
         static ptr_type op(EWBinOpId bop, const ptr_type & a_ptr, const ptr_type & b_ptr)
         {
-            auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto & a = _a->xarray();
+            auto const & a = _a->xarray();
             auto const & b = _b->xarray();
             
             switch(bop) {
+            case __ADD__:
             case ADD:
-            case RADD:
                 return mk_tx(*_a, a + b);
-            case EQ:
+            case __RADD__:
+                return mk_tx(*_a, b + a);
+            case ATAN2:
+                return  mk_tx(*_a, xt::atan2(a, b));
+            case __EQ__:
+            case EQUAL:
                 return  mk_tx(*_a, xt::equal(a, b));
-            case FLOORDIV:
+            case __FLOORDIV__:
+            case FLOOR_DIVIDE:
                 return mk_tx(*_a, xt::floor(a / b));
-            case GE:
+            case __GE__:
+            case GREATER_EQUAL:
                 return mk_tx(*_a, a >= b);
-            case GT:
+            case __GT__:
+            case GREATER:
                 return mk_tx(*_a, a > b);
-            case LE:
+            case __LE__:
+            case LESS_EQUAL:
                 return mk_tx(*_a, a <= b);
-            case LT:
+            case __LT__:
+            case LESS:
                 return mk_tx(*_a, a < b);
-                /* FIXME
-            case MATMUL:
-                return mk_tx(*_a, );
-                */
-            case MUL:
-            case RMUL:
+            case __MUL__:
+            case MULTIPLY:
                 return mk_tx(*_a, a * b);
-            case NE:
+            case __RMUL__:
+                return mk_tx(*_a, b * a);
+            case __NE__:
+            case NOT_EQUAL:
                 return mk_tx(*_a, xt::not_equal(a, b));
-                /* FIXME
-            case POW:
-                return mk_tx(*_a, );
-                */
-            case SUB:
+            case __SUB__:
+            case SUBTRACT:
                 return mk_tx(*_a, a - b);
-            case TRUEDIV:
+            case __TRUEDIV__:
+            case DIVIDE:
                 return mk_tx(*_a, a / b);
-            case RFLOORDIV:
+            case __RFLOORDIV__:
                 return mk_tx(*_a, xt::floor(b / a));
-                /* FIXME
-            case RPOW:
-                return mk_tx(*_a, );
-                */
-            case RSUB:
+            case __RSUB__:
                 return mk_tx(*_a, b - a);
-            case RTRUEDIV:
+            case __RTRUEDIV__:
                 return mk_tx(*_a, b / a);
+            case __MATMUL__:
+            case __POW__:
+            case POW:
+            case __RPOW__:
+            case LOGADDEXP:
+            case LOGICAL_AND:
+            case LOGICAL_OR:
+            case LOGICAL_XOR:
+                // FIXME
+                throw std::runtime_error("Binary operation not implemented");
             }
             return integral_op(bop, *_a, a, b);
         }
@@ -303,4 +321,113 @@ namespace x
 #pragma GCC diagnostic pop
 
     };
+
+    
+    template<typename T>
+    class EWUnyOp
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+#pragma GCC diagnostic ignored "-Wswitch"
+
+        template<typename A, typename U = T, std::enable_if_t<std::is_floating_point<U>::value, bool> = true>
+        static ptr_type integral_op(EWUnyOpId uop, const DPTensorBaseX & tx, A && a)
+        {
+            throw std::runtime_error("Illegal or unknown inplace elementwise unary operation");
+        }
+
+        template<typename A, typename U = T, std::enable_if_t<std::is_integral<U>::value, bool> = true>
+        static ptr_type integral_op(EWUnyOpId uop, const DPTensorBaseX & tx, A && a)
+        {
+            switch(uop) {
+            case __INVERT__:
+            case BITWISE_INVERT:
+            default:
+                throw std::runtime_error("Unknown elementwise unary operation");
+            }
+        }
+
+        static ptr_type op(EWUnyOpId uop, const ptr_type & a_ptr)
+        {
+            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            if(!_a )
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+            auto const & a = _a->xarray();
+            
+            switch(uop) {
+            case __ABS__:
+            case ABS:
+                return mk_tx(*_a, xt::abs(a));
+            case ACOS:
+                return mk_tx(*_a, xt::acos(a));
+            case ACOSH:
+                return mk_tx(*_a, xt::acosh(a));
+            case ASIN:
+                return mk_tx(*_a, xt::asin(a));
+            case ASINH:
+                return mk_tx(*_a, xt::asinh(a));
+            case ATAN:
+                return mk_tx(*_a, xt::atan(a));
+            case ATANH:
+                return mk_tx(*_a, xt::atanh(a));
+            case CEIL:
+                return mk_tx(*_a, xt::ceil(a));
+            case COS:
+                return mk_tx(*_a, xt::cos(a));
+            case COSH:
+                return mk_tx(*_a, xt::cosh(a));
+            case EXP:
+                return mk_tx(*_a, xt::exp(a));
+            case EXPM1:
+                return mk_tx(*_a, xt::expm1(a));
+            case FLOOR:
+                return mk_tx(*_a, xt::floor(a));
+            case ISFINITE:
+                return mk_tx(*_a, xt::isfinite(a));
+            case ISINF:
+                return mk_tx(*_a, xt::isinf(a));
+            case ISNAN:
+                return mk_tx(*_a, xt::isnan(a));
+            case LOG:
+                return mk_tx(*_a, xt::log(a));
+            case LOG1P:
+                return mk_tx(*_a, xt::log1p(a));
+            case LOG2:
+                return mk_tx(*_a, xt::log2(a));
+            case LOG10:
+                return mk_tx(*_a, xt::log10(a));
+            case ROUND:
+                return mk_tx(*_a, xt::round(a));
+            case SIGN:
+                return mk_tx(*_a, xt::sign(a));
+            case SIN:
+                return mk_tx(*_a, xt::sin(a));
+            case SINH:
+                return mk_tx(*_a, xt::sinh(a));
+            case SQUARE:
+                return mk_tx(*_a, xt::square(a));
+            case SQRT:
+                return mk_tx(*_a, xt::sqrt(a));
+            case TAN:
+                return mk_tx(*_a, xt::tan(a));
+            case TANH:
+                return mk_tx(*_a, xt::tanh(a));
+            case TRUNC:
+                return mk_tx(*_a, xt::trunc(a));
+            case __NEG__:
+            case NEGATIVE:
+            case __POS__:
+            case POSITIVE:
+            case LOGICAL_NOT:
+                // FIXME
+                throw std::runtime_error("Unary operation not implemented");
+            }
+            return integral_op(uop, *_a, a);
+        }
+
+#pragma GCC diagnostic pop
+
+    };
+                
 } // namespace x

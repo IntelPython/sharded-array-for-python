@@ -15,6 +15,49 @@ creators = [
     "zeros_like",  # (x, /, *, dtype=None, device=None)
 ]
 
+ew_unary_methods = [
+    "__abs__",  # (self, /)
+    "__invert__",  # (self, /)
+    "__neg__",  # (self, /)
+    "__pos__",  # (self, /)
+]
+
+ew_unary_ops = [
+    "abs",  # (x, /)
+    "acos",  # (x, /)
+    "acosh",  # (x, /)
+    "asin",  # (x, /)
+    "asinh",  # (x, /)
+    "atan",  # (x, /)
+    "atanh",  # (x, /)
+    "bitwise_invert",  # (x, /)
+    "ceil",  # (x, /)
+    "cos",  # (x, /)
+    "cosh",  # (x, /)
+    "exp",  # (x, /)
+    "expm1",  # (x, /)
+    "floor",  # (x, /)
+    "isfinite",  # (x, /)
+    "isinf",  # (x, /)
+    "isnan",  # (x, /)
+    "logical_not",  # (x, /)
+    "log",  # (x, /)
+    "log1p",  # (x, /)
+    "log2",  # (x, /)
+    "log10",  # (x, /)
+    "negative",  # (x, /)
+    "positive",  # (x, /)
+    "round",  # (x, /)
+    "sign",  # (x, /)
+    "sin",  # (x, /)
+    "sinh",  # (x, /)
+    "square",  # (x, /)
+    "sqrt",  # (x, /)
+    "tan",  # (x, /)
+    "tanh",  # (x, /)
+    "trunc",  # (x, /)
+]
+
 ew_binary_methods_inplace = [
     # inplace operators
     "__iadd__",
@@ -64,4 +107,30 @@ ew_binary_methods = [
     "__rsub__",
     "__rtruediv__",
     "__rxor__",
+]
+
+ew_binary_ops = [
+    "add",  # (x1, x2, /)
+    "atan2",  # (x1, x2, /)
+    "bitwise_and",  # (x1, x2, /)
+    "bitwise_left_shift",  # (x1, x2, /)
+    "bitwise_or",  # (x1, x2, /)
+    "bitwise_right_shift",  # (x1, x2, /)
+    "bitwise_xor",  # (x1, x2, /)
+    "divide",  # (x1, x2, /)
+    "equal",  # (x1, x2, /)
+    "floor_divide",  # (x1, x2, /)
+    "greater",  # (x1, x2, /)
+    "greater_equal",  # (x1, x2, /)
+    "less_equal",  # (x1, x2, /)
+    "logaddexp",  # (x1, x2)
+    "logical_and",  # (x1, x2, /)
+    "logical_or",  # (x1, x2, /)
+    "logical_xor",  # (x1, x2, /)
+    "multiply",  # (x1, x2, /)
+    "less",  # (x1, x2, /)
+    "not_equal",  # (x1, x2, /)
+    "pow",  # (x1, x2, /)
+    "remainder",  # (x1, x2, /)
+    "subtract",  # (x1, x2, /)
 ]

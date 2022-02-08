@@ -236,6 +236,14 @@ struct EWBinOp
     }
 };
 
+struct EWUnyOp
+{
+    static auto op(EWUnyOpId op, x::DPTensorBaseX::ptr_type a)
+    {
+        return TypeDispatch<x::EWUnyOp>(a->dtype(), op, a);
+    }
+};
+
 rank_type myrank()
 {
     return theTransceiver->rank();
@@ -261,6 +269,9 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)
         .def("full", &Creator::full);
+
+    py::class_<EWUnyOp>(m, "EWUnyOp")
+        .def("op", &EWUnyOp::op);
 
     py::class_<IEWBinOp>(m, "IEWBinOp")
         .def("op", &IEWBinOp::op);

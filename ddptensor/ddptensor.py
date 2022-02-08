@@ -2,13 +2,6 @@ from . import _ddptensor as _cdt
 from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
-ew_unary_methods = [
-    "__abs__",  # (self, /)
-    "__invert__",  # (self, /)
-    "__neg__",  # (self, /)
-    "__pos__",  # (self, /)
-]
-
 unary_methods = [
     # "__array_namespace__",  # (self, /, *, api_version=None)
     "__bool__",  # (self, /)
@@ -45,7 +38,7 @@ class dtensor:
             f"{method} = lambda self, other: (self, _cdt.ew_binary_op_inplace(self._t, '{method}', other._t if isinstance(other, dtensor) else other))[0]"
         )
 
-    for method in ew_unary_methods:
+    for method in api.ew_unary_methods:
         exec(
             f"{method} = lambda self: dtensor(_cdt.ew_unary_op(self._t, '{method}', True))"
         )
