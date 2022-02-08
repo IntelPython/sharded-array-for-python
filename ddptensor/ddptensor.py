@@ -2,41 +2,6 @@ from . import _ddptensor as _cdt
 from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
-ew_binary_methods = [
-    "__add__",  # (self, other, /)
-    "__and__",  # (self, other, /)
-    "__eq__",  # (self, other, /)
-    "__floordiv__",  # (self, other, /)
-    "__ge__",  # (self, other, /)
-    "__gt__",  # (self, other, /)
-    "__le__",  # (self, other, /)
-    "__lshift__",  # (self, other, /)
-    "__lt__",  # (self, other, /)
-    "__matmul__",  # (self, other, /)
-    "__mod__",  # (self, other, /)
-    "__mul__",  # (self, other, /)
-    "__ne__",  # (self, other, /)
-    "__or__",  # (self, other, /)
-    "__pow__",  # (self, other, /)
-    "__rshift__",  # (self, other, /)
-    "__sub__",  # (self, other, /)
-    "__truediv__",  # (self, other, /)
-    "__xor__",  # (self, other, /)
-    # reflected operators
-    "__radd__",
-    "__rand__",
-    "__rflowdiv__",
-    "__rlshift__",
-    "__rmod__",
-    "__rmul__",
-    "__ror__",
-    "__rpow__",
-    "__rrshift__",
-    "__rsub__",
-    "__rtruediv__",
-    "__rxor__",
-]
-
 ew_unary_methods = [
     "__abs__",  # (self, /)
     "__invert__",  # (self, /)
@@ -70,7 +35,7 @@ class dtensor:
         return self._t.__repr__()
 
 
-    for method in ew_binary_methods:
+    for method in api.ew_binary_methods:
         exec(
             f"{method} = lambda self, other: dtensor(_cdt.ew_binary_op(self._t, '{method}', other._t if isinstance(other, dtensor) else other, True))"
         )

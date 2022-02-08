@@ -16,7 +16,7 @@ ext_modules = [
         glob("src/*.cpp"),
         include_dirs = xt_includes + [jp(mpiroot, "include"), jp("third_party", "bitsery", "include"), jp("src", "include"), ],
         extra_compile_args = ["-DUSE_MKL", "-DXTENSOR_USE_XSIMD=1", "-DXTENSOR_USE_OPENMP=1",
-                              "-std=c++17",
+                              "-std=c++17", "-fopenmp",
                               "-Wno-unused-but-set-variable", "-Wno-sign-compare", "-Wno-unused-local-typedefs", "-Wno-reorder",
                               "-march=native", "-O0", "-g"],
         libraries = ["mpi", "mkl_intel_lp64", "mkl_intel_thread", "mkl_core", "iomp5", "pthread", "rt", "dl", "m"],

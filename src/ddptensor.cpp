@@ -228,6 +228,14 @@ struct IEWBinOp
     }
 };
 
+struct EWBinOp
+{
+    static auto op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
+    {
+        return TypeDispatch<x::EWBinOp>(a->dtype(), op, a, b);
+    }
+};
+
 rank_type myrank()
 {
     return theTransceiver->rank();
@@ -256,6 +264,9 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<IEWBinOp>(m, "IEWBinOp")
         .def("op", &IEWBinOp::op);
+
+    py::class_<EWBinOp>(m, "EWBinOp")
+        .def("op", &EWBinOp::op);
 
     py::class_<x::DPTensorBaseX, x::DPTensorBaseX::ptr_type>(m, "DPTensorX")
         .def("__repr__", &x::DPTensorBaseX::__repr__);

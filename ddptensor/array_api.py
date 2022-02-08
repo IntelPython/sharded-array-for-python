@@ -30,3 +30,38 @@ ew_binary_methods_inplace = [
     "__itruediv__",
     "__ixor__",
 ]
+
+ew_binary_methods = [
+    "__add__",  # (self, other, /)
+    "__and__",  # (self, other, /)
+    "__eq__",  # (self, other, /)
+    "__floordiv__",  # (self, other, /)
+    "__ge__",  # (self, other, /)
+    "__gt__",  # (self, other, /)
+    "__le__",  # (self, other, /)
+    "__lshift__",  # (self, other, /)
+    "__lt__",  # (self, other, /)
+    "__matmul__",  # (self, other, /)
+    "__mod__",  # (self, other, /)
+    "__mul__",  # (self, other, /)
+    "__ne__",  # (self, other, /)
+    "__or__",  # (self, other, /)
+    "__pow__",  # (self, other, /)
+    "__rshift__",  # (self, other, /)
+    "__sub__",  # (self, other, /)
+    "__truediv__",  # (self, other, /)
+    "__xor__",  # (self, other, /)
+    # reflected operators
+    "__radd__",
+    "__rand__",
+    "__rfloordiv__",
+    "__rlshift__",
+    "__rmod__",
+    "__rmul__",
+    "__ror__",
+    "__rpow__",
+    "__rrshift__",
+    "__rsub__",
+    "__rtruediv__",
+    "__rxor__",
+]

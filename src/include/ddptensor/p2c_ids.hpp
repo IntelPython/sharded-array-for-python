@@ -38,6 +38,41 @@ enum IEWBinOpId : int {
     IEWBINOP_LAST
 };
 
+enum EWBinOpId : int {
+    ADD = IEWBINOP_LAST,
+    AND,
+    EQ,
+    FLOORDIV,
+    GE,
+    GT,
+    LE,
+    LSHIFT,
+    LT,
+    MATMUL,
+    MOD,
+    MUL,
+    NE,
+    OR,
+    POW,
+    RSHIFT,
+    SUB,
+    TRUEDIV,
+    XOR,
+    RADD,
+    RAND,
+    RFLOORDIV,
+    RLSHIFT,
+    RMOD,
+    RMUL,
+    ROR,
+    RPOW,
+    RRSHIFT,
+    RSUB,
+    RTRUEDIV,
+    RXOR,
+    EWBINOP_LAST
+};
+
 void def_enums(py::module_ & m)
 {
     py::enum_<CreatorId>(m, "CreatorId")
@@ -71,4 +106,39 @@ void def_enums(py::module_ & m)
         .value("ITRUEDIV", ITRUEDIV)
         .value("IXOR", IXOR)
         .export_values();
+
+    py::enum_<EWBinOpId>(m, "EWBinOpId")
+        .value("ADD", ADD)
+        .value("AND", AND)
+        .value("EQ", EQ)
+        .value("FLOORDIV", FLOORDIV)
+        .value("GE", GE)
+        .value("GT", GT)
+        .value("LE", LE)
+        .value("LSHIFT", LSHIFT)
+        .value("LT", LT)
+        .value("MATMUL", MATMUL)
+        .value("MOD", MOD)
+        .value("MUL", MUL)
+        .value("NE", NE)
+        .value("OR", OR)
+        .value("POW", POW)
+        .value("RSHIFT", RSHIFT)
+        .value("SUB", SUB)
+        .value("TRUEDIV", TRUEDIV)
+        .value("XOR", XOR)
+        .value("RADD", RADD)
+        .value("RAND", RAND)
+        .value("RFLOORDIV", RFLOORDIV)
+        .value("RLSHIFT", RLSHIFT)
+        .value("RMOD", RMOD)
+        .value("RMUL", RMUL)
+        .value("ROR", ROR)
+        .value("RPOW", RPOW)
+        .value("RRSHIFT", RRSHIFT)
+        .value("RSUB", RSUB)
+        .value("RTRUEDIV", RTRUEDIV)
+        .value("RXOR", RXOR)
+        .export_values();
+
 }

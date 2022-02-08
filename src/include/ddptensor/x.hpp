@@ -33,6 +33,7 @@ namespace x
         virtual ~DPTensorBaseX() {};
         virtual std::string __repr__() const = 0;
         virtual DType dtype() const = 0;
+        virtual shape_type shape() const = 0;
     };
 
     template<typename T>
@@ -64,6 +65,16 @@ namespace x
         xt::xarray<T> & xarray()
         {
             return _xarray;
+        }
+
+        const PVSlice & slice() const
+        {
+            return _slice;
+        }
+
+        virtual shape_type shape() const
+        {
+            return _slice.shape();
         }
     };
 
@@ -147,7 +158,7 @@ namespace x
         static void op(IEWBinOpId iop, ptr_type a_ptr, const ptr_type & b_ptr)
         {
             auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            auto _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
             auto & a = _a->xarray();
@@ -176,6 +187,117 @@ namespace x
                 return;
             }
             integral_iop(iop, a, b);
+        }
+
+#pragma GCC diagnostic pop
+
+    };
+
+    
+    template<typename T>
+    class EWBinOp
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+        template<typename X>
+        static ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
+        {
+            return std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), x);
+        }
+
+#pragma GCC diagnostic ignored "-Wswitch"
+
+        template<typename A, typename B, typename U = T, std::enable_if_t<std::is_floating_point<U>::value, bool> = true>
+        static ptr_type integral_op(EWBinOpId iop, const DPTensorX<T> & tx, A && a, B && b)
+        {
+                throw std::runtime_error("Illegal or unknown inplace elementwise binary operation");
+        }
+
+        template<typename A, typename B, typename U = T, std::enable_if_t<std::is_integral<U>::value, bool> = true>
+        static ptr_type integral_op(EWBinOpId iop, const DPTensorBaseX & tx, A && a, B && b)
+        {
+            switch(iop) {
+            case AND:
+            case RAND:
+                return mk_tx(tx, a & b);
+            case LSHIFT:
+                return mk_tx(tx, a << b);
+            case MOD:
+                return mk_tx(tx, a % b);
+            case OR:
+            case ROR:
+                return mk_tx(tx, a | b);
+            case RSHIFT:
+                return mk_tx(tx, a >> b);
+            case XOR:
+            case RXOR:
+                return mk_tx(tx, a ^ b);
+            case RLSHIFT:
+                return mk_tx(tx, b << a);
+            case RMOD:
+                return mk_tx(tx, b % a);
+            case RRSHIFT:
+                return mk_tx(tx, b >> a);
+            default:
+                throw std::runtime_error("Unknown elementwise binary operation");
+            }
+        }
+
+        static ptr_type op(EWBinOpId bop, const ptr_type & a_ptr, const ptr_type & b_ptr)
+        {
+            auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            if(!_a || !_b)
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+            auto & a = _a->xarray();
+            auto const & b = _b->xarray();
+            
+            switch(bop) {
+            case ADD:
+            case RADD:
+                return mk_tx(*_a, a + b);
+            case EQ:
+                return  mk_tx(*_a, xt::equal(a, b));
+            case FLOORDIV:
+                return mk_tx(*_a, xt::floor(a / b));
+            case GE:
+                return mk_tx(*_a, a >= b);
+            case GT:
+                return mk_tx(*_a, a > b);
+            case LE:
+                return mk_tx(*_a, a <= b);
+            case LT:
+                return mk_tx(*_a, a < b);
+                /* FIXME
+            case MATMUL:
+                return mk_tx(*_a, );
+                */
+            case MUL:
+            case RMUL:
+                return mk_tx(*_a, a * b);
+            case NE:
+                return mk_tx(*_a, xt::not_equal(a, b));
+                /* FIXME
+            case POW:
+                return mk_tx(*_a, );
+                */
+            case SUB:
+                return mk_tx(*_a, a - b);
+            case TRUEDIV:
+                return mk_tx(*_a, a / b);
+            case RFLOORDIV:
+                return mk_tx(*_a, xt::floor(b / a));
+                /* FIXME
+            case RPOW:
+                return mk_tx(*_a, );
+                */
+            case RSUB:
+                return mk_tx(*_a, b - a);
+            case RTRUEDIV:
+                return mk_tx(*_a, b / a);
+            }
+            return integral_op(bop, *_a, a, b);
         }
 
 #pragma GCC diagnostic pop

@@ -20,6 +20,13 @@ for x in api.ew_binary_methods_inplace:
 print("    IEWBINOP_LAST")
 print("};\n")
 
+print("enum EWBinOpId : int {")
+for x in api.ew_binary_methods:
+    x = x[2:-2] + " = IEWBINOP_LAST" if x == api.ew_binary_methods[0] else x[2:-2]
+    print(f"    {x.upper()},")
+print("    EWBINOP_LAST")
+print("};\n")
+
 print("void def_enums(py::module_ & m)\n{")
 
 print('    py::enum_<CreatorId>(m, "CreatorId")')
@@ -30,6 +37,11 @@ print("        .export_values();\n")
 print('    py::enum_<IEWBinOpId>(m, "IEWBinOpId")')
 for x in api.ew_binary_methods_inplace:
     print(f'        .value("{x[2:-2].upper()}", {x[2:-2].upper()})')
-print("        .export_values();")
+print("        .export_values();\n")
+
+print('    py::enum_<EWBinOpId>(m, "EWBinOpId")')
+for x in api.ew_binary_methods:
+    print(f'        .value("{x[2:-2].upper()}", {x[2:-2].upper()})')
+print("        .export_values();\n")
 
 print("}")
