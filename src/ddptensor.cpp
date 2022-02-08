@@ -12,10 +12,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11;
+using namespace pybind11::literals; // to bring _a
 
 #include "ddptensor/ddptensor_impl.hpp"
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/MPIMediator.hpp"
+#include "ddptensor/x.hpp"
 
 /// Thensor which is closely following the Python API
 class dtensor
@@ -170,6 +172,62 @@ dtensor reduce_op(const dtensor & a, const char * op, const py::kwargs & kwargs)
     return dtensor(a._tensor->_reduce_op(op, dims));
 }
 
+// ###################################################################
+// ###################################################################
+// ###################################################################
+
+template<template<typename OD> class OpDispatch, typename... Ts>
+auto TypeDispatch(DType dt, Ts&&... args)
+{
+    switch(dt) {
+    case DT_FLOAT64:
+        return OpDispatch<double>::op(std::forward<Ts>(args)...);
+    case DT_FLOAT32:
+        return OpDispatch<float>::op(std::forward<Ts>(args)...);
+    case DT_INT64:
+        return OpDispatch<int64_t>::op(std::forward<Ts>(args)...);
+    case DT_INT32:
+        return OpDispatch<int32_t>::op(std::forward<Ts>(args)...);
+    case DT_INT16:
+        return OpDispatch<int16_t>::op(std::forward<Ts>(args)...);
+    case DT_UINT64:
+        return OpDispatch<uint64_t>::op(std::forward<Ts>(args)...);
+    case DT_UINT32:
+        return OpDispatch<uint32_t>::op(std::forward<Ts>(args)...);
+    case DT_UINT16:
+        return OpDispatch<uint16_t>::op(std::forward<Ts>(args)...);
+        /* FIXME
+    case DT_BOOL:
+        return OpDispatch<bool>::op(std::forward<Ts>(args)...);
+        */
+    default:
+        throw std::runtime_error("unknown dtype");
+    }
+}
+
+struct Creator
+{
+
+    static auto create_from_shape(CreatorId op, shape_type && shape, DType dtype=DT_FLOAT64)
+    {
+        return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape));
+    }
+
+    static auto full(shape_type && shape, py::object && val, DType dtype=DT_FLOAT64)
+    {
+        auto op = FULL;
+        return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape), std::forward<py::object>(val));
+    }
+};
+
+struct IEWBinOp
+{
+    static auto op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
+    {
+        return TypeDispatch<x::IEWBinOp>(a->dtype(), op, a, b);
+    }
+};
+
 rank_type myrank()
 {
     return theTransceiver->rank();
@@ -192,14 +250,18 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     m.doc() = "A partitioned and distributed tensor";
 
-    /*    static const DType _DT_FLOAT64 = DT_FLOAT64;
-    static const DType _DT_INT64 = DT_INT64;
-    static const DType _DT_BOOL = DT_BOOL;
+    py::class_<Creator>(m, "Creator")
+        .def("create_from_shape", &Creator::create_from_shape)
+        .def("full", &Creator::full);
 
-    m.def_readonly("float64", &_DT_FLOAT64);
-    m.def_readonly("int64", &_DT_INT64);
-    m.def_readonly("bool", &_DT_BOOL);
-    */
+    py::class_<IEWBinOp>(m, "IEWBinOp")
+        .def("op", &IEWBinOp::op);
+
+    py::class_<x::DPTensorBaseX, x::DPTensorBaseX::ptr_type>(m, "DPTensorX")
+        .def("__repr__", &x::DPTensorBaseX::__repr__);
+
+    def_enums(m);
+
     py::enum_<DType>(m, "dtype")
         .value("float64", DT_FLOAT64)
         .value("int64", DT_INT64)

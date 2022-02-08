@@ -1,6 +1,7 @@
 from . import _ddptensor as _cdt
 from .ddptensor import float64, int64, fini, dtensor
 from os import getenv
+from . import array_api as api
 
 __impl_str = getenv("DDPNP_ARRAY", 'numpy')
 exec(f"import {__impl_str} as __impl")
@@ -77,17 +78,11 @@ for op in ew_unary_ops:
         f"{op} = lambda this: dtensor(_cdt.ew_unary_op(this._t, '{op}', False))"
     )
 
-creators_with_shape = [
-    "empty",  # (shape, *, dtype=None, device=None)
-    "full",   # (shape, fill_value, *, dtype=None, device=None)
-    "ones",   # (shape, *, dtype=None, device=None)
-    "zeros",  # (shape, *, dtype=None, device=None)
-]
-
-for func in creators_with_shape:
-    exec(
-        f"{func} = lambda shape, *args, **kwargs: dtensor(_cdt.create(shape, '{func}', '{__impl_str}', *args, **kwargs))"
-    )
+for func in api.creators:
+    if func in ["empty", "full", "ones", "zeros",]:
+        exec(
+            f"{func} = lambda shape, *args, **kwargs: dtensor(_cdt.create(shape, '{func}', '{__impl_str}', *args, **kwargs))"
+        )
 
 statisticals = [
     "max",   # (x, /, *, axis=None, keepdims=False)
@@ -103,17 +98,3 @@ for func in statisticals:
     exec(
         f"{func} = lambda this, **kwargs: dtensor(_cdt.reduce_op(this._t, '{func}', **kwargs))"
     )
-
-
-creators = [
-    "arange",  # (start, /, stop=None, step=1, *, dtype=None, device=None)
-    "asarray",  # (obj, /, *, dtype=None, device=None, copy=None)
-    "empty_like",  # (x, /, *, dtype=None, device=None)
-    "eye",  # (n_rows, n_cols=None, /, *, k=0, dtype=None, device=None)
-    "from_dlpack",  # (x, /)
-    "full_like",  # (x, /, fill_value, *, dtype=None, device=None)
-    "linspace",  # (start, stop, /, num, *, dtype=None, device=None, endpoint=True)
-    "meshgrid",  # (*arrays, indexing=’xy’)
-    "ones_like",  # (x, /, *, dtype=None, device=None)
-    "zeros_like",  # (x, /, *, dtype=None, device=None)
-]
