@@ -1,9 +1,9 @@
-import ddptensor._ddptensor as dt
-a = dt.Creator.create_from_shape(dt.ONES, [4,4], dt.float64)
-b = dt.Creator.create_from_shape(dt.ONES, [4,4], dt.float64)
-dt.IEWBinOp.op(dt.__IADD__, a, b)
+import ddptensor as dt
+a = dt.ones([4,4], dt.float64)
+b = dt.ones([4,4], dt.float64)
+a += b
 print(a)
-print(dt.EWBinOp.op(dt.EQUAL, a, b))
-print(dt.EWUnyOp.op(dt.SQRT, a))
-print(dt.ReduceOp.op(dt.SUM, a, [1]))
+print(a == b)
+print(dt.sqrt(a))
+print(dt.sum(a, [1]))
 dt.fini()
