@@ -144,3 +144,13 @@ statisticals = [
     "std",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
     "var",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
 ]
+
+unary_methods = [
+    "__array_namespace__",  # (self, /, *, api_version=None)
+    "__bool__",  # (self, /)
+    "__dlpack__",  # (self, /, *, stream=None)
+    "__dlpack_device__",  # (self, /)
+    "__float__",  # (self, /)
+    "__int__",  # (self, /)
+    "__len__",  # (self, /)
+]

@@ -47,26 +47,37 @@ namespace x
     template<typename T>
     class DPTensorX : public DPTensorBaseX
     {
+        rank_type _owner;
         PVSlice _slice;
         xt::xstrided_slice_vector _lslice;
         std::shared_ptr<xt::xarray<T>> _xarray;
+        T _replica = 0;
 
     public:
         template<typename I>
-        DPTensorX(PVSlice && slc, I && ax)
-            : _slice(std::move(slc)),
+        DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(std::move(slc)),
               _lslice(to_xt(_slice.local_slice_of_rank())),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
         }
 
         template<typename O>
-        DPTensorX(const DPTensorX<O> & org, const NDSlice & slc)
-            : _slice(org._slice, slc),
+        DPTensorX(const DPTensorX<O> & org, const NDSlice & slc, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(org._slice, slc),
               _lslice(to_xt(_slice.local_slice_of_rank())),
               _xarray(org._xarray)
         {
-            std::cerr << "slice: " << _slice.slice() << " lslice: " << _slice.local_slice_of_rank() << std::endl;
+            if(owner == NOOWNER && slice().size() <= 1) {
+                set_owner(org.slice().owner(slc));
+            } else if(owner == REPLICATED) {
+                _replica = *(xt::strided_view(xarray(), to_xt(slice().slice())).begin());
+            }
+            std::cerr << "slice: " << _slice.slice() << " sz " << _slice.size()
+                      << " lslice: " << _slice.local_slice_of_rank() << " owner: " << _owner
+                      << " val: " << _replica << std::endl;
         }
 
         virtual std::string __repr__() const
@@ -80,6 +91,11 @@ namespace x
         virtual DType dtype() const
         {
             return DTYPE<T>::value;
+        }
+
+        virtual shape_type shape() const
+        {
+            return _slice.shape();
         }
 
         xt::xarray<T> & xarray()
@@ -102,9 +118,41 @@ namespace x
             return _lslice;
         }
 
-        virtual shape_type shape() const
+        bool has_owner() const
         {
-            return _slice.shape();
+            return _owner < _OWNER_END;
+        }
+        
+        void set_owner(rank_type o)
+        {
+            _owner = o;
+        }
+        
+        rank_type owner() const
+        {
+            return _owner;
+        }
+        
+        bool is_replicated() const
+        {
+            return _owner == REPLICATED;
+        }
+
+        T replicate()
+        {
+            std::cerr << "is_replicated()=" << is_replicated() << " owner=" << owner() << " shape=" << to_string(shape()) << std::endl;
+            if(is_replicated()) return _replica;
+            if(has_owner() && _slice.size() == 1) {
+                if(theTransceiver->rank() == owner()) {
+                    _replica = *(xt::strided_view(xarray(), lslice()).begin());
+                    std::cerr << "replica: " << _replica << std::endl;
+                }
+                theTransceiver->bcast(&_replica, sizeof(T), owner());
+                set_owner(REPLICATED);
+            } else {
+                throw(std::runtime_error("Replication implemented for single element and single owner only."));
+            }
+            return _replica;
         }
     };
 
@@ -460,6 +508,34 @@ namespace x
 
     };
 
+    template<typename T>
+    class UnyOp
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+        template<typename N>
+        static N __type__(const ptr_type & a_ptr)
+        {
+            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            if(!_a )
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+            T v = _a->replicate();
+            return static_cast<N>(v);
+        }
+        static bool op(const ptr_type & a_ptr, bool)
+        {
+            return __type__<bool>(a_ptr);
+        }
+        static double op(const ptr_type & a_ptr, double)
+        {
+            return __type__<double>(a_ptr);
+        }
+        static int64_t op(const ptr_type & a_ptr, int64_t)
+        {
+            return __type__<int64_t>(a_ptr);
+        }
+    };
     
     template<typename T>
     class ReduceOp
@@ -474,11 +550,13 @@ namespace x
         {
             xt::xarray<typename X::value_type> a = x;
             auto new_shape = reduce_shape(slice.shape(), dims);
+            rank_type owner = NOOWNER;
             if(slice.need_reduce(dims)) {
                 auto len = VPROD(new_shape);
                 theTransceiver->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
+                owner = REPLICATED;
             }
-            return std::make_shared<DPTensorX<typename X::value_type>>(new_shape, a);
+            return std::make_shared<DPTensorX<typename X::value_type>>(new_shape, a, owner);
         }
 
         static ptr_type op(ReduceOpId rop, const ptr_type & a_ptr, const dim_vec_type & dims)
@@ -529,5 +607,5 @@ namespace x
             return std::make_shared<DPTensorX<T>>(*_a, slice);
         }
     };
-   
+
 } // namespace x

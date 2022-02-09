@@ -92,6 +92,24 @@ struct EWUnyOp
     }
 };
 
+struct UnyOp
+{
+    static bool __bool__(x::DPTensorBaseX::ptr_type a)
+    {
+        return TypeDispatch<x::UnyOp>(a->dtype(), a, true);
+    }
+
+    static double __float__(x::DPTensorBaseX::ptr_type a)
+    {
+        return TypeDispatch<x::UnyOp>(a->dtype(), a, double(1));
+    }
+
+    static int64_t __int__(x::DPTensorBaseX::ptr_type a)
+    {
+        return TypeDispatch<x::UnyOp>(a->dtype(), a, int64_t(1));
+    }
+};
+
 struct ReduceOp
 {
     static auto op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim)
@@ -147,6 +165,11 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<EWUnyOp>(m, "EWUnyOp")
         .def("op", &EWUnyOp::op);
+
+    py::class_<UnyOp>(m, "UnyOp")
+        .def("__bool__", &UnyOp::__bool__)
+        .def("__float__", &UnyOp::__float__)
+        .def("__int__", &UnyOp::__int__);
 
     py::class_<IEWBinOp>(m, "IEWBinOp")
         .def("op", &IEWBinOp::op);

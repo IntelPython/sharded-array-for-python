@@ -155,6 +155,11 @@ public:
         return _slice;
     }
 
+    uint64_t size() const
+    {
+        return slice().size();
+    }
+
 #if 0
     NDSlice normalized_slice() const
     {

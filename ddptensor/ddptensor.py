@@ -2,16 +2,6 @@ from . import _ddptensor as _cdt
 from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
-unary_methods = [
-    # "__array_namespace__",  # (self, /, *, api_version=None)
-    "__bool__",  # (self, /)
-    # "__dlpack__",  # (self, /, *, stream=None)
-    # "__dlpack_device__",  # (self, /)
-    "__float__",  # (self, /)
-    "__int__",  # (self, /)
-    "__len__",  # (self, /)
-]
-
 t_attributes = ["dtype", "shape", ]  #"device", "ndim", "size", "T"]
 
 #def try_except(func, *args, **kwargs):
@@ -26,7 +16,6 @@ class dtensor:
 
     def __repr__(self):
         return self._t.__repr__()
-
 
     for method in api.ew_binary_methods:
         METHOD = method.upper()
@@ -45,11 +34,11 @@ class dtensor:
         exec(
             f"{method} = lambda self: dtensor(_cdt.EWUnyOp.op(_cdt.{METHOD}, self._t))"
         )
-        
-    # for method in unary_methods:
-    #     exec(
-    #         f"{method} = lambda self: self._t.{method}()"
-    #     )
+
+    for method in api.unary_methods:
+        exec(
+            f"{method} = lambda self: _cdt.UnyOp.{method}(self._t)"
+        )
 
     # for att in t_attributes:
     #     exec(
