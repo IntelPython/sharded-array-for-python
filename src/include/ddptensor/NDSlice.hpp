@@ -89,6 +89,11 @@ public:
         return ret;
     }
 
+    std::vector<Slice> slices() const
+    {
+        return _slice_vec;
+    }
+
     ///
     /// @return total number of elements represented by the nd-slice
     ///
@@ -202,7 +207,7 @@ public:
     NDSlice trim_shift(const NDSlice & t_slc, const NDSlice & s_slc) const
     {
         return _convert([&](uint64_t i) {
-                return _slice_vec[i].trim(t_slc.dim(i)._start, t_slc.dim(i)._end, s_slc.dim(i)._start);
+                return _slice_vec[i].trim(t_slc.dim(i)._start, t_slc.dim(i)._end).shift(s_slc.dim(i)._start);
             } );
     }
 

@@ -175,7 +175,7 @@ public:
         return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
     }
 
-    NDSlice local_slice_of_rank(rank_type rank) const
+    NDSlice local_slice_of_rank(rank_type rank = theTransceiver->rank()) const
     {
         if(_base->split_dim() == NOSPLIT) {
             return rank == theTransceiver->rank() ? slice() : NDSlice();

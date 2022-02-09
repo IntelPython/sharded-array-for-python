@@ -6,6 +6,7 @@
 #include <sstream>
 #include <memory>
 #include <xtensor/xarray.hpp>
+#include <xtensor/xstrided_view.hpp>
 #include <xtensor/xio.hpp>
 #include "PVSlice.hpp"
 #include "p2c_ids.hpp"
@@ -25,6 +26,13 @@ namespace x
         return o.cast<T>();
     }
 
+    inline xt::xstrided_slice_vector to_xt(const NDSlice & slice)
+    {
+        xt::xstrided_slice_vector sv;
+        for(auto s : slice.slices()) sv.push_back(xt::range(s._start, s._end, s._step));
+        return sv;
+    }
+
     class DPTensorBaseX
     {
     public:
@@ -40,20 +48,32 @@ namespace x
     class DPTensorX : public DPTensorBaseX
     {
         PVSlice _slice;
-        xt::xarray<T> _xarray;
+        xt::xstrided_slice_vector _lslice;
+        std::shared_ptr<xt::xarray<T>> _xarray;
 
     public:
         template<typename I>
         DPTensorX(PVSlice && slc, I && ax)
             : _slice(std::move(slc)),
-              _xarray(std::forward<I>(ax))
+              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
+        }
+
+        template<typename O>
+        DPTensorX(const DPTensorX<O> & org, const NDSlice & slc)
+            : _slice(org._slice, slc),
+              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _xarray(org._xarray)
+        {
+            std::cerr << "slice: " << _slice.slice() << " lslice: " << _slice.local_slice_of_rank() << std::endl;
         }
 
         virtual std::string __repr__() const
         {
+            auto v = xt::strided_view(xarray(), lslice());
             std::ostringstream oss;
-            oss << _xarray << "\n";
+            oss << v << "\n";
             return oss.str();
         }
 
@@ -64,12 +84,22 @@ namespace x
 
         xt::xarray<T> & xarray()
         {
-            return _xarray;
+            return *_xarray.get();
+        }
+
+        const xt::xarray<T> & xarray() const
+        {
+            return *_xarray.get();
         }
 
         const PVSlice & slice() const
         {
             return _slice;
+        }
+
+        const xt::xstrided_slice_vector & lslice() const
+        {
+            return _lslice;
         }
 
         virtual shape_type shape() const
@@ -161,8 +191,8 @@ namespace x
             auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto & a = _a->xarray();
-            auto const & b = _b->xarray();
+            auto a = xt::strided_view(_a->xarray(), _a->lslice());
+            auto const b = xt::strided_view(_b->xarray(), _b->lslice());
             
             switch(iop) {
             case __IADD__:
@@ -255,8 +285,8 @@ namespace x
             auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = _a->xarray();
-            auto const & b = _b->xarray();
+            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
+            auto const & b = xt::strided_view(_b->xarray(), _b->lslice());
             
             switch(bop) {
             case __ADD__:
@@ -353,7 +383,7 @@ namespace x
             auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             if(!_a )
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = _a->xarray();
+            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
             
             switch(uop) {
             case __ABS__:
@@ -456,7 +486,7 @@ namespace x
             auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             if(!_a )
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = _a->xarray();
+            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
 
             switch(rop) {
             case MEAN:
@@ -481,5 +511,23 @@ namespace x
 
     };
 
-                
+    template<typename T>
+    class GetItem
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+        static ptr_type op(const ptr_type & a_ptr, const NDSlice & slice)
+        {
+            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            if(!_a )
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+            auto nd = _a->shape().size();
+            if(nd != slice.ndims())
+                throw std::runtime_error("Index dimensionality must match array dimensionality");
+
+            return std::make_shared<DPTensorX<T>>(*_a, slice);
+        }
+    };
+   
 } // namespace x

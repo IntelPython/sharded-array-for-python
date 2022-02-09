@@ -201,7 +201,7 @@ struct Slice
   /// @param s Start index to trim to
   /// @param e End index to trim to
   ///
-  Slice trim(value_type s, value_type e, value_type shift = 0) const
+  Slice trim(value_type s, value_type e) const
   {
     assert(_step > 0);
     auto start = _start;
@@ -211,7 +211,7 @@ struct Slice
       else start = s;
     }
     auto end = std::min(e, _end);
-    return {start-shift, end-shift, _step};
+    return {std::min(start, end), end, _step};
   }
 
   Slice map(const Slice & slc) const
