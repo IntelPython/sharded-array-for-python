@@ -10,6 +10,7 @@
 #include <xtensor/xio.hpp>
 #include "PVSlice.hpp"
 #include "p2c_ids.hpp"
+#include "tensor_i.hpp"
 
 namespace x
 {
@@ -33,20 +34,12 @@ namespace x
         return sv;
     }
 
-    class DPTensorBaseX
-    {
-    public:
-        using ptr_type = std::shared_ptr<DPTensorBaseX>;
-
-        virtual ~DPTensorBaseX() {};
-        virtual std::string __repr__() const = 0;
-        virtual DType dtype() const = 0;
-        virtual shape_type shape() const = 0;
-    };
+    using DPTensorBaseX = tensor_i;
 
     template<typename T>
     class DPTensorX : public DPTensorBaseX
     {
+        uint64_t _id = 0;
         rank_type _owner;
         PVSlice _slice;
         xt::xstrided_slice_vector _lslice;
@@ -154,6 +147,62 @@ namespace x
             }
             return _replica;
         }
+
+        virtual int item_size() const
+        {
+            return sizeof(T);
+        }
+
+        virtual uint64_t id() const
+        {
+            return _id;
+        }
+
+        void set_id(uint64_t id)
+        {
+            _id = id;
+        }
+
+        virtual void bufferize(const NDSlice & slc, Buffer & buff)
+        {
+            NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
+
+            std::cerr << "lslice=" << lslice << " slc= " << slc << " buffsz=" << buff.size() << " want " << slc.size()*sizeof(T) << std::endl;
+
+            auto ary_v = xt::strided_view(xarray(), to_xt(lslice));
+            buff.resize(slc.size()*sizeof(T));
+            T * out = reinterpret_cast<T*>(buff.data());
+            int o = 0;
+            for(auto i = ary_v.begin(); i != ary_v.end(); ++i, ++o) {
+                std::cerr << o << " <- " << *i << std::endl;
+                out[o] = *i;
+            }
+        }
+    };
+
+
+    template<typename T>
+    class operatorx
+    {
+    public:
+        static tensor_i::ptr_type register_tensor(std::shared_ptr<DPTensorX<T>> t)
+        {
+            auto id = theMediator->register_array(t);
+            t->set_id(id);
+            return t;
+        }
+
+        template<typename ...Ts>
+        static DPTensorBaseX::ptr_type mk_tx(Ts&&... args)
+        {
+            return register_tensor(std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...));
+        }
+            
+        template<typename X>
+        static DPTensorBaseX::ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
+        {
+            return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
+        }
     };
 
     template<typename T>
@@ -168,11 +217,11 @@ namespace x
             shape_type shape(std::move(pvslice.tile_shape()));
             switch(c) {
             case EMPTY:
-                return std::make_shared<DPTensorX<T>>(std::move(pvslice), std::move(xt::empty<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::empty<T>(shape)));
             case ONES:
-                return std::make_shared<DPTensorX<T>>(std::move(pvslice), std::move(xt::ones<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::ones<T>(shape)));
             case ZEROS:
-                return std::make_shared<DPTensorX<T>>(std::move(pvslice), std::move(xt::zeros<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::zeros<T>(shape)));
             default:
                 throw std::runtime_error("Unknown creator");
             };
@@ -185,8 +234,8 @@ namespace x
                 PVSlice pvslice(std::forward<shape_type>(shp));
                 shape_type shape(std::move(pvslice.tile_shape()));
                 auto a = xt::empty<T>(std::move(shape));
-                a = to_native<T>(v);
-                return std::make_shared<DPTensorX<T>>(std::move(pvslice), std::move(a));
+                a.fill(to_native<T>(v));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(a));
             }
             throw std::runtime_error("Unknown creator");
         }
@@ -268,12 +317,6 @@ namespace x
 
     };
 
-    template<typename X>
-    inline DPTensorBaseX::ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
-    {
-        return std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), x);
-    }
-    
     template<typename T>
     class EWBinOp
     {
@@ -294,34 +337,34 @@ namespace x
             switch(iop) {
             case __AND__:
             case BITWISE_AND:
-                return mk_tx(tx, a & b);
+                return operatorx<T>::mk_tx(tx, a & b);
             case __RAND__:
-                return mk_tx(tx, b & a);
+                return operatorx<T>::mk_tx(tx, b & a);
             case __LSHIFT__:
             case BITWISE_LEFT_SHIFT:
-                return mk_tx(tx, a << b);
+                return operatorx<T>::mk_tx(tx, a << b);
             case __MOD__:
             case REMAINDER:
-                return mk_tx(tx, a % b);
+                return operatorx<T>::mk_tx(tx, a % b);
             case __OR__:
             case BITWISE_OR:
-                return mk_tx(tx, a | b);
+                return operatorx<T>::mk_tx(tx, a | b);
             case __ROR__:
-                return mk_tx(tx, b | a);
+                return operatorx<T>::mk_tx(tx, b | a);
             case __RSHIFT__:
             case BITWISE_RIGHT_SHIFT:
-                return mk_tx(tx, a >> b);
+                return operatorx<T>::mk_tx(tx, a >> b);
             case __XOR__:
             case BITWISE_XOR:
-                return mk_tx(tx, a ^ b);
+                return operatorx<T>::mk_tx(tx, a ^ b);
             case __RXOR__:
-                return mk_tx(tx, b ^ a);
+                return operatorx<T>::mk_tx(tx, b ^ a);
             case __RLSHIFT__:
-                return mk_tx(tx, b << a);
+                return operatorx<T>::mk_tx(tx, b << a);
             case __RMOD__:
-                return mk_tx(tx, b % a);
+                return operatorx<T>::mk_tx(tx, b % a);
             case __RRSHIFT__:
-                return mk_tx(tx, b >> a);
+                return operatorx<T>::mk_tx(tx, b >> a);
             default:
                 throw std::runtime_error("Unknown elementwise binary operation");
             }
@@ -339,49 +382,49 @@ namespace x
             switch(bop) {
             case __ADD__:
             case ADD:
-                return mk_tx(*_a, a + b);
+                return operatorx<T>::mk_tx(*_a, a + b);
             case __RADD__:
-                return mk_tx(*_a, b + a);
+                return operatorx<T>::mk_tx(*_a, b + a);
             case ATAN2:
-                return  mk_tx(*_a, xt::atan2(a, b));
+                return  operatorx<T>::mk_tx(*_a, xt::atan2(a, b));
             case __EQ__:
             case EQUAL:
-                return  mk_tx(*_a, xt::equal(a, b));
+                return  operatorx<T>::mk_tx(*_a, xt::equal(a, b));
             case __FLOORDIV__:
             case FLOOR_DIVIDE:
-                return mk_tx(*_a, xt::floor(a / b));
+                return operatorx<T>::mk_tx(*_a, xt::floor(a / b));
             case __GE__:
             case GREATER_EQUAL:
-                return mk_tx(*_a, a >= b);
+                return operatorx<T>::mk_tx(*_a, a >= b);
             case __GT__:
             case GREATER:
-                return mk_tx(*_a, a > b);
+                return operatorx<T>::mk_tx(*_a, a > b);
             case __LE__:
             case LESS_EQUAL:
-                return mk_tx(*_a, a <= b);
+                return operatorx<T>::mk_tx(*_a, a <= b);
             case __LT__:
             case LESS:
-                return mk_tx(*_a, a < b);
+                return operatorx<T>::mk_tx(*_a, a < b);
             case __MUL__:
             case MULTIPLY:
-                return mk_tx(*_a, a * b);
+                return operatorx<T>::mk_tx(*_a, a * b);
             case __RMUL__:
-                return mk_tx(*_a, b * a);
+                return operatorx<T>::mk_tx(*_a, b * a);
             case __NE__:
             case NOT_EQUAL:
-                return mk_tx(*_a, xt::not_equal(a, b));
+                return operatorx<T>::mk_tx(*_a, xt::not_equal(a, b));
             case __SUB__:
             case SUBTRACT:
-                return mk_tx(*_a, a - b);
+                return operatorx<T>::mk_tx(*_a, a - b);
             case __TRUEDIV__:
             case DIVIDE:
-                return mk_tx(*_a, a / b);
+                return operatorx<T>::mk_tx(*_a, a / b);
             case __RFLOORDIV__:
-                return mk_tx(*_a, xt::floor(b / a));
+                return operatorx<T>::mk_tx(*_a, xt::floor(b / a));
             case __RSUB__:
-                return mk_tx(*_a, b - a);
+                return operatorx<T>::mk_tx(*_a, b - a);
             case __RTRUEDIV__:
-                return mk_tx(*_a, b / a);
+                return operatorx<T>::mk_tx(*_a, b / a);
             case __MATMUL__:
             case __POW__:
             case POW:
@@ -436,63 +479,63 @@ namespace x
             switch(uop) {
             case __ABS__:
             case ABS:
-                return mk_tx(*_a, xt::abs(a));
+                return operatorx<T>::mk_tx(*_a, xt::abs(a));
             case ACOS:
-                return mk_tx(*_a, xt::acos(a));
+                return operatorx<T>::mk_tx(*_a, xt::acos(a));
             case ACOSH:
-                return mk_tx(*_a, xt::acosh(a));
+                return operatorx<T>::mk_tx(*_a, xt::acosh(a));
             case ASIN:
-                return mk_tx(*_a, xt::asin(a));
+                return operatorx<T>::mk_tx(*_a, xt::asin(a));
             case ASINH:
-                return mk_tx(*_a, xt::asinh(a));
+                return operatorx<T>::mk_tx(*_a, xt::asinh(a));
             case ATAN:
-                return mk_tx(*_a, xt::atan(a));
+                return operatorx<T>::mk_tx(*_a, xt::atan(a));
             case ATANH:
-                return mk_tx(*_a, xt::atanh(a));
+                return operatorx<T>::mk_tx(*_a, xt::atanh(a));
             case CEIL:
-                return mk_tx(*_a, xt::ceil(a));
+                return operatorx<T>::mk_tx(*_a, xt::ceil(a));
             case COS:
-                return mk_tx(*_a, xt::cos(a));
+                return operatorx<T>::mk_tx(*_a, xt::cos(a));
             case COSH:
-                return mk_tx(*_a, xt::cosh(a));
+                return operatorx<T>::mk_tx(*_a, xt::cosh(a));
             case EXP:
-                return mk_tx(*_a, xt::exp(a));
+                return operatorx<T>::mk_tx(*_a, xt::exp(a));
             case EXPM1:
-                return mk_tx(*_a, xt::expm1(a));
+                return operatorx<T>::mk_tx(*_a, xt::expm1(a));
             case FLOOR:
-                return mk_tx(*_a, xt::floor(a));
+                return operatorx<T>::mk_tx(*_a, xt::floor(a));
             case ISFINITE:
-                return mk_tx(*_a, xt::isfinite(a));
+                return operatorx<T>::mk_tx(*_a, xt::isfinite(a));
             case ISINF:
-                return mk_tx(*_a, xt::isinf(a));
+                return operatorx<T>::mk_tx(*_a, xt::isinf(a));
             case ISNAN:
-                return mk_tx(*_a, xt::isnan(a));
+                return operatorx<T>::mk_tx(*_a, xt::isnan(a));
             case LOG:
-                return mk_tx(*_a, xt::log(a));
+                return operatorx<T>::mk_tx(*_a, xt::log(a));
             case LOG1P:
-                return mk_tx(*_a, xt::log1p(a));
+                return operatorx<T>::mk_tx(*_a, xt::log1p(a));
             case LOG2:
-                return mk_tx(*_a, xt::log2(a));
+                return operatorx<T>::mk_tx(*_a, xt::log2(a));
             case LOG10:
-                return mk_tx(*_a, xt::log10(a));
+                return operatorx<T>::mk_tx(*_a, xt::log10(a));
             case ROUND:
-                return mk_tx(*_a, xt::round(a));
+                return operatorx<T>::mk_tx(*_a, xt::round(a));
             case SIGN:
-                return mk_tx(*_a, xt::sign(a));
+                return operatorx<T>::mk_tx(*_a, xt::sign(a));
             case SIN:
-                return mk_tx(*_a, xt::sin(a));
+                return operatorx<T>::mk_tx(*_a, xt::sin(a));
             case SINH:
-                return mk_tx(*_a, xt::sinh(a));
+                return operatorx<T>::mk_tx(*_a, xt::sinh(a));
             case SQUARE:
-                return mk_tx(*_a, xt::square(a));
+                return operatorx<T>::mk_tx(*_a, xt::square(a));
             case SQRT:
-                return mk_tx(*_a, xt::sqrt(a));
+                return operatorx<T>::mk_tx(*_a, xt::sqrt(a));
             case TAN:
-                return mk_tx(*_a, xt::tan(a));
+                return operatorx<T>::mk_tx(*_a, xt::tan(a));
             case TANH:
-                return mk_tx(*_a, xt::tanh(a));
+                return operatorx<T>::mk_tx(*_a, xt::tanh(a));
             case TRUNC:
-                return mk_tx(*_a, xt::trunc(a));
+                return operatorx<T>::mk_tx(*_a, xt::trunc(a));
             case __NEG__:
             case NEGATIVE:
             case __POS__:
@@ -556,7 +599,7 @@ namespace x
                 theTransceiver->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
                 owner = REPLICATED;
             }
-            return std::make_shared<DPTensorX<typename X::value_type>>(new_shape, a, owner);
+            return operatorx<typename X::value_type>::mk_tx(new_shape, a, owner);
         }
 
         static ptr_type op(ReduceOpId rop, const ptr_type & a_ptr, const dim_vec_type & dims)
@@ -604,8 +647,94 @@ namespace x
             if(nd != slice.ndims())
                 throw std::runtime_error("Index dimensionality must match array dimensionality");
 
-            return std::make_shared<DPTensorX<T>>(*_a, slice);
+            return operatorx<T>::mk_tx(*_a, slice);
         }
     };
 
+    template<typename T>
+    class SetItem
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+        // copy data from val into (*dest)[slice]
+        // this is a non-collective call.
+        template<typename U>
+        static void _set_slice(DPTensorX<T> & dest, const NDSlice & dest_slice, const DPTensorX<U> & val, const NDSlice & val_slice)
+        {
+            std::cerr << "_set_slice " << dest.slice() << " " << dest_slice << " " << val.slice() << " " << val_slice << std::endl;
+            auto nd = dest.shape().size();
+            if(dest.owner() == REPLICATED && nd > 0)
+                std::cerr << "Warning: __setitem__ on replicated data updates local tile only" << std::endl;
+            if(nd != dest_slice.ndims())
+                throw std::runtime_error("Index dimensionality must match array dimensionality");
+            if(val_slice.size() != dest_slice.size())
+                throw std::runtime_error("Input and output slices must be of same size");
+
+            // Use given slice to create a global view into orig array
+            PVSlice g_slc_view(dest.slice(), dest_slice);
+            std::cerr << "g_slice: " << g_slc_view.slice() << std::endl;
+            // Create a view into val
+            PVSlice needed_val_view(val.slice(), val_slice);
+            std::cerr << "needed_val_view: " << needed_val_view.slice() << " (was " << val.slice().slice() << ")" << std::endl;
+
+            // we can now compute which ranks actually hold which piece of the data from val that we need locally
+            for(rank_type i=0; i<theTransceiver->nranks(); ++i ) {
+                // get local view into val
+                PVSlice val_local_view(val.slice(), i);
+                std::cerr << i << " val_local_view: " << val_local_view.slice() << std::endl;
+                NDSlice curr_needed_val_slice = needed_val_view.slice_of_rank(i);
+                std::cerr << i << " curr_needed_val_slice: " << curr_needed_val_slice << std::endl;
+                NDSlice curr_local_val_slice = val_local_view.map_slice(curr_needed_val_slice);
+                std::cerr << i << " curr_local_val_slice: " << curr_local_val_slice << std::endl;
+                NDSlice curr_needed_norm_slice = needed_val_view.map_slice(curr_needed_val_slice);
+                std::cerr << i << " curr_needed_norm_slice: " << curr_needed_norm_slice << std::endl;
+                PVSlice my_curr_needed_view = PVSlice(g_slc_view, curr_needed_norm_slice);
+                std::cerr << i << " my_curr_needed_slice: " << my_curr_needed_view.slice() << std::endl;
+                NDSlice my_curr_local_slice = my_curr_needed_view.local_slice_of_rank(theTransceiver->rank());
+                std::cerr << i << " my_curr_local_slice: " << my_curr_local_slice << std::endl;
+                if(curr_needed_norm_slice.size()) {
+                    py::tuple tpl = _make_tuple(my_curr_local_slice); //my_curr_view.slice());
+                    if(i == theTransceiver->rank()) {
+                        // copy locally
+                        auto to_v   = xt::strided_view(dest.xarray(), to_xt(my_curr_local_slice));
+                        auto from_v = xt::strided_view(val.xarray(), to_xt(curr_local_val_slice));
+                        to_v = from_v;
+                    } else {
+                        // pull slice directly into new array
+                        xt::xarray<U> from_a = xt::empty<U>(curr_local_val_slice.shape());
+                        from_a.fill(static_cast<U>(4711));
+                        theMediator->pull(i, val, curr_local_val_slice, from_a.data());
+                        auto to_v = xt::strided_view(dest.xarray(), to_xt(my_curr_local_slice));
+                        to_v = from_a;
+                    }
+                }
+            }
+        }
+
+        // FIXME We use a generic SPMD/PGAS mechanism to pull elements from remote
+        // on all procs simultaneously.  Since __setitem__ is collective we could
+        // implement a probaly more efficient mechanism which pushes data and/or using RMA.
+        static void op(ptr_type & a_ptr, const NDSlice & slice, const ptr_type & b_ptr)
+        {
+            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            if(!_a || !_b)
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+
+            // Use given slice to create a global view into orig array
+            PVSlice g_slc_view(_a->slice(), slice);
+            std::cerr << "g_slice: " << g_slc_view.slice() << std::endl;
+            NDSlice my_slice = g_slc_view.slice_of_rank();
+            std::cerr << "my_slice: " << my_slice << std::endl;
+            NDSlice my_norm_slice = g_slc_view.map_slice(my_slice);
+            std::cerr << "my_norm_slice: " << my_norm_slice << std::endl;
+            NDSlice my_rel_slice = _a->slice().map_slice(my_slice);
+            std::cerr << "my_rel_slice: " << my_rel_slice << std::endl;
+            
+            theTransceiver->barrier();
+            _set_slice(*_a, my_rel_slice, *_b, my_norm_slice);
+        }
+
+    };
 } // namespace x

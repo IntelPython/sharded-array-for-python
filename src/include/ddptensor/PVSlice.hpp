@@ -172,7 +172,7 @@ public:
         return _slice.map(slc);
     }
 
-    NDSlice slice_of_rank(rank_type rank) const
+    NDSlice slice_of_rank(rank_type rank = theTransceiver->rank()) const
     {
         if(_base->split_dim() == NOSPLIT) {
             return rank == theTransceiver->rank() ? slice() : NDSlice();
@@ -278,5 +278,12 @@ public:
     iterator end() const noexcept
     {
         return iterator();
+    }
+
+    friend std::ostream &operator<<(std::ostream &output, const PVSlice & slc) {
+        output << "{slice=" << slc.slice()
+               << "base=" << to_string(slc._base->shape())
+               << "offset=" << slc._base->offset()<< "}";
+        return output;
     }
 };

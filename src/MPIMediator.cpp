@@ -53,7 +53,7 @@ uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
     return s_last_id;
 }
 
-void MPIMediator::pull(rank_type from, const tensor_i * ary, const NDSlice & slice, void * rbuff)
+void MPIMediator::pull(rank_type from, const tensor_i & ary, const NDSlice & slice, void * rbuff)
 {
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Request request[2];
@@ -61,12 +61,12 @@ void MPIMediator::pull(rank_type from, const tensor_i * ary, const NDSlice & sli
     Buffer buff;
 
     bitsery::Serializer<OutputAdapter> ser{buff};
-    uint64_t id = ary->id();
+    uint64_t id = ary.id();
     ser.value8b(id);
     ser.object(slice);
     ser.adapter().flush();
 
-    auto sz = slice.size() * ary->item_size();
+    auto sz = slice.size() * ary.item_size();
     std::cerr << "alsdkjf " << sz << " " << buff.size() << " " << rbuff << std::endl;
     MPI_Irecv(rbuff, sz, MPI_CHAR, from, PUSH_TAG, comm, &request[1]);
     MPI_Isend(buff.data(), buff.size(), MPI_CHAR, from, PULL_TAG, comm, &request[0]);

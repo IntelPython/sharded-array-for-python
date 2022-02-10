@@ -67,7 +67,7 @@ struct Creator
         return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape), std::forward<py::object>(val));
     }
 };
-
+#if 0
 struct IEWBinOp
 {
     static auto op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
@@ -117,12 +117,20 @@ struct ReduceOp
         return TypeDispatch<x::ReduceOp>(a->dtype(), op, a, dim);
     }
 };
+#endif
 
 struct GetItem
 {
     static auto op(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
     {
         return TypeDispatch<x::GetItem>(a->dtype(), a, NDSlice(v));
+    }
+};
+struct SetItem
+{
+    static auto op(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v, x::DPTensorBaseX::ptr_type b)
+    {
+        return TypeDispatch<x::SetItem>(a->dtype(), a, NDSlice(v), b);
     }
 };
 
@@ -162,7 +170,7 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)
         .def("full", &Creator::full);
-
+#if 0
     py::class_<EWUnyOp>(m, "EWUnyOp")
         .def("op", &EWUnyOp::op);
 
@@ -179,10 +187,12 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<ReduceOp>(m, "ReduceOp")
         .def("op", &ReduceOp::op);
+#endif
 
     py::class_<x::DPTensorBaseX, x::DPTensorBaseX::ptr_type>(m, "DPTensorX")
         .def("__repr__", &x::DPTensorBaseX::__repr__)
-        .def("__getitem__", &GetItem::op);
+        .def("__getitem__", &GetItem::op)
+        .def("__setitem__", &SetItem::op);
 
 #if 0
     py::class_<dtensor>(m, "dtensor")

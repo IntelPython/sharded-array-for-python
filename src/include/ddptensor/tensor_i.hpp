@@ -21,6 +21,16 @@ class tensor_i
 public:
     typedef std::shared_ptr<tensor_i> ptr_type;
 
+    virtual ~tensor_i() {};
+    virtual std::string __repr__() const = 0;
+    virtual DType dtype() const = 0;
+    virtual shape_type shape() const = 0;
+    virtual void bufferize(const NDSlice & slice, Buffer & buff) = 0;
+    virtual int item_size() const = 0;
+    virtual uint64_t id() const = 0;
+};
+ #if 0
+
     virtual ~tensor_i(){}
 
     virtual const PVSlice & pvslice() = 0;
@@ -47,3 +57,4 @@ public:
 
     virtual py::object get_slice(const NDSlice & slice) const = 0;
 };
+#endif
