@@ -2,8 +2,6 @@ from . import _ddptensor as _cdt
 from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
-t_attributes = ["dtype", "shape", ]  #"device", "ndim", "size", "T"]
-
 #def try_except(func, *args, **kwargs):
 #    try:
 #        return func(*args, **kwargs)
@@ -37,19 +35,16 @@ class dtensor:
 
     for method in api.unary_methods:
         exec(
-            f"{method} = lambda self: _cdt.UnyOp.{method}(self._t)"
+            f"{method} = lambda self: self._t.{method}()"
         )
 
-    # for att in t_attributes:
-    #     exec(
-    #         f"{att} = property(lambda self: self._t.{att})"
-    #     )
+    for att in api.attributes:
+        exec(
+            f"{att} = property(lambda self: self._t.{att})"
+        )
 
     def __getitem__(self, *args):
         return dtensor(self._t.__getitem__(*args))
 
     def __setitem__(self, key, value):
         x = self._t.__setitem__(key, value._t) # if isinstance(value, dtensor) else value)
-
-    # def get_slice(self, *args):
-    #     return self._t.get_slice(*args)

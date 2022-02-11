@@ -1,6 +1,12 @@
 import array_api as api
 
-print("""// SPDX-License-Identifier: BSD-3-Clause
+print("""// Auto-generated file
+// #######################################################
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// !! DO NOT EDIT, USE ../scripts/code_gen.py TO UPDATE !!
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// #######################################################
+// SPDX-License-Identifier: BSD-3-Clause
 #pragma once
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

@@ -152,5 +152,20 @@ unary_methods = [
     "__dlpack_device__",  # (self, /)
     "__float__",  # (self, /)
     "__int__",  # (self, /)
+    "__index__",
     "__len__",  # (self, /)
+]
+
+misc_methods = [
+    "__getitem__",
+    "__setitem__",
+]
+
+attributes = [
+    "dtype",
+    "shape",
+    "device",
+    "ndim",
+    "size",
+    "T"
 ]

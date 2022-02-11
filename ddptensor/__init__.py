@@ -2,6 +2,7 @@ from . import _ddptensor as _cdt
 from .ddptensor import float64, int64, fini, dtensor
 from os import getenv
 from . import array_api as api
+from . import spmd
 
 #__impl_str = getenv("DDPNP_ARRAY", 'numpy')
 #exec(f"import {__impl_str} as __impl")

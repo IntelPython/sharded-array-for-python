@@ -1,26 +1,28 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+// Concrete implementation of tensor_i plus compute kernels using XTensor.
+// Interfaces are based on shared_ptr<tensor_i>.
+// To make sure we use the correctly typed implementations we dynamic_cast
+// input tensors.
+// Many kernels life in a single function. This function then accepts an
+// operation identifiyer (enum value) and dispatches accordingly.
+
 #pragma once
 
 #include <type_traits>
 #include <sstream>
 #include <memory>
 #include <xtensor/xarray.hpp>
+#include <xtensor/xadapt.hpp>
 #include <xtensor/xstrided_view.hpp>
 #include <xtensor/xio.hpp>
+#include <pybind11/numpy.h>
 #include "PVSlice.hpp"
 #include "p2c_ids.hpp"
 #include "tensor_i.hpp"
 
 namespace x
 {
-#if 0
-    template<typename T, typename S>
-    T to_native(S v)
-    {
-        return static_cast<T>(v);
-    }
-#endif
     template<typename T>
     T to_native(py::object & o)
     {
@@ -40,11 +42,11 @@ namespace x
     class DPTensorX : public DPTensorBaseX
     {
         uint64_t _id = 0;
-        rank_type _owner;
+        mutable rank_type _owner;
         PVSlice _slice;
         xt::xstrided_slice_vector _lslice;
         std::shared_ptr<xt::xarray<T>> _xarray;
-        T _replica = 0;
+        mutable T _replica = 0;
 
     public:
         template<typename I>
@@ -68,9 +70,16 @@ namespace x
             } else if(owner == REPLICATED) {
                 _replica = *(xt::strided_view(xarray(), to_xt(slice().slice())).begin());
             }
-            std::cerr << "slice: " << _slice.slice() << " sz " << _slice.size()
-                      << " lslice: " << _slice.local_slice_of_rank() << " owner: " << _owner
-                      << " val: " << _replica << std::endl;
+        }
+
+        template<typename O>
+        DPTensorX(O && org, PVSlice && slc)
+            : _owner(theTransceiver->rank()),
+              _slice(std::forward<PVSlice>(slc)),
+              _lslice(to_xt(_slice.slice())),
+              _xarray()
+        {
+            _xarray = org;
         }
 
         virtual std::string __repr__() const
@@ -89,6 +98,36 @@ namespace x
         virtual shape_type shape() const
         {
             return _slice.shape();
+        }
+
+        virtual int ndim() const
+        {
+            return _slice.ndims();
+        }
+
+        virtual uint64_t size() const
+        {
+            return _slice.size();
+        }
+
+        virtual bool __bool__() const
+        {
+            return static_cast<bool>(replicate());
+        }
+
+        virtual double __float__() const
+        {
+            return static_cast<double>(replicate());
+        }
+
+        virtual int64_t __int__() const
+        {
+            return static_cast<int64_t>(replicate());
+        }
+
+        virtual uint64_t __len__() const
+        {
+            return _slice.slice().dim(0).size();
         }
 
         xt::xarray<T> & xarray()
@@ -116,7 +155,7 @@ namespace x
             return _owner < _OWNER_END;
         }
         
-        void set_owner(rank_type o)
+        void set_owner(rank_type o) const
         {
             _owner = o;
         }
@@ -131,7 +170,7 @@ namespace x
             return _owner == REPLICATED;
         }
 
-        T replicate()
+        T replicate() const
         {
             std::cerr << "is_replicated()=" << is_replicated() << " owner=" << owner() << " shape=" << to_string(shape()) << std::endl;
             if(is_replicated()) return _replica;
@@ -163,7 +202,7 @@ namespace x
             _id = id;
         }
 
-        virtual void bufferize(const NDSlice & slc, Buffer & buff)
+        virtual void bufferize(const NDSlice & slc, Buffer & buff) const
         {
             NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
 
@@ -174,7 +213,6 @@ namespace x
             T * out = reinterpret_cast<T*>(buff.data());
             int o = 0;
             for(auto i = ary_v.begin(); i != ary_v.end(); ++i, ++o) {
-                std::cerr << o << " <- " << *i << std::endl;
                 out[o] = *i;
             }
         }
@@ -182,15 +220,17 @@ namespace x
 
 
     template<typename T>
+    static tensor_i::ptr_type register_tensor(std::shared_ptr<DPTensorX<T>> t)
+    {
+        auto id = theMediator->register_array(t);
+        t->set_id(id);
+        return t;
+    }
+
+    template<typename T>
     class operatorx
     {
     public:
-        static tensor_i::ptr_type register_tensor(std::shared_ptr<DPTensorX<T>> t)
-        {
-            auto id = theMediator->register_array(t);
-            t->set_id(id);
-            return t;
-        }
 
         template<typename ...Ts>
         static DPTensorBaseX::ptr_type mk_tx(Ts&&... args)
@@ -199,7 +239,7 @@ namespace x
         }
             
         template<typename X>
-        static DPTensorBaseX::ptr_type mk_tx(const DPTensorBaseX & tx, X && x)
+        static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {
             return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
         }
@@ -285,11 +325,11 @@ namespace x
         static void op(IEWBinOpId iop, ptr_type a_ptr, const ptr_type & b_ptr)
         {
             auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            const auto _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
             auto a = xt::strided_view(_a->xarray(), _a->lslice());
-            auto const b = xt::strided_view(_b->xarray(), _b->lslice());
+            const auto b = xt::strided_view(_b->xarray(), _b->lslice());
             
             switch(iop) {
             case __IADD__:
@@ -332,39 +372,39 @@ namespace x
         }
 
         template<typename A, typename B, typename U = T, std::enable_if_t<std::is_integral<U>::value, bool> = true>
-        static ptr_type integral_op(EWBinOpId iop, const DPTensorBaseX & tx, A && a, B && b)
+        static ptr_type integral_op(EWBinOpId iop, const DPTensorX<T> & tx, A && a, B && b)
         {
             switch(iop) {
             case __AND__:
             case BITWISE_AND:
-                return operatorx<T>::mk_tx(tx, a & b);
+                return operatorx<T>::mk_tx_(tx, a & b);
             case __RAND__:
-                return operatorx<T>::mk_tx(tx, b & a);
+                return operatorx<T>::mk_tx_(tx, b & a);
             case __LSHIFT__:
             case BITWISE_LEFT_SHIFT:
-                return operatorx<T>::mk_tx(tx, a << b);
+                return operatorx<T>::mk_tx_(tx, a << b);
             case __MOD__:
             case REMAINDER:
-                return operatorx<T>::mk_tx(tx, a % b);
+                return operatorx<T>::mk_tx_(tx, a % b);
             case __OR__:
             case BITWISE_OR:
-                return operatorx<T>::mk_tx(tx, a | b);
+                return operatorx<T>::mk_tx_(tx, a | b);
             case __ROR__:
-                return operatorx<T>::mk_tx(tx, b | a);
+                return operatorx<T>::mk_tx_(tx, b | a);
             case __RSHIFT__:
             case BITWISE_RIGHT_SHIFT:
-                return operatorx<T>::mk_tx(tx, a >> b);
+                return operatorx<T>::mk_tx_(tx, a >> b);
             case __XOR__:
             case BITWISE_XOR:
-                return operatorx<T>::mk_tx(tx, a ^ b);
+                return operatorx<T>::mk_tx_(tx, a ^ b);
             case __RXOR__:
-                return operatorx<T>::mk_tx(tx, b ^ a);
+                return operatorx<T>::mk_tx_(tx, b ^ a);
             case __RLSHIFT__:
-                return operatorx<T>::mk_tx(tx, b << a);
+                return operatorx<T>::mk_tx_(tx, b << a);
             case __RMOD__:
-                return operatorx<T>::mk_tx(tx, b % a);
+                return operatorx<T>::mk_tx_(tx, b % a);
             case __RRSHIFT__:
-                return operatorx<T>::mk_tx(tx, b >> a);
+                return operatorx<T>::mk_tx_(tx, b >> a);
             default:
                 throw std::runtime_error("Unknown elementwise binary operation");
             }
@@ -372,59 +412,59 @@ namespace x
 
         static ptr_type op(EWBinOpId bop, const ptr_type & a_ptr, const ptr_type & b_ptr)
         {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            const auto _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
-            auto const & b = xt::strided_view(_b->xarray(), _b->lslice());
+            const auto & a = xt::strided_view(_a->xarray(), _a->lslice());
+            const auto & b = xt::strided_view(_b->xarray(), _b->lslice());
             
             switch(bop) {
             case __ADD__:
             case ADD:
-                return operatorx<T>::mk_tx(*_a, a + b);
+                return operatorx<T>::mk_tx_(*_a, a + b);
             case __RADD__:
-                return operatorx<T>::mk_tx(*_a, b + a);
+                return operatorx<T>::mk_tx_(*_a, b + a);
             case ATAN2:
-                return  operatorx<T>::mk_tx(*_a, xt::atan2(a, b));
+                return  operatorx<T>::mk_tx_(*_a, xt::atan2(a, b));
             case __EQ__:
             case EQUAL:
-                return  operatorx<T>::mk_tx(*_a, xt::equal(a, b));
+                return  operatorx<T>::mk_tx_(*_a, xt::equal(a, b));
             case __FLOORDIV__:
             case FLOOR_DIVIDE:
-                return operatorx<T>::mk_tx(*_a, xt::floor(a / b));
+                return operatorx<T>::mk_tx_(*_a, xt::floor(a / b));
             case __GE__:
             case GREATER_EQUAL:
-                return operatorx<T>::mk_tx(*_a, a >= b);
+                return operatorx<T>::mk_tx_(*_a, a >= b);
             case __GT__:
             case GREATER:
-                return operatorx<T>::mk_tx(*_a, a > b);
+                return operatorx<T>::mk_tx_(*_a, a > b);
             case __LE__:
             case LESS_EQUAL:
-                return operatorx<T>::mk_tx(*_a, a <= b);
+                return operatorx<T>::mk_tx_(*_a, a <= b);
             case __LT__:
             case LESS:
-                return operatorx<T>::mk_tx(*_a, a < b);
+                return operatorx<T>::mk_tx_(*_a, a < b);
             case __MUL__:
             case MULTIPLY:
-                return operatorx<T>::mk_tx(*_a, a * b);
+                return operatorx<T>::mk_tx_(*_a, a * b);
             case __RMUL__:
-                return operatorx<T>::mk_tx(*_a, b * a);
+                return operatorx<T>::mk_tx_(*_a, b * a);
             case __NE__:
             case NOT_EQUAL:
-                return operatorx<T>::mk_tx(*_a, xt::not_equal(a, b));
+                return operatorx<T>::mk_tx_(*_a, xt::not_equal(a, b));
             case __SUB__:
             case SUBTRACT:
-                return operatorx<T>::mk_tx(*_a, a - b);
+                return operatorx<T>::mk_tx_(*_a, a - b);
             case __TRUEDIV__:
             case DIVIDE:
-                return operatorx<T>::mk_tx(*_a, a / b);
+                return operatorx<T>::mk_tx_(*_a, a / b);
             case __RFLOORDIV__:
-                return operatorx<T>::mk_tx(*_a, xt::floor(b / a));
+                return operatorx<T>::mk_tx_(*_a, xt::floor(b / a));
             case __RSUB__:
-                return operatorx<T>::mk_tx(*_a, b - a);
+                return operatorx<T>::mk_tx_(*_a, b - a);
             case __RTRUEDIV__:
-                return operatorx<T>::mk_tx(*_a, b / a);
+                return operatorx<T>::mk_tx_(*_a, b / a);
             case __MATMUL__:
             case __POW__:
             case POW:
@@ -471,71 +511,71 @@ namespace x
 
         static ptr_type op(EWUnyOpId uop, const ptr_type & a_ptr)
         {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             if(!_a )
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
+            const auto & a = xt::strided_view(_a->xarray(), _a->lslice());
             
             switch(uop) {
             case __ABS__:
             case ABS:
-                return operatorx<T>::mk_tx(*_a, xt::abs(a));
+                return operatorx<T>::mk_tx_(*_a, xt::abs(a));
             case ACOS:
-                return operatorx<T>::mk_tx(*_a, xt::acos(a));
+                return operatorx<T>::mk_tx_(*_a, xt::acos(a));
             case ACOSH:
-                return operatorx<T>::mk_tx(*_a, xt::acosh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::acosh(a));
             case ASIN:
-                return operatorx<T>::mk_tx(*_a, xt::asin(a));
+                return operatorx<T>::mk_tx_(*_a, xt::asin(a));
             case ASINH:
-                return operatorx<T>::mk_tx(*_a, xt::asinh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::asinh(a));
             case ATAN:
-                return operatorx<T>::mk_tx(*_a, xt::atan(a));
+                return operatorx<T>::mk_tx_(*_a, xt::atan(a));
             case ATANH:
-                return operatorx<T>::mk_tx(*_a, xt::atanh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::atanh(a));
             case CEIL:
-                return operatorx<T>::mk_tx(*_a, xt::ceil(a));
+                return operatorx<T>::mk_tx_(*_a, xt::ceil(a));
             case COS:
-                return operatorx<T>::mk_tx(*_a, xt::cos(a));
+                return operatorx<T>::mk_tx_(*_a, xt::cos(a));
             case COSH:
-                return operatorx<T>::mk_tx(*_a, xt::cosh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::cosh(a));
             case EXP:
-                return operatorx<T>::mk_tx(*_a, xt::exp(a));
+                return operatorx<T>::mk_tx_(*_a, xt::exp(a));
             case EXPM1:
-                return operatorx<T>::mk_tx(*_a, xt::expm1(a));
+                return operatorx<T>::mk_tx_(*_a, xt::expm1(a));
             case FLOOR:
-                return operatorx<T>::mk_tx(*_a, xt::floor(a));
+                return operatorx<T>::mk_tx_(*_a, xt::floor(a));
             case ISFINITE:
-                return operatorx<T>::mk_tx(*_a, xt::isfinite(a));
+                return operatorx<T>::mk_tx_(*_a, xt::isfinite(a));
             case ISINF:
-                return operatorx<T>::mk_tx(*_a, xt::isinf(a));
+                return operatorx<T>::mk_tx_(*_a, xt::isinf(a));
             case ISNAN:
-                return operatorx<T>::mk_tx(*_a, xt::isnan(a));
+                return operatorx<T>::mk_tx_(*_a, xt::isnan(a));
             case LOG:
-                return operatorx<T>::mk_tx(*_a, xt::log(a));
+                return operatorx<T>::mk_tx_(*_a, xt::log(a));
             case LOG1P:
-                return operatorx<T>::mk_tx(*_a, xt::log1p(a));
+                return operatorx<T>::mk_tx_(*_a, xt::log1p(a));
             case LOG2:
-                return operatorx<T>::mk_tx(*_a, xt::log2(a));
+                return operatorx<T>::mk_tx_(*_a, xt::log2(a));
             case LOG10:
-                return operatorx<T>::mk_tx(*_a, xt::log10(a));
+                return operatorx<T>::mk_tx_(*_a, xt::log10(a));
             case ROUND:
-                return operatorx<T>::mk_tx(*_a, xt::round(a));
+                return operatorx<T>::mk_tx_(*_a, xt::round(a));
             case SIGN:
-                return operatorx<T>::mk_tx(*_a, xt::sign(a));
+                return operatorx<T>::mk_tx_(*_a, xt::sign(a));
             case SIN:
-                return operatorx<T>::mk_tx(*_a, xt::sin(a));
+                return operatorx<T>::mk_tx_(*_a, xt::sin(a));
             case SINH:
-                return operatorx<T>::mk_tx(*_a, xt::sinh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::sinh(a));
             case SQUARE:
-                return operatorx<T>::mk_tx(*_a, xt::square(a));
+                return operatorx<T>::mk_tx_(*_a, xt::square(a));
             case SQRT:
-                return operatorx<T>::mk_tx(*_a, xt::sqrt(a));
+                return operatorx<T>::mk_tx_(*_a, xt::sqrt(a));
             case TAN:
-                return operatorx<T>::mk_tx(*_a, xt::tan(a));
+                return operatorx<T>::mk_tx_(*_a, xt::tan(a));
             case TANH:
-                return operatorx<T>::mk_tx(*_a, xt::tanh(a));
+                return operatorx<T>::mk_tx_(*_a, xt::tanh(a));
             case TRUNC:
-                return operatorx<T>::mk_tx(*_a, xt::trunc(a));
+                return operatorx<T>::mk_tx_(*_a, xt::trunc(a));
             case __NEG__:
             case NEGATIVE:
             case __POS__:
@@ -550,36 +590,7 @@ namespace x
 #pragma GCC diagnostic pop
 
     };
-
-    template<typename T>
-    class UnyOp
-    {
-    public:
-        using ptr_type = DPTensorBaseX::ptr_type;
-
-        template<typename N>
-        static N __type__(const ptr_type & a_ptr)
-        {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            if(!_a )
-                throw std::runtime_error("Invalid array object: could not dynamically cast");
-            T v = _a->replicate();
-            return static_cast<N>(v);
-        }
-        static bool op(const ptr_type & a_ptr, bool)
-        {
-            return __type__<bool>(a_ptr);
-        }
-        static double op(const ptr_type & a_ptr, double)
-        {
-            return __type__<double>(a_ptr);
-        }
-        static int64_t op(const ptr_type & a_ptr, int64_t)
-        {
-            return __type__<int64_t>(a_ptr);
-        }
-    };
-    
+   
     template<typename T>
     class ReduceOp
     {
@@ -604,10 +615,10 @@ namespace x
 
         static ptr_type op(ReduceOpId rop, const ptr_type & a_ptr, const dim_vec_type & dims)
         {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             if(!_a )
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
-            auto const & a = xt::strided_view(_a->xarray(), _a->lslice());
+            const auto & a = xt::strided_view(_a->xarray(), _a->lslice());
 
             switch(rop) {
             case MEAN:
@@ -640,7 +651,7 @@ namespace x
 
         static ptr_type op(const ptr_type & a_ptr, const NDSlice & slice)
         {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
             if(!_a )
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
             auto nd = _a->shape().size();
@@ -659,20 +670,22 @@ namespace x
 
         // copy data from val into (*dest)[slice]
         // this is a non-collective call.
-        template<typename U>
-        static void _set_slice(DPTensorX<T> & dest, const NDSlice & dest_slice, const DPTensorX<U> & val, const NDSlice & val_slice)
+        template<typename X, typename U>
+        static void _set_slice(X && dest, const PVSlice & org_slice, const NDSlice & dest_slice, const DPTensorX<U> & val, const NDSlice & val_slice)
+        // (DPTensorX<T> & dest, const NDSlice & dest_slice, const DPTensorX<U> & val, const NDSlice & val_slice)
         {
-            std::cerr << "_set_slice " << dest.slice() << " " << dest_slice << " " << val.slice() << " " << val_slice << std::endl;
-            auto nd = dest.shape().size();
-            if(dest.owner() == REPLICATED && nd > 0)
-                std::cerr << "Warning: __setitem__ on replicated data updates local tile only" << std::endl;
+            // const PVSlice & org_slice = dest.slice();
+            std::cerr << "_set_slice " << org_slice << " " << dest_slice << " " << val.slice() << " " << val_slice << std::endl;
+            auto nd = org_slice.ndims();
+            // if(dest.owner() == REPLICATED && nd > 0)
+            //     std::cerr << "Warning: __setitem__ on replicated data updates local tile only" << std::endl;
             if(nd != dest_slice.ndims())
                 throw std::runtime_error("Index dimensionality must match array dimensionality");
             if(val_slice.size() != dest_slice.size())
                 throw std::runtime_error("Input and output slices must be of same size");
 
             // Use given slice to create a global view into orig array
-            PVSlice g_slc_view(dest.slice(), dest_slice);
+            PVSlice g_slc_view(org_slice, dest_slice);
             std::cerr << "g_slice: " << g_slc_view.slice() << std::endl;
             // Create a view into val
             PVSlice needed_val_view(val.slice(), val_slice);
@@ -697,15 +710,17 @@ namespace x
                     py::tuple tpl = _make_tuple(my_curr_local_slice); //my_curr_view.slice());
                     if(i == theTransceiver->rank()) {
                         // copy locally
-                        auto to_v   = xt::strided_view(dest.xarray(), to_xt(my_curr_local_slice));
+                        std::cerr << "local copy\n";
+                        auto to_v   = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
                         auto from_v = xt::strided_view(val.xarray(), to_xt(curr_local_val_slice));
+                        std::cerr << "to: " << to_v << std::endl << "from: " << from_v << std::endl;
                         to_v = from_v;
                     } else {
                         // pull slice directly into new array
                         xt::xarray<U> from_a = xt::empty<U>(curr_local_val_slice.shape());
                         from_a.fill(static_cast<U>(4711));
                         theMediator->pull(i, val, curr_local_val_slice, from_a.data());
-                        auto to_v = xt::strided_view(dest.xarray(), to_xt(my_curr_local_slice));
+                        auto to_v = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
                         to_v = from_a;
                     }
                 }
@@ -717,8 +732,8 @@ namespace x
         // implement a probaly more efficient mechanism which pushes data and/or using RMA.
         static void op(ptr_type & a_ptr, const NDSlice & slice, const ptr_type & b_ptr)
         {
-            auto const _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            auto const _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            const auto _b = dynamic_cast<DPTensorX<T>*>(b_ptr.get());
             if(!_a || !_b)
                 throw std::runtime_error("Invalid array object: could not dynamically cast");
 
@@ -733,8 +748,34 @@ namespace x
             std::cerr << "my_rel_slice: " << my_rel_slice << std::endl;
             
             theTransceiver->barrier();
-            _set_slice(*_a, my_rel_slice, *_b, my_norm_slice);
+            _set_slice(_a->xarray(), _a->slice(),
+                       my_rel_slice, *_b, my_norm_slice);
         }
+    };
 
+    template<typename T>
+    class SPMD
+    {
+    public:
+        using ptr_type = DPTensorBaseX::ptr_type;
+
+        static py::object op(const ptr_type & a_ptr, const NDSlice & slice)
+        {
+            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
+            if(!_a)
+                throw std::runtime_error("Invalid array object: could not dynamically cast");
+            auto shp = slice.shape();
+            auto sz = VPROD(shp);
+            auto res = py::array_t<T>(sz);
+            auto ax = xt::adapt(res.mutable_data(), sz, xt::no_ownership(), shp);
+            std::cerr << ax << std::endl << py::str(res).cast<std::string>() << res.mutable_data() << std::endl;
+            // Create dtensor without creating id: do not use create_dtensor
+            // auto out = DPTensorX<T>(ax, PVSlice(shp, NOSPLIT));
+            PVSlice slc{shp, NOSPLIT};
+            SetItem<T>::_set_slice(ax, slc, slc.slice(), *_a, slice);
+            std::cerr << ax << std::endl << py::str(res).cast<std::string>() << std::endl;
+            // res.reshape(shp);
+            return res;
+        }
     };
 } // namespace x

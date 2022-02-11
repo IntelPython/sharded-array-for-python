@@ -2,11 +2,16 @@
 
 /*
   A Distributed Data-Parallel Tensor for Python, following the array API.
-  We have a 3-level hierachy
-    1. tensor_i: the abstract interface, not bound to types (like numpy)
-    2. dtensor_impl: a typed template layer with the actual functionality
-    3. dtensor: the PYthon API delegating to untyped tensor_i
-  We use pybind11.
+  
+  XTensor handles the actual functionality on each process.
+  pybind11 handles the bridge to Python.
+
+  We bridge dynamic dtypes of the Python array through dynamic type dispatch (TypeDispatch).
+  This means the compiler will instantiate the full functionality for all elements types.
+  Within kernels we dispatch the operation type by enum values (see x.hpp).
+  tensor_i is an abstract class to hide the element type which of the actual tensor.
+  The concrete tensor implementation (DPTensorX, x.hpp) requires the element type 
+  as a template parameter.
  */
 
 #include <pybind11/pybind11.h>
@@ -18,17 +23,17 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/x.hpp"
 
-// ###################################################################
-// ###################################################################
-// ###################################################################
-
+// Dependent on dt, dispatch arguments to a operation class.
+// The operation must
+//    * be a template class accepting the element type as argument
+//    * implement one or more "op" methods matching the given arguments (args)
+// All arguments other than dt are opaquely passed to the operation.
 template<template<typename OD> class OpDispatch, typename... Ts>
 auto TypeDispatch(DType dt, Ts&&... args)
 {
     switch(dt) {
     case DT_FLOAT64:
         return OpDispatch<double>::op(std::forward<Ts>(args)...);
-#if 0
     case DT_INT64:
         return OpDispatch<int64_t>::op(std::forward<Ts>(args)...);
     case DT_FLOAT32:
@@ -43,7 +48,6 @@ auto TypeDispatch(DType dt, Ts&&... args)
         return OpDispatch<uint32_t>::op(std::forward<Ts>(args)...);
     case DT_UINT16:
         return OpDispatch<uint16_t>::op(std::forward<Ts>(args)...);
-#endif
         /* FIXME
     case DT_BOOL:
         return OpDispatch<bool>::op(std::forward<Ts>(args)...);
@@ -52,6 +56,9 @@ auto TypeDispatch(DType dt, Ts&&... args)
         throw std::runtime_error("unknown dtype");
     }
 }
+
+// #########################################################################
+// The following classes are wrappers bridging pybind11 defs to TypeDispatch
 
 struct Creator
 {
@@ -67,7 +74,7 @@ struct Creator
         return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape), std::forward<py::object>(val));
     }
 };
-#if 0
+
 struct IEWBinOp
 {
     static auto op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
@@ -92,24 +99,6 @@ struct EWUnyOp
     }
 };
 
-struct UnyOp
-{
-    static bool __bool__(x::DPTensorBaseX::ptr_type a)
-    {
-        return TypeDispatch<x::UnyOp>(a->dtype(), a, true);
-    }
-
-    static double __float__(x::DPTensorBaseX::ptr_type a)
-    {
-        return TypeDispatch<x::UnyOp>(a->dtype(), a, double(1));
-    }
-
-    static int64_t __int__(x::DPTensorBaseX::ptr_type a)
-    {
-        return TypeDispatch<x::UnyOp>(a->dtype(), a, int64_t(1));
-    }
-};
-
 struct ReduceOp
 {
     static auto op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim)
@@ -117,18 +106,22 @@ struct ReduceOp
         return TypeDispatch<x::ReduceOp>(a->dtype(), op, a, dim);
     }
 };
-#endif
 
 struct GetItem
 {
-    static auto op(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
+    static auto __getitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
     {
         return TypeDispatch<x::GetItem>(a->dtype(), a, NDSlice(v));
     }
+    static auto get_slice(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
+    {
+        return TypeDispatch<x::SPMD>(a->dtype(), a, NDSlice(v));
+    }
 };
+
 struct SetItem
 {
-    static auto op(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v, x::DPTensorBaseX::ptr_type b)
+    static auto __setitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v, x::DPTensorBaseX::ptr_type b)
     {
         return TypeDispatch<x::SetItem>(a->dtype(), a, NDSlice(v), b);
     }
@@ -142,6 +135,7 @@ rank_type myrank()
 Transceiver * theTransceiver = nullptr;
 Mediator * theMediator = nullptr;
 
+// users currently need to call fini to make MPI terminate gracefully
 void fini()
 {
     delete theMediator;
@@ -150,6 +144,8 @@ void fini()
     theTransceiver = nullptr;
 }
     
+// #########################################################################
+// Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
     theTransceiver = new MPITransceiver();
     theMediator = new MPIMediator();
@@ -164,20 +160,16 @@ PYBIND11_MODULE(_ddptensor, m) {
         .value("bool", DT_BOOL)
         .export_values();
 
-    m.def("fini", &fini);
-    m.def("myrank", &myrank);
+    m.def("fini", &fini)
+        .def("myrank", &myrank)
+        .def("_get_slice", &GetItem::get_slice);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)
         .def("full", &Creator::full);
-#if 0
+
     py::class_<EWUnyOp>(m, "EWUnyOp")
         .def("op", &EWUnyOp::op);
-
-    py::class_<UnyOp>(m, "UnyOp")
-        .def("__bool__", &UnyOp::__bool__)
-        .def("__float__", &UnyOp::__float__)
-        .def("__int__", &UnyOp::__int__);
 
     py::class_<IEWBinOp>(m, "IEWBinOp")
         .def("op", &IEWBinOp::op);
@@ -187,12 +179,20 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<ReduceOp>(m, "ReduceOp")
         .def("op", &ReduceOp::op);
-#endif
 
     py::class_<x::DPTensorBaseX, x::DPTensorBaseX::ptr_type>(m, "DPTensorX")
+        .def_property_readonly("dtype", &x::DPTensorBaseX::dtype)
+        .def_property_readonly("shape", &x::DPTensorBaseX::shape)
+        .def_property_readonly("size", &x::DPTensorBaseX::size)
+        .def_property_readonly("ndim", &x::DPTensorBaseX::ndim)
+        .def("__bool__", &x::DPTensorBaseX::__bool__)
+        .def("__float__", &x::DPTensorBaseX::__float__)
+        .def("__int__", &x::DPTensorBaseX::__int__)
+        .def("__index__", &x::DPTensorBaseX::__int__)
+        .def("__len__", &x::DPTensorBaseX::__len__)
         .def("__repr__", &x::DPTensorBaseX::__repr__)
-        .def("__getitem__", &GetItem::op)
-        .def("__setitem__", &SetItem::op);
+        .def("__getitem__", &GetItem::__getitem__)
+        .def("__setitem__", &SetItem::__setitem__);
 
 #if 0
     py::class_<dtensor>(m, "dtensor")
