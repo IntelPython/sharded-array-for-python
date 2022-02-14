@@ -1,11 +1,23 @@
+"""
+Distributed implementation of the array API as defined here:
+https://data-apis.org/array-api/latest
+"""
+
+# Many features of the API are very uniformly defined.
+# We make use of that by providing lists of operations which are similar
+# (see array_api.py). __init__.py and ddptensor.py simply generate the API
+# by iterating through these lists and forwarding the function calls the the
+# C++-extension. Python functions are defined and added by using "eval".
+# For many operations we assume the C++-extension defines enums which allow
+# us identifying each operation.
+# At this point there are no checks of input arguments whatsoever, arguments
+# are simply forwarded as-is.
+
 from . import _ddptensor as _cdt
 from .ddptensor import float64, int64, fini, dtensor
 from os import getenv
 from . import array_api as api
 from . import spmd
-
-#__impl_str = getenv("DDPNP_ARRAY", 'numpy')
-#exec(f"import {__impl_str} as __impl")
 
 for op in api.ew_binary_ops:
     OP = op.upper()

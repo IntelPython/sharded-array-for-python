@@ -1,3 +1,9 @@
+"""
+The list of data API operations for ddptensor, a
+distributed implementation of the array API as defined here:
+https://data-apis.org/array-api/latest
+"""
+
 creators = [
     "arange",  # (start, /, stop=None, step=1, *, dtype=None, device=None)
     "asarray",  # (obj, /, *, dtype=None, device=None, copy=None)

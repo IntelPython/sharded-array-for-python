@@ -1,13 +1,15 @@
+"""
+The Tensor class for ddptensor, a
+distributed implementation of the array API as defined here:
+https://data-apis.org/array-api/latest
+"""
+#
+# See __init__.py for an implementation overview
+#
 from . import _ddptensor as _cdt
 from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
-#def try_except(func, *args, **kwargs):
-#    try:
-#        return func(*args, **kwargs)
-#    except:
-#        return None
-    
 class dtensor:
     def __init__(self, t):
         self._t = t
