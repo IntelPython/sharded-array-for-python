@@ -50,6 +50,8 @@ namespace x
         mutable T _replica = 0;
 
     public:
+        using typed_ptr_type = std::shared_ptr<DPTensorX<T>>;
+
         template<typename I>
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
@@ -243,6 +245,12 @@ namespace x
         static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {
             return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
+        }
+
+        template<typename X>
+        static DPTensorBaseX::ptr_type mk_tx_(const typename DPTensorX<T>::typed_ptr_type & tx, X && x)
+        {
+            return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
         }
     };
 

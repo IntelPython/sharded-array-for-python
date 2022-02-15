@@ -14,7 +14,8 @@ https://data-apis.org/array-api/latest
 # are simply forwarded as-is.
 
 from . import _ddptensor as _cdt
-from .ddptensor import float64, int64, fini, dtensor
+from ._ddptensor import float64, float32, int64, int32, int16, uint64, uint32, uint16, fini
+from .ddptensor import dtensor
 from os import getenv
 from . import array_api as api
 from . import spmd

@@ -3,7 +3,6 @@
 
 namespace x {
 
-    template<typename T>
     class ReduceOp
     {
     public:
@@ -25,28 +24,26 @@ namespace x {
             return operatorx<typename X::value_type>::mk_tx(new_shape, a, owner);
         }
 
-        static ptr_type op(ReduceOpId rop, const ptr_type & a_ptr, const dim_vec_type & dims)
+        template<typename T>
+        static ptr_type op(ReduceOpId rop, const dim_vec_type & dims, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            const auto _a = dynamic_cast<DPTensorX<T>*>(a_ptr.get());
-            if(!_a )
-                throw std::runtime_error("Invalid array object: could not dynamically cast");
-            const auto & a = xt::strided_view(_a->xarray(), _a->lslice());
+            const auto & a = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
 
             switch(rop) {
             case MEAN:
-                return dist_reduce(rop, _a->slice(), dims, xt::mean(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::mean(a, dims));
             case PROD:
-                return dist_reduce(rop, _a->slice(), dims, xt::prod(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::prod(a, dims));
             case SUM:
-                return dist_reduce(rop, _a->slice(), dims, xt::sum(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::sum(a, dims));
             case STD:
-                return dist_reduce(rop, _a->slice(), dims, xt::stddev(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::stddev(a, dims));
             case VAR:
-                return dist_reduce(rop, _a->slice(), dims, xt::variance(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::variance(a, dims));
             case MAX:
-                return dist_reduce(rop, _a->slice(), dims, xt::amax(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::amax(a, dims));
             case MIN:
-                return dist_reduce(rop, _a->slice(), dims, xt::amin(a, dims));
+                return dist_reduce(rop, a_ptr->slice(), dims, xt::amin(a, dims));
             default:
                 throw std::runtime_error("Unknown reduction operation");
             }
@@ -59,5 +56,5 @@ namespace x {
 
 tensor_i::ptr_type ReduceOp::op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim)
 {
-    return TypeDispatch<x::ReduceOp>(a->dtype(), op, a, dim);
+    return TypeDispatch2<x::ReduceOp>(a, op, dim);
 }

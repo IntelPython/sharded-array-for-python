@@ -1,39 +1,62 @@
-import cmake_build_extension
-from setuptools import setup
-from pathlib import Path
+import os
+import pathlib
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext as build_ext_orig
 
-ext_modules = [
-        cmake_build_extension.CMakeExtension(
-            name="_ddptensor",
-            # Name of the resulting package name (import mymath_pybind11)
-            install_prefix="ddptensor",
-            # Note: pybind11 is a build-system requirement specified in pyproject.toml,
-            #       therefore pypa/pip or pypa/build will install it in the virtual
-            #       environment created in /tmp during packaging.
-            #       This cmake_depends_on option adds the pybind11 installation path
-            #       to CMAKE_PREFIX_PATH so that the example finds the pybind11 targets
-            #       even if it is not installed in the system.
-            cmake_depends_on=["pybind11"],
-            # Exposes the binary print_answer to the environment.
-            # It requires also adding a new entry point in setup.cfg.
-            # expose_binaries=["bin/print_answer"],
-            # Writes the content to the top-level __init__.py
-            #write_top_level_init=init_py,
-            # Selects the folder where the main CMakeLists.txt is stored
-            # (it could be a subfolder)
-            source_dir=str(Path(__file__).parent.absolute()),
-            cmake_configure_options=[
-            ]
-        ),
-    ]
+
+class CMakeExtension(Extension):
+
+    def __init__(self, name):
+        # don't invoke the original build_ext for this special extension
+        super().__init__(name, sources=[])
+
+
+class build_ext(build_ext_orig):
+
+    def run(self):
+        for ext in self.extensions:
+            self.build_cmake(ext)
+        super().run()
+
+    def build_cmake(self, ext):
+        cwd = pathlib.Path().absolute()
+
+        # these dirs will be created in build_py, so if you don't have
+        # any python sources to bundle, the dirs will be missing
+        build_temp = pathlib.Path(self.build_temp)
+        build_temp.mkdir(parents=True, exist_ok=True)
+        extdir = pathlib.Path(self.get_ext_fullpath(ext.name))
+        extdir.parent.mkdir(parents=True, exist_ok=True)
+
+        # example of cmake args
+        config = 'Debug' if self.debug else 'Release'
+        cmake_args = [
+            '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + str(extdir.parent.absolute()),
+            '-DCMAKE_BUILD_TYPE=' + config
+        ]
+
+        # example of build args
+        build_args = [
+            '--config', config,
+            '--', '-j8'
+        ]
+
+        os.chdir(str(build_temp))
+        self.spawn(['cmake', str(cwd)] + cmake_args)
+        if not self.dry_run:
+            self.spawn(['cmake', '--build', '.'] + build_args)
+        # Troubleshooting: if fail on line above then delete all possible 
+        # temporary CMake files including "CMakeCache.txt" in top level dir.
+        os.chdir(str(cwd))
+
 
 setup(name="ddptensor",
       version="0.1",
       description="Distributed Tensor and more",
       packages=["ddptensor", "ddptensor.numpy", "ddptensor.torch"],
-      ext_modules=ext_modules,
+      ext_modules=[CMakeExtension('ddptensor/_ddptensor')],
       cmdclass=dict(
           # Enable the CMakeExtension entries defined above
-          build_ext=cmake_build_extension.BuildExtension,
+          build_ext=build_ext  #cmake_build_extension.BuildExtension,
       ),
 )

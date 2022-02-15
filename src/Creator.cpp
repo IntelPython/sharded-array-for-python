@@ -8,6 +8,7 @@ namespace x {
     {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
+        using typed_ptr_type = typename DPTensorX<T>::typed_ptr_type;
 
         static ptr_type op(CreatorId c, shape_type && shp)
         {
