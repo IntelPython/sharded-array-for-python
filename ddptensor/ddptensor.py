@@ -20,7 +20,7 @@ class dtensor:
     for method in api.ew_binary_methods:
         METHOD = method.upper()
         exec(
-            f"{method} = lambda self, other: dtensor(_cdt.EWBinOp.op(_cdt.{METHOD}, self._t, other._t))" # if isinstance(other, dtensor) else other, True))"
+            f"{method} = lambda self, other: dtensor(_cdt.EWBinOp.op(_cdt.{METHOD}, self._t, other._t if isinstance(other, dtensor) else other))"
         )
 
     for method in api.ew_binary_methods_inplace:

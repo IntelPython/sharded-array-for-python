@@ -13,8 +13,16 @@ print("""// Auto-generated file
 namespace py = pybind11;
 """)
 
+# dtypes must go first
+print("enum DType {")
+for x in api.dtypes:
+    print(f"    DT_{x.upper()},")
+print("    DTYPE_LAST")
+print("};\n")
+
 print("enum CreatorId : int {")
 for x in api.creators:
+    x = x + " = DTYPE_LAST" if x == api.creators[0] else x
     print(f"    {x.upper()},")
 print("    CREATOR_LAST")
 print("};\n")
@@ -50,6 +58,11 @@ print("    REDUCEOP_LAST")
 print("};\n")
 
 print("static void def_enums(py::module_ & m)\n{")
+
+print('    py::enum_<DType>(m, "dtype")')
+for x in api.dtypes:
+    print(f'        .value("{x}", DT_{x.upper()})')
+print("        .export_values();\n")
 
 print('    py::enum_<CreatorId>(m, "CreatorId")')
 for x in api.creators:

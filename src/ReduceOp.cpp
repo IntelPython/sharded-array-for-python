@@ -56,5 +56,5 @@ namespace x {
 
 tensor_i::ptr_type ReduceOp::op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim)
 {
-    return TypeDispatch2<x::ReduceOp>(a, op, dim);
+    return TypeDispatch<x::ReduceOp>(a, op, dim);
 }

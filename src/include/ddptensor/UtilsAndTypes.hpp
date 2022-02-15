@@ -15,21 +15,6 @@ using dim_vec_type = std::vector<int>;
 using Buffer = std::vector<uint8_t>;
 using rank_type = uint64_t;
 
-enum DType {
-    DT_FLOAT32,
-    DT_FLOAT64,
-    DT_INT8,
-    DT_INT16,
-    DT_INT32,
-    DT_INT64,
-    DT_UINT8,
-    DT_UINT16,
-    DT_UINT32,
-    DT_UINT64,
-    DT_BOOL,
-    _DT_END
-};
-
 enum : rank_type {
     NOOWNER    = std::numeric_limits<rank_type>::max(),
     REPLICATED = std::numeric_limits<rank_type>::max() - 1,
@@ -64,7 +49,7 @@ inline py::module_ get_array_impl(const py::object & = py::none())
 
 inline const py::object & get_impl_dtype(const DType dt)
 {
-    static py::object _dtypes [_DT_END] {py::none()};
+    static py::object _dtypes [DTYPE_LAST] {py::none()};
     if(_dtypes[DT_FLOAT32].is(py::none())) {
         auto mod = get_array_impl();
         _dtypes[DT_FLOAT32] = mod.attr("float32");

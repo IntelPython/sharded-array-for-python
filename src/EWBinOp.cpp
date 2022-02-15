@@ -115,5 +115,5 @@ namespace x {
     
 tensor_i::ptr_type EWBinOp::op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
 {
-    return TypeDispatch2<x::EWBinOp>(a, b, op);
+    return TypeDispatch<x::EWBinOp>(a, b, op);
 }

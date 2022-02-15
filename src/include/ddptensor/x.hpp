@@ -25,7 +25,7 @@
 namespace x
 {
     template<typename T>
-    T to_native(py::object & o)
+    T to_native(const py::object & o)
     {
         return o.cast<T>();
     }

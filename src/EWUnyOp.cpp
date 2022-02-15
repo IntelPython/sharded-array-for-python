@@ -74,6 +74,8 @@ namespace x {
                 return operatorx<T>::mk_tx_(a_ptr, xt::tanh(a));
             case TRUNC:
                 return operatorx<T>::mk_tx_(a_ptr, xt::trunc(a));
+            case ERF:
+                return operatorx<T>::mk_tx_(a_ptr, xt::erf(a));
             case __NEG__:
             case NEGATIVE:
             case __POS__:
@@ -98,5 +100,5 @@ namespace x {
 
 tensor_i::ptr_type EWUnyOp::op(EWUnyOpId op, x::DPTensorBaseX::ptr_type a)
 {
-    return TypeDispatch2<x::EWUnyOp>(a, op);
+    return TypeDispatch<x::EWUnyOp>(a, op);
 }

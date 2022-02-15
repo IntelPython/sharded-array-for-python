@@ -10,8 +10,23 @@
 #include <pybind11/stl.h>
 namespace py = pybind11;
 
+enum DType {
+    DT_FLOAT32,
+    DT_FLOAT64,
+    DT_INT8,
+    DT_INT16,
+    DT_INT32,
+    DT_INT64,
+    DT_UINT8,
+    DT_UINT16,
+    DT_UINT32,
+    DT_UINT64,
+    DT_BOOL,
+    DTYPE_LAST
+};
+
 enum CreatorId : int {
-    ARANGE,
+    ARANGE = DTYPE_LAST,
     ASARRAY,
     EMPTY,
     EMPTY_LIKE,
@@ -66,6 +81,7 @@ enum EWUnyOpId : int {
     TAN,
     TANH,
     TRUNC,
+    ERF,
     EWUNYOP_LAST
 };
 
@@ -156,6 +172,20 @@ enum ReduceOpId : int {
 
 static void def_enums(py::module_ & m)
 {
+    py::enum_<DType>(m, "dtype")
+        .value("float32", DT_FLOAT32)
+        .value("float64", DT_FLOAT64)
+        .value("int8", DT_INT8)
+        .value("int16", DT_INT16)
+        .value("int32", DT_INT32)
+        .value("int64", DT_INT64)
+        .value("uint8", DT_UINT8)
+        .value("uint16", DT_UINT16)
+        .value("uint32", DT_UINT32)
+        .value("uint64", DT_UINT64)
+        .value("bool", DT_BOOL)
+        .export_values();
+
     py::enum_<CreatorId>(m, "CreatorId")
         .value("ARANGE", ARANGE)
         .value("ASARRAY", ASARRAY)
@@ -211,6 +241,7 @@ static void def_enums(py::module_ & m)
         .value("TAN", TAN)
         .value("TANH", TANH)
         .value("TRUNC", TRUNC)
+        .value("ERF", ERF)
         .export_values();
 
     py::enum_<IEWBinOpId>(m, "IEWBinOpId")

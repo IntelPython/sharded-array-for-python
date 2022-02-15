@@ -64,5 +64,5 @@ namespace x {
 
 void IEWBinOp::op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
 {
-    TypeDispatch2<x::IEWBinOp>(a, b, op);
+    TypeDispatch<x::IEWBinOp>(a, b, op);
 }

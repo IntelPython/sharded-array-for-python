@@ -4,6 +4,20 @@ distributed implementation of the array API as defined here:
 https://data-apis.org/array-api/latest
 """
 
+dtypes = [
+    "float32",
+    "float64",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "bool",
+]
+
 creators = [
     "arange",  # (start, /, stop=None, step=1, *, dtype=None, device=None)
     "asarray",  # (obj, /, *, dtype=None, device=None, copy=None)
@@ -62,6 +76,8 @@ ew_unary_ops = [
     "tan",  # (x, /)
     "tanh",  # (x, /)
     "trunc",  # (x, /)
+    # non standard from here
+    "erf",  # (x, /)
 ]
 
 ew_binary_methods_inplace = [

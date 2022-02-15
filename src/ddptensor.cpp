@@ -22,6 +22,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/Operations.hpp"
+#include "ddptensor/Random.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -42,7 +43,7 @@ void fini()
     delete theTransceiver;
     theTransceiver = nullptr;
 }
-    
+
 // #########################################################################
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
@@ -52,18 +53,6 @@ PYBIND11_MODULE(_ddptensor, m) {
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
-
-    py::enum_<DType>(m, "dtype")
-        .value("float64", DT_FLOAT64)
-        .value("float32", DT_FLOAT32)
-        .value("int64", DT_INT64)
-        .value("int32", DT_INT32)
-        .value("int16", DT_INT16)
-        .value("uint64", DT_UINT64)
-        .value("uint32", DT_UINT32)
-        .value("uint16", DT_UINT16)
-        .value("bool", DT_BOOL)
-        .export_values();
 
     m.def("fini", &fini)
         .def("myrank", &myrank)
@@ -98,6 +87,10 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("__repr__", &x::DPTensorBaseX::__repr__)
         .def("__getitem__", &GetItem::__getitem__)
         .def("__setitem__", &SetItem::__setitem__);
+
+    py::class_<Random>(m, "Random")
+        .def("seed", &Random::seed)
+        .def("uniform", &Random::rand);
 
 #if 0
     py::class_<dtensor>(m, "dtensor")

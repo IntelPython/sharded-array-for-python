@@ -23,7 +23,7 @@ from . import spmd
 for op in api.ew_binary_ops:
     OP = op.upper()
     exec(
-        f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t))"  # if isinstance(other, ddptensor) else other, False))"
+        f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t if isinstance(other, ddptensor) else other))"
     )
 
 for op in api.ew_unary_ops:
