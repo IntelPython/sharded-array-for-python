@@ -85,6 +85,16 @@ namespace x
             _xarray = org;
         }
 
+        DPTensorX(const T & v)
+            : _owner(theTransceiver->rank()),
+              _slice(shape_type{1}),
+              _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
+              _xarray(std::make_shared<xt::xarray<T>>(1)),
+              _replica(v)
+        {
+            *_xarray = v;
+        }
+
         virtual std::string __repr__() const
         {
             auto v = xt::strided_view(xarray(), lslice());
@@ -235,6 +245,11 @@ namespace x
     {
     public:
 
+        static DPTensorBaseX::ptr_type mk_tx(py::object & o)
+        {
+            return std::make_shared<DPTensorX<T>>(o.cast<T>());
+        }
+
         template<typename ...Ts>
         static DPTensorBaseX::ptr_type mk_tx(Ts&&... args)
         {
@@ -252,6 +267,18 @@ namespace x
         {
             return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
         }
+    };
+
+    static DPTensorBaseX::ptr_type mk_tx(py::object & b)
+    {
+        if(py::isinstance<x::DPTensorBaseX::ptr_type>(b)) {
+            return b.cast<x::DPTensorBaseX::ptr_type>();
+        } else if(py::isinstance<py::float_>(b)) {
+            return x::operatorx<double>::mk_tx(b);
+        } else if(py::isinstance<py::int_>(b)) {
+            return x::operatorx<int64_t>::mk_tx(b);
+        }
+        throw std::runtime_error("Invalid right operand to elementwise binary operation");
     };
 
 } // namespace x

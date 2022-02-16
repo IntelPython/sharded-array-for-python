@@ -62,7 +62,8 @@ namespace x {
     };
 } // namespace x
 
-void IEWBinOp::op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, x::DPTensorBaseX::ptr_type b)
+void IEWBinOp::op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object b)
 {
-    TypeDispatch<x::IEWBinOp>(a, b, op);
+    auto bb = x::mk_tx(b);
+    TypeDispatch<x::IEWBinOp>(a, bb, op);
 }
