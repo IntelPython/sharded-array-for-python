@@ -15,12 +15,12 @@ struct Creator
 
 struct IEWBinOp
 {
-    static void op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object b);
+    static void op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b);
 };
 
 struct EWBinOp
 {
-    static tensor_i::ptr_type op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object b);
+    static tensor_i::ptr_type op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b);
 };
 
 struct EWUnyOp

@@ -271,12 +271,12 @@ namespace x
 
     static DPTensorBaseX::ptr_type mk_tx(py::object & b)
     {
-        if(py::isinstance<x::DPTensorBaseX::ptr_type>(b)) {
-            return b.cast<x::DPTensorBaseX::ptr_type>();
+        if(py::isinstance<DPTensorBaseX>(b)) {
+            return b.cast<DPTensorBaseX::ptr_type>();
         } else if(py::isinstance<py::float_>(b)) {
-            return x::operatorx<double>::mk_tx(b);
+            return operatorx<double>::mk_tx(b);
         } else if(py::isinstance<py::int_>(b)) {
-            return x::operatorx<int64_t>::mk_tx(b);
+            return operatorx<int64_t>::mk_tx(b);
         }
         throw std::runtime_error("Invalid right operand to elementwise binary operation");
     };

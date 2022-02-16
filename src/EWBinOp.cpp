@@ -113,7 +113,7 @@ namespace x {
     };
 } // namespace x
     
-tensor_i::ptr_type EWBinOp::op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object b)
+tensor_i::ptr_type EWBinOp::op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b)
 {
     auto bb = x::mk_tx(b);
     return TypeDispatch<x::EWBinOp>(a, bb, op);
