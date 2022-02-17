@@ -8,13 +8,24 @@ namespace x {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
-#pragma GCC diagnostic ignored "-Wswitch"
         template<typename A, typename B>
         static void op(IEWBinOpId iop, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
-            auto a = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
-            const auto b = xt::strided_view(b_ptr->xarray(), b_ptr->lslice());
-            
+            auto & ax = a_ptr->xarray();
+            const auto & bx = b_ptr->xarray();
+            if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
+                auto av = xt::strided_view(ax, a_ptr->lslice());
+                const auto & bv = xt::strided_view(bx, b_ptr->lslice());
+                do_op(iop, av, bv);
+            } else {
+                do_op(iop, ax, bx);
+            }
+        }
+
+#pragma GCC diagnostic ignored "-Wswitch"
+        template<typename T1, typename T2>
+        static void do_op(IEWBinOpId iop, T1 & a, const T2 & b)
+        {
             switch(iop) {
             case __IADD__:
                 a += b;
@@ -34,7 +45,7 @@ namespace x {
             case __IPOW__:
                 throw std::runtime_error("Binary inplace operation not implemented");
             }
-            if constexpr (std::is_integral<A>::value && std::is_integral<B>::value) {
+            if constexpr (std::is_integral<typename T1::value_type>::value && std::is_integral<typename T2::value_type>::value) {
                 switch(iop) {
                 case __IMOD__:
                     a %= b;

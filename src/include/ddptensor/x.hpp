@@ -48,6 +48,7 @@ namespace x
         xt::xstrided_slice_vector _lslice;
         std::shared_ptr<xt::xarray<T>> _xarray;
         mutable T _replica = 0;
+        bool _issliced = false;
 
     public:
         using typed_ptr_type = std::shared_ptr<DPTensorX<T>>;
@@ -56,7 +57,22 @@ namespace x
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
               _slice(std::move(slc)),
-              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
+        {
+        }
+
+        template<typename I>
+        DPTensorX(const shape_type & slc, I && ax, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(slc),
+              _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
+        {
+        }
+
+        template<typename I>
+        DPTensorX(shape_type && slc, I && ax, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(std::move(slc)),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
         }
@@ -66,7 +82,8 @@ namespace x
             : _owner(owner),
               _slice(org._slice, slc),
               _lslice(to_xt(_slice.local_slice_of_rank())),
-              _xarray(org._xarray)
+              _xarray(org._xarray),
+              _issliced(true)
         {
             if(owner == NOOWNER && slice().size() <= 1) {
                 set_owner(org.slice().owner(slc));
@@ -80,7 +97,8 @@ namespace x
             : _owner(theTransceiver->rank()),
               _slice(std::forward<PVSlice>(slc)),
               _lslice(to_xt(_slice.slice())),
-              _xarray()
+              _xarray(),
+              _issliced(true)
         {
             _xarray = org;
         }
@@ -88,13 +106,18 @@ namespace x
         DPTensorX(const T & v)
             : _owner(theTransceiver->rank()),
               _slice(shape_type{1}),
-              _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
+              // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
               _xarray(std::make_shared<xt::xarray<T>>(1)),
               _replica(v)
         {
             *_xarray = v;
         }
 
+        bool is_sliced() const
+        {
+            return _issliced;
+        }
+        
         virtual std::string __repr__() const
         {
             auto v = xt::strided_view(xarray(), lslice());

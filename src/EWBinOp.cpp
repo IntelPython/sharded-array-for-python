@@ -8,13 +8,23 @@ namespace x {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
-#pragma GCC diagnostic ignored "-Wswitch"
         template<typename A, typename B>
         static ptr_type op(EWBinOpId bop, const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
-            const auto & a = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
-            const auto & b = xt::strided_view(b_ptr->xarray(), b_ptr->lslice());
-            
+            const auto & ax = a_ptr->xarray();
+            const auto & bx = b_ptr->xarray();
+            if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
+                const auto & av = xt::strided_view(ax, a_ptr->lslice());
+                const auto & bv = xt::strided_view(bx, b_ptr->lslice());
+                return do_op(bop, av, bv, a_ptr);
+            }
+            return do_op(bop, ax, bx, a_ptr);
+        }
+
+#pragma GCC diagnostic ignored "-Wswitch"
+        template<typename T1, typename T2, typename A>
+        static ptr_type do_op(EWBinOpId bop, const T1 & a, const T2 & b, const std::shared_ptr<DPTensorX<A>> & a_ptr)
+        {
             switch(bop) {
             case __ADD__:
             case ADD:
@@ -72,7 +82,7 @@ namespace x {
                 // FIXME
                 throw std::runtime_error("Binary operation not implemented");
             }
-            if constexpr (std::is_integral<A>::value && std::is_integral<B>::value) {
+            if constexpr (std::is_integral<A>::value && std::is_integral<typename T2::value_type>::value) {
                 switch(bop) {
                 case __AND__:
                 case BITWISE_AND:

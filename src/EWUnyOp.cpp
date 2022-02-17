@@ -8,12 +8,21 @@ namespace x {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
-#pragma GCC diagnostic ignored "-Wswitch"
         template<typename T>
         static ptr_type op(EWUnyOpId uop, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            const auto & a = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
-            
+            const auto & ax = a_ptr->xarray();
+            if(a_ptr->is_sliced()) {
+                const auto & av = xt::strided_view(ax, a_ptr->lslice());
+                return do_op(uop, av, a_ptr);
+            }
+            return do_op(uop, ax, a_ptr);
+        }
+
+#pragma GCC diagnostic ignored "-Wswitch"
+        template<typename T1, typename T>
+        static ptr_type do_op(EWUnyOpId uop, const T1 & a, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        {
             switch(uop) {
             case __ABS__:
             case ABS:

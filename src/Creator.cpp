@@ -16,11 +16,11 @@ namespace x {
             shape_type shape(std::move(pvslice.tile_shape()));
             switch(c) {
             case EMPTY:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::empty<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::empty<T>(std::move(shape))));
             case ONES:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::ones<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::ones<T>(std::move(shape))));
             case ZEROS:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::zeros<T>(shape)));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::zeros<T>(std::move(shape))));
             default:
                 throw std::runtime_error("Unknown creator");
             };

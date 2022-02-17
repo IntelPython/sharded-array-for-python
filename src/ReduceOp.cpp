@@ -8,8 +8,6 @@ namespace x {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
-#pragma GCC diagnostic ignored "-Wswitch"
-
         template<typename X>
         static ptr_type dist_reduce(ReduceOpId rop, const PVSlice & slice, const dim_vec_type & dims, X && x)
         {
@@ -21,14 +19,24 @@ namespace x {
                 theTransceiver->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
                 owner = REPLICATED;
             }
-            return operatorx<typename X::value_type>::mk_tx(new_shape, a, owner);
+            return operatorx<typename X::value_type>::mk_tx(std::move(new_shape), a, owner);
         }
 
         template<typename T>
         static ptr_type op(ReduceOpId rop, const dim_vec_type & dims, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            const auto & a = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
+            const auto & ax = a_ptr->xarray();
+            if(a_ptr->is_sliced()) {
+                const auto & av = xt::strided_view(ax, a_ptr->lslice());
+                return do_op(rop, dims, av, a_ptr);
+            }
+            return do_op(rop, dims, ax, a_ptr);
+        }
 
+#pragma GCC diagnostic ignored "-Wswitch"
+        template<typename T1, typename T>
+        static ptr_type do_op(ReduceOpId rop, const dim_vec_type & dims, const T1 & a, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        {
             switch(rop) {
             case MEAN:
                 return dist_reduce(rop, a_ptr->slice(), dims, xt::mean(a, dims));

@@ -11,11 +11,12 @@ namespace x {
     struct Rand
     {
         template<typename L, typename U>
-        static ptr_type op(const shape_type & shape, const L & lower, const U & upper)
+        static ptr_type op(const shape_type & shp, const L & lower, const U & upper)
         {
             if constexpr (std::is_floating_point<T>::value) {
-                PVSlice pvslice(shape);
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::random::rand(shape, to_native<T>(lower), to_native<T>(upper))));
+                PVSlice pvslice(shp);
+                shape_type shape(std::move(pvslice.tile_shape()));
+                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::random::rand(std::move(shape), to_native<T>(lower), to_native<T>(upper))));
             }
         }
     };

@@ -1,5 +1,5 @@
 import ddptensor as dt
-a = dt.ones((8,8))
+a = dt.ones((8,8), dtype=dt.float64)
 s = dt.sum(a, axis=None)
 b = dt.ones((8,8))
 c = a + b
