@@ -14,25 +14,39 @@ https://data-apis.org/array-api/latest
 # are simply forwarded as-is.
 
 from . import _ddptensor as _cdt
-from ._ddptensor import float64, float32, int64, int32, int16, uint64, uint32, uint16, fini
+from ._ddptensor import (
+    FLOAT64 as float64,
+    FLOAT32 as float32,
+    INT64 as int64,
+    INT32 as int32,
+    INT16  as int16,
+    INT8 as int8,
+    UINT64 as uint64,
+    UINT32 as uint32,
+    UINT16 as uint16,
+    UINT8 as uint8,
+    fini
+)
 from .ddptensor import dtensor
 from os import getenv
 from . import array_api as api
 from . import spmd
 
-for op in api.ew_binary_ops:
-    OP = op.upper()
-    exec(
-        f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t if isinstance(other, ddptensor) else other))"
-    )
+for op in api.api_categories["EWBinOp"]:
+    if not op.startswith("__"):
+        OP = op.upper()
+        exec(
+            f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t if isinstance(other, ddptensor) else other))"
+        )
 
-for op in api.ew_unary_ops:
-    OP = op.upper()
-    exec(
-        f"{op} = lambda this: dtensor(_cdt.EWUnyOp.op(_cdt.{OP}, this._t))"
-    )
+for op in api.api_categories["EWUnyOp"]:
+    if not op.startswith("__"):
+        OP = op.upper()
+        exec(
+            f"{op} = lambda this: dtensor(_cdt.EWUnyOp.op(_cdt.{OP}, this._t))"
+        )
 
-for func in api.creators:
+for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func in ["empty", "ones", "zeros",]:
         exec(
@@ -43,7 +57,7 @@ for func in api.creators:
             f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(_cdt.{FUNC}, shape, val, dtype))"
         )
 
-for func in api.statisticals:
+for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()
     exec(
         f"{func} = lambda this, dim: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim))"

@@ -9,8 +9,8 @@
 
 struct Creator
 {
-    static tensor_i::ptr_type create_from_shape(CreatorId op, shape_type && shape, DType dtype=DT_FLOAT64);
-    static tensor_i::ptr_type full(shape_type && shape, py::object && val, DType dtype=DT_FLOAT64);
+    static tensor_i::ptr_type create_from_shape(CreatorId op, const shape_type & shape, DTypeId dtype=FLOAT64);
+    static tensor_i::ptr_type full(const shape_type & shape, const py::object & val, DTypeId dtype=FLOAT64);
 };
 
 struct IEWBinOp
@@ -51,32 +51,32 @@ struct SetItem
 //    * implement one or more "op" methods matching the given arguments (args)
 // All arguments other than dt are opaquely passed to the operation.
 template<template<typename OD> class OpDispatch, typename... Ts>
-auto TypeDispatch(DType dt, Ts&&... args)
+auto TypeDispatch(DTypeId dt, Ts&&... args)
 {
     switch(dt) {
-    case DT_FLOAT64:
+    case FLOAT64:
         return OpDispatch<double>::op(std::forward<Ts>(args)...);
-    case DT_INT64:
+    case INT64:
         return OpDispatch<int64_t>::op(std::forward<Ts>(args)...);
 #if ! defined(DDPT_2TYPES)
-    case DT_FLOAT32:
+    case FLOAT32:
         return OpDispatch<float>::op(std::forward<Ts>(args)...);
-    case DT_INT32:
+    case INT32:
         return OpDispatch<int32_t>::op(std::forward<Ts>(args)...);
-    case DT_INT16:
+    case INT16:
         return OpDispatch<int16_t>::op(std::forward<Ts>(args)...);
-    case DT_INT8:
+    case INT8:
         return OpDispatch<int8_t>::op(std::forward<Ts>(args)...);
-    case DT_UINT64:
+    case UINT64:
         return OpDispatch<uint64_t>::op(std::forward<Ts>(args)...);
-    case DT_UINT32:
+    case UINT32:
         return OpDispatch<uint32_t>::op(std::forward<Ts>(args)...);
-    case DT_UINT16:
+    case UINT16:
         return OpDispatch<uint16_t>::op(std::forward<Ts>(args)...);
-    case DT_UINT8:
+    case UINT8:
         return OpDispatch<uint8_t>::op(std::forward<Ts>(args)...);
         /* FIXME
-    case DT_BOOL:
+    case BOOL:
         return OpDispatch<bool>::op(std::forward<Ts>(args)...);
         */
 #endif
@@ -104,29 +104,29 @@ auto TypeDispatch(x::DPTensorBaseX::ptr_type & a_ptr, Ts&&... args)
 {
     using ptr_type = x::DPTensorBaseX::ptr_type;
     switch(a_ptr->dtype()) {
-    case DT_FLOAT64:
+    case FLOAT64:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<double>(a_ptr));
-    case DT_INT64:
+    case INT64:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<int64_t>(a_ptr));
 #if ! defined(DDPT_2TYPES)
-    case DT_FLOAT32:
+    case FLOAT32:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<float>(a_ptr));
-    case DT_INT32:
+    case INT32:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<int32_t>(a_ptr));
-    case DT_INT16:
+    case INT16:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<int16_t>(a_ptr));
-    case DT_INT8:
+    case INT8:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<int8_t>(a_ptr));
-    case DT_UINT64:
+    case UINT64:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<uint64_t>(a_ptr));
-    case DT_UINT32:
+    case UINT32:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<uint32_t>(a_ptr));
-    case DT_UINT16:
+    case UINT16:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<uint16_t>(a_ptr));
-    case DT_UINT8:
+    case UINT8:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<uint8_t>(a_ptr));
         /* FIXME
-    case DT_BOOL:
+    case BOOL:
         return TypeDispatch2<OpDispatch>(std::forward<Ts>(args)..., _downcast<bool>(a_ptr));
         */
 #endif

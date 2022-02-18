@@ -10,9 +10,9 @@ namespace x {
         using ptr_type = DPTensorBaseX::ptr_type;
         using typed_ptr_type = typename DPTensorX<T>::typed_ptr_type;
 
-        static ptr_type op(CreatorId c, shape_type && shp)
+        static ptr_type op(CreatorId c, const shape_type & shp)
         {
-            PVSlice pvslice(std::forward<shape_type>(shp));
+            PVSlice pvslice(shp);
             shape_type shape(std::move(pvslice.tile_shape()));
             switch(c) {
             case EMPTY:
@@ -27,10 +27,10 @@ namespace x {
         };
 
         template<typename V>
-        static ptr_type op(CreatorId c, shape_type && shp, V && v)
+        static ptr_type op(CreatorId c, const shape_type & shp, const V & v)
         {
             if(c == FULL) {
-                PVSlice pvslice(std::forward<shape_type>(shp));
+                PVSlice pvslice(shp);
                 shape_type shape(std::move(pvslice.tile_shape()));
                 auto a = xt::empty<T>(std::move(shape));
                 a.fill(to_native<T>(v));
@@ -41,13 +41,13 @@ namespace x {
     }; // class creatorx
 } // namespace x
 
-tensor_i::ptr_type Creator::create_from_shape(CreatorId op, shape_type && shape, DType dtype)
+tensor_i::ptr_type Creator::create_from_shape(CreatorId op, const shape_type & shape, DTypeId dtype)
 {
-    return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape));
+    return TypeDispatch<x::Creator>(dtype, op, shape);
 }
 
-tensor_i::ptr_type Creator::full(shape_type && shape, py::object && val, DType dtype)
+tensor_i::ptr_type Creator::full(const shape_type & shape, const py::object & val, DTypeId dtype)
 {
     auto op = FULL;
-    return TypeDispatch<x::Creator>(dtype, op, std::forward<shape_type>(shape), std::forward<py::object>(val));
+    return TypeDispatch<x::Creator>(dtype, op, shape, val);
 }

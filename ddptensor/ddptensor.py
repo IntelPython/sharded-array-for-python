@@ -7,7 +7,6 @@ https://data-apis.org/array-api/latest
 # See __init__.py for an implementation overview
 #
 from . import _ddptensor as _cdt
-from ._ddptensor import float64, int64, fini
 from . import array_api as api
 
 class dtensor:
@@ -17,25 +16,27 @@ class dtensor:
     def __repr__(self):
         return self._t.__repr__()
 
-    for method in api.ew_binary_methods:
-        METHOD = method.upper()
-        exec(
-            f"{method} = lambda self, other: dtensor(_cdt.EWBinOp.op(_cdt.{METHOD}, self._t, other._t if isinstance(other, dtensor) else other))"
-        )
+    for method in api.api_categories["EWBinOp"]:
+        if method.startswith("__"):
+            METHOD = method.upper()
+            exec(
+                f"{method} = lambda self, other: dtensor(_cdt.EWBinOp.op(_cdt.{METHOD}, self._t, other._t if isinstance(other, dtensor) else other))"
+            )
 
-    for method in api.ew_binary_methods_inplace:
+    for method in api.api_categories["IEWBinOp"]:
         METHOD = method.upper()
         exec(
             f"{method} = lambda self, other: (self, _cdt.IEWBinOp.op(_cdt.{METHOD}, self._t, other._t))[0]" # if isinstance(other, dtensor) else other))[0]"
         )
 
-    for method in api.ew_unary_methods:
-        METHOD = method.upper()
-        exec(
-            f"{method} = lambda self: dtensor(_cdt.EWUnyOp.op(_cdt.{METHOD}, self._t))"
-        )
+    for method in api.api_categories["EWUnyOp"]:
+        if method.startswith("__"):
+            METHOD = method.upper()
+            exec(
+                f"{method} = lambda self: dtensor(_cdt.EWUnyOp.op(_cdt.{METHOD}, self._t))"
+            )
 
-    for method in api.unary_methods:
+    for method in api.api_categories["UnyOp"]:
         exec(
             f"{method} = lambda self: self._t.{method}()"
         )

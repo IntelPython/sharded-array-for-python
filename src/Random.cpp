@@ -22,12 +22,12 @@ namespace x {
     };
 }
 
-ptr_type Random::rand(DType dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
+ptr_type Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
 {
     switch(dtype) {
-    case DT_FLOAT64:
+    case FLOAT64:
         return x::Rand<double>::op(shape, lower, upper);
-    case DT_FLOAT32:
+    case FLOAT32:
         return x::Rand<double>::op(shape, lower, upper);
     }
     throw std::runtime_error("rand: dtype must be a floating point type");

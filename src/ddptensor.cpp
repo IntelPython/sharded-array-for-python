@@ -74,17 +74,17 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<ReduceOp>(m, "ReduceOp")
         .def("op", &ReduceOp::op);
 
-    py::class_<x::DPTensorBaseX, x::DPTensorBaseX::ptr_type>(m, "DPTensorX")
-        .def_property_readonly("dtype", &x::DPTensorBaseX::dtype)
-        .def_property_readonly("shape", &x::DPTensorBaseX::shape)
-        .def_property_readonly("size", &x::DPTensorBaseX::size)
-        .def_property_readonly("ndim", &x::DPTensorBaseX::ndim)
-        .def("__bool__", &x::DPTensorBaseX::__bool__)
-        .def("__float__", &x::DPTensorBaseX::__float__)
-        .def("__int__", &x::DPTensorBaseX::__int__)
-        .def("__index__", &x::DPTensorBaseX::__int__)
-        .def("__len__", &x::DPTensorBaseX::__len__)
-        .def("__repr__", &x::DPTensorBaseX::__repr__)
+    py::class_<tensor_i, tensor_i::ptr_type>(m, "DPTensorX")
+        .def_property_readonly("dtype", &tensor_i::dtype)
+        .def_property_readonly("shape", &tensor_i::shape)
+        .def_property_readonly("size", &tensor_i::size)
+        .def_property_readonly("ndim", &tensor_i::ndim)
+        .def("__bool__", &tensor_i::__bool__)
+        .def("__float__", &tensor_i::__float__)
+        .def("__int__", &tensor_i::__int__)
+        .def("__index__", &tensor_i::__int__)
+        .def("__len__", &tensor_i::__len__)
+        .def("__repr__", &tensor_i::__repr__)
         .def("__getitem__", &GetItem::__getitem__)
         .def("__setitem__", &SetItem::__setitem__);
 
@@ -94,7 +94,7 @@ PYBIND11_MODULE(_ddptensor, m) {
 
 #if 0
     py::class_<dtensor>(m, "dtensor")
-        .def(py::init<const shape_type &, DType>())
+        .def(py::init<const shape_type &, DTypeId>())
         .def_property_readonly("dtype", &dtensor::dtype)
         .def_property_readonly("shape", &dtensor::shape)
         .def("__bool__", &dtensor::__bool__)

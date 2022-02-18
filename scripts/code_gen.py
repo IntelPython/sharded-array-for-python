@@ -1,4 +1,8 @@
-import array_api as api
+import sys, os
+sys.path.append(os.path.abspath(os.path.dirname(sys.argv[1])))
+exec(f"import {os.path.basename(sys.argv[1]).split('.')[0]} as api")
+
+sys.stdout = open(sys.argv[2], 'w')
 
 print("""// Auto-generated file
 // #######################################################
@@ -13,80 +17,25 @@ print("""// Auto-generated file
 namespace py = pybind11;
 """)
 
-# dtypes must go first
-print("enum DType {")
-for x in api.dtypes:
-    print(f"    DT_{x.upper()},")
-print("    DTYPE_LAST")
-print("};\n")
-
-print("enum CreatorId : int {")
-for x in api.creators:
-    x = x + " = DTYPE_LAST" if x == api.creators[0] else x
-    print(f"    {x.upper()},")
-print("    CREATOR_LAST")
-print("};\n")
-
-uops = api.ew_unary_methods + api.ew_unary_ops
-print("enum EWUnyOpId : int {")
-for x in uops:
-    x = x + " = CREATOR_LAST" if x == uops[0] else x
-    print(f"    {x.upper()},")
-print("    EWUNYOP_LAST")
-print("};\n")
-
-print("enum IEWBinOpId : int {")
-for x in api.ew_binary_methods_inplace:
-    x = x + " = EWUNYOP_LAST" if x == api.ew_binary_methods_inplace[0] else x
-    print(f"    {x.upper()},")
-print("    IEWBINOP_LAST")
-print("};\n")
-
-bops = api.ew_binary_methods + api.ew_binary_ops
-print("enum EWBinOpId : int {")
-for x in bops:
-    x = x + " = IEWBINOP_LAST" if x == bops[0] else x
-    print(f"    {x.upper()},")
-print("    EWBINOP_LAST")
-print("};\n")
-
-print("enum ReduceOpId : int {")
-for x in api.statisticals:
-    x = x + " = EWBINOP_LAST" if x == api.statisticals[0] else x
-    print(f"    {x.upper()},")
-print("    REDUCEOP_LAST")
-print("};\n")
+prev = "0"
+for cat, lst in api.api_categories.items():
+    print(f"enum {cat}Id : int {{")
+    for x in lst:
+        x = x + f" = {prev}" if x == lst[0] else x
+        print(f"    {x.upper()},")
+    prev = f"{cat.upper()}_LAST"
+    print(f"    {prev}")
+    print("};\n")
 
 print("static void def_enums(py::module_ & m)\n{")
 
-print('    py::enum_<DType>(m, "dtype")')
-for x in api.dtypes:
-    print(f'        .value("{x}", DT_{x.upper()})')
-print("        .export_values();\n")
-
-print('    py::enum_<CreatorId>(m, "CreatorId")')
-for x in api.creators:
-    print(f'        .value("{x.upper()}", {x.upper()})')
-print("        .export_values();\n")
-
-print('    py::enum_<EWUnyOpId>(m, "EWUnyOpId")')
-for x in uops:
-    print(f'        .value("{x.upper()}", {x.upper()})')
-print("        .export_values();\n")
-
-print('    py::enum_<IEWBinOpId>(m, "IEWBinOpId")')
-for x in api.ew_binary_methods_inplace:
-    print(f'        .value("{x.upper()}", {x.upper()})')
-print("        .export_values();\n")
-
-print('    py::enum_<EWBinOpId>(m, "EWBinOpId")')
-for x in bops:
-    print(f'        .value("{x.upper()}", {x.upper()})')
-print("        .export_values();\n")
-
-print('    py::enum_<ReduceOpId>(m, "ReduceOpId")')
-for x in api.statisticals:
-    print(f'        .value("{x.upper()}", {x.upper()})')
-print("        .export_values();\n")
+for cat, lst in api.api_categories.items():
+    print(f'    py::enum_<{cat}Id>(m, "{cat}Id")')
+    for x in lst:
+        print(f'        .value("{x.upper()}", {x.upper()})')
+    print("        .export_values();\n")
 
 print("}")
+
+# Close the file
+sys.stdout.close()

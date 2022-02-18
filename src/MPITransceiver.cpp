@@ -23,18 +23,18 @@ MPITransceiver::MPITransceiver()
     _rank = rank;
 };
 
-static MPI_Datatype to_mpi(DType T)
+static MPI_Datatype to_mpi(DTypeId T)
 {
     switch(T) {
-    case DT_FLOAT64: return MPI_DOUBLE;
-    case DT_FLOAT32: return MPI_FLOAT;
-    case DT_INT32:   return MPI_INT32_T;
-    case DT_INT64:   return MPI_INT64_T;
-    case DT_UINT32:  return MPI_INT32_T;
-    case DT_UINT64:  return MPI_INT64_T;
-    case DT_INT8:    return MPI_INT8_T;
-    case DT_UINT8:   return MPI_UINT8_T;
-    case DT_BOOL:    return MPI_C_BOOL;
+    case FLOAT64: return MPI_DOUBLE;
+    case FLOAT32: return MPI_FLOAT;
+    case INT32:   return MPI_INT32_T;
+    case INT64:   return MPI_INT64_T;
+    case UINT32:  return MPI_INT32_T;
+    case UINT64:  return MPI_INT64_T;
+    case INT8:    return MPI_INT8_T;
+    case UINT8:   return MPI_UINT8_T;
+    case BOOL:    return MPI_C_BOOL;
     default: throw std::logic_error("unsupported data type");
     }
 }
@@ -68,7 +68,7 @@ void MPITransceiver::bcast(void * ptr, size_t N, rank_type root)
     MPI_Bcast(ptr, N, MPI_CHAR, root, MPI_COMM_WORLD);
 }
 
-void MPITransceiver::reduce_all(void * inout, DType T, size_t N, RedOpType op)
+void MPITransceiver::reduce_all(void * inout, DTypeId T, size_t N, RedOpType op)
 {
     MPI_Allreduce(MPI_IN_PLACE, inout, N, to_mpi(T), to_mpi(op), MPI_COMM_WORLD);
 }

@@ -126,7 +126,7 @@ namespace x
             return oss.str();
         }
 
-        virtual DType dtype() const
+        virtual DTypeId dtype() const
         {
             return DTYPE<T>::value;
         }

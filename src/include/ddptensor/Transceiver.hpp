@@ -27,7 +27,7 @@ public:
     // @param[in]    T     data type of elements in inout
     // @param[in]    N     number of elements in inout
     // @param[in]    op    reduction operation
-    virtual void reduce_all(void * inout, DType T, size_t N, RedOpType op) = 0;
+    virtual void reduce_all(void * inout, DTypeId T, size_t N, RedOpType op) = 0;
 };
 
 extern Transceiver * theTransceiver;

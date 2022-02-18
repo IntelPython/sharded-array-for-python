@@ -22,17 +22,17 @@ enum : rank_type {
 };
 
 template<typename T> struct DTYPE {};
-template<> struct DTYPE<double>   { constexpr static DType value = DT_FLOAT64; };
-template<> struct DTYPE<float>    { constexpr static DType value = DT_FLOAT32; };
-template<> struct DTYPE<int64_t>  { constexpr static DType value = DT_INT64; };
-template<> struct DTYPE<int32_t>  { constexpr static DType value = DT_INT32; };
-template<> struct DTYPE<int16_t>  { constexpr static DType value = DT_INT16; };
-template<> struct DTYPE<int8_t>   { constexpr static DType value = DT_INT8; };
-template<> struct DTYPE<uint64_t> { constexpr static DType value = DT_UINT64; };
-template<> struct DTYPE<uint32_t> { constexpr static DType value = DT_UINT32; };
-template<> struct DTYPE<uint16_t> { constexpr static DType value = DT_UINT16; };
-template<> struct DTYPE<uint8_t>  { constexpr static DType value = DT_UINT8; };
-template<> struct DTYPE<bool>     { constexpr static DType value = DT_BOOL; };
+template<> struct DTYPE<double>   { constexpr static DTypeId value = FLOAT64; };
+template<> struct DTYPE<float>    { constexpr static DTypeId value = FLOAT32; };
+template<> struct DTYPE<int64_t>  { constexpr static DTypeId value = INT64; };
+template<> struct DTYPE<int32_t>  { constexpr static DTypeId value = INT32; };
+template<> struct DTYPE<int16_t>  { constexpr static DTypeId value = INT16; };
+template<> struct DTYPE<int8_t>   { constexpr static DTypeId value = INT8; };
+template<> struct DTYPE<uint64_t> { constexpr static DTypeId value = UINT64; };
+template<> struct DTYPE<uint32_t> { constexpr static DTypeId value = UINT32; };
+template<> struct DTYPE<uint16_t> { constexpr static DTypeId value = UINT16; };
+template<> struct DTYPE<uint8_t>  { constexpr static DTypeId value = UINT8; };
+template<> struct DTYPE<bool>     { constexpr static DTypeId value = BOOL; };
 
 template<typename T> py::object get_impl_dtype() { return get_impl_dtype(DTYPE<T>::value); };
 
@@ -47,22 +47,22 @@ inline py::module_ get_array_impl(const py::object & = py::none())
     return _array_ns;
 }
 
-inline const py::object & get_impl_dtype(const DType dt)
+inline const py::object & get_impl_dtype(const DTypeId dt)
 {
     static py::object _dtypes [DTYPE_LAST] {py::none()};
-    if(_dtypes[DT_FLOAT32].is(py::none())) {
+    if(_dtypes[FLOAT32].is(py::none())) {
         auto mod = get_array_impl();
-        _dtypes[DT_FLOAT32] = mod.attr("float32");
-        _dtypes[DT_FLOAT64] = mod.attr("float64");
-        _dtypes[DT_INT16] = mod.attr("int16");
-        _dtypes[DT_INT32] = mod.attr("int32");
-        _dtypes[DT_INT64] = mod.attr("int64");
+        _dtypes[FLOAT32] = mod.attr("float32");
+        _dtypes[FLOAT64] = mod.attr("float64");
+        _dtypes[INT16] = mod.attr("int16");
+        _dtypes[INT32] = mod.attr("int32");
+        _dtypes[INT64] = mod.attr("int64");
 #if 0 // FIXME torch
-        _dtypes[DT_UINT16] = mod.attr("uint16");
-        _dtypes[DT_UINT32] = mod.attr("uint32");
-        _dtypes[DT_UINT64] = mod.attr("uint64");
+        _dtypes[UINT16] = mod.attr("uint16");
+        _dtypes[UINT32] = mod.attr("uint32");
+        _dtypes[UINT64] = mod.attr("uint64");
 #endif
-        _dtypes[DT_BOOL] = mod.attr("bool");
+        _dtypes[BOOL] = mod.attr("bool");
     }
     return _dtypes[dt];
 }
