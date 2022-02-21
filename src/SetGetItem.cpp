@@ -1,4 +1,5 @@
-#include "ddptensor/Operations.hpp"
+#include "ddptensor/SetGetItem.hpp"
+#include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
 
 namespace x {

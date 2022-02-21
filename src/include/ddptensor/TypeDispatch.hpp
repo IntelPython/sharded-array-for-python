@@ -7,50 +7,6 @@
 #include "x.hpp"
 #include "p2c_ids.hpp"
 
-struct Creator
-{
-    static tensor_i::ptr_type create_from_shape(CreatorId op, const shape_type & shape, DTypeId dtype=FLOAT64);
-    static tensor_i::ptr_type full(const shape_type & shape, const py::object & val, DTypeId dtype=FLOAT64);
-    static tensor_i::ptr_type arange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype=INT64);
-};
-
-struct IEWBinOp
-{
-    static void op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b);
-};
-
-struct EWBinOp
-{
-    static tensor_i::ptr_type op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b);
-};
-
-struct EWUnyOp
-{
-    static tensor_i::ptr_type op(EWUnyOpId op, x::DPTensorBaseX::ptr_type a);
-};
-
-struct ReduceOp
-{
-    static tensor_i::ptr_type op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim);
-};
-
-struct GetItem
-{
-    static tensor_i::ptr_type __getitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v);
-    static py::object get_slice(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v);
-};
-
-struct SetItem
-{
-    static void __setitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v, x::DPTensorBaseX::ptr_type b);
-};
-
-struct ManipOp
-{
-    static tensor_i::ptr_type reshape(x::DPTensorBaseX::ptr_type a, const shape_type & shape);
-};
-
-
 // Dependent on dt, dispatch arguments to a operation class.
 // The operation must
 //    * be a template class accepting the element type as argument
@@ -92,7 +48,7 @@ auto TypeDispatch(DTypeId dt, Ts&&... args)
 }
 
 template<typename A>
-typename x::DPTensorX<A>::typed_ptr_type _downcast(const x::DPTensorBaseX::ptr_type & a_ptr)
+typename x::DPTensorX<A>::typed_ptr_type _downcast(const tensor_i::ptr_type & a_ptr)
 {
     auto _a = std::dynamic_pointer_cast<x::DPTensorX<A>>(a_ptr);
     if(!_a )
@@ -102,13 +58,13 @@ typename x::DPTensorX<A>::typed_ptr_type _downcast(const x::DPTensorBaseX::ptr_t
 
 // Dependent on dt, dispatch arguments to a operation class.
 // The operation must implement one or more "op" methods matching the given arguments (args)
-// Recursiovely called to downcast x::DPTensorBaseX::ptr_type to typed shared_pointers.
+// Recursiovely called to downcast tensor_i::ptr_type to typed shared_pointers.
 // Downcasted tensor arg is removed from front of arg list and appended to its end.
 // All other arguments are opaquely passed to the operation.
 template<typename OpDispatch, typename... Ts>
-auto TypeDispatch(x::DPTensorBaseX::ptr_type & a_ptr, Ts&&... args)
+auto TypeDispatch(tensor_i::ptr_type & a_ptr, Ts&&... args)
 {
-    using ptr_type = x::DPTensorBaseX::ptr_type;
+    using ptr_type = tensor_i::ptr_type;
     switch(a_ptr->dtype()) {
     case FLOAT64:
         return TypeDispatch<OpDispatch>(std::forward<Ts>(args)..., _downcast<double>(a_ptr));

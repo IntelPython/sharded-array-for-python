@@ -1,7 +1,6 @@
 #include <xtensor/xrandom.hpp>
 #include "ddptensor/Random.hpp"
 #include "ddptensor/x.hpp"
-#include "ddptensor/Operations.hpp"
 
 using ptr_type = tensor_i::ptr_type;
 

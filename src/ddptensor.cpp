@@ -21,7 +21,13 @@ using namespace pybind11::literals; // to bring _a
 
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/MPIMediator.hpp"
-#include "ddptensor/Operations.hpp"
+#include "ddptensor/Creator.hpp"
+#include "ddptensor/IEWBinOp.hpp"
+#include "ddptensor/EWBinOp.hpp"
+#include "ddptensor/EWUnyOp.hpp"
+#include "ddptensor/ReduceOp.hpp"
+#include "ddptensor/ManipOp.hpp"
+#include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Random.hpp"
 
 // #########################################################################
