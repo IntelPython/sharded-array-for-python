@@ -60,7 +60,8 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)
-        .def("full", &Creator::full);
+        .def("full", &Creator::full)
+        .def("arange", &Creator::arange);
 
     py::class_<EWUnyOp>(m, "EWUnyOp")
         .def("op", &EWUnyOp::op);
@@ -73,6 +74,9 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<ReduceOp>(m, "ReduceOp")
         .def("op", &ReduceOp::op);
+
+    py::class_<ManipOp>(m, "ManipOp")
+        .def("reshape", &ManipOp::reshape);
 
     py::class_<tensor_i, tensor_i::ptr_type>(m, "DPTensorX")
         .def_property_readonly("dtype", &tensor_i::dtype)

@@ -28,6 +28,16 @@ public:
     // @param[in]    N     number of elements in inout
     // @param[in]    op    reduction operation
     virtual void reduce_all(void * inout, DTypeId T, size_t N, RedOpType op) = 0;
+
+    // umm, can this be higher-level?
+    virtual void alltoall(const void* buffer_send,
+                          const int* counts_send,
+                          const int* displacements_send,
+                          DTypeId datatype_send,
+                          void* buffer_recv,
+                          const int* counts_recv,
+                          const int* displacements_recv,
+                          DTypeId datatype_recv) = 0;
 };
 
 extern Transceiver * theTransceiver;

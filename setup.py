@@ -29,7 +29,7 @@ class build_ext(build_ext_orig):
         extdir.parent.mkdir(parents=True, exist_ok=True)
 
         # example of cmake args
-        config = 'Debug' if self.debug else 'Release'
+        config = 'Debug'# if self.debug else 'Release'
         cmake_args = [
             '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + str(extdir.parent.absolute()),
             '-DCMAKE_BUILD_TYPE=' + config

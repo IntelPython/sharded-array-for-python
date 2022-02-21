@@ -77,6 +77,23 @@ namespace x
         {
         }
 
+        DPTensorX(const shape_type & shp, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(shp),
+              _xarray(std::make_shared<xt::xarray<T>>(xt::empty<T>(_slice.tile_shape())))
+        {
+        }
+
+        DPTensorX(const T & v)
+            : _owner(theTransceiver->rank()),
+              _slice(shape_type{1}),
+              // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
+              _xarray(std::make_shared<xt::xarray<T>>(1)),
+              _replica(v)
+        {
+            *_xarray = v;
+        }
+
         template<typename O>
         DPTensorX(const DPTensorX<O> & org, const NDSlice & slc, rank_type owner=NOOWNER)
             : _owner(owner),
@@ -101,16 +118,6 @@ namespace x
               _issliced(true)
         {
             _xarray = org;
-        }
-
-        DPTensorX(const T & v)
-            : _owner(theTransceiver->rank()),
-              _slice(shape_type{1}),
-              // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
-              _xarray(std::make_shared<xt::xarray<T>>(1)),
-              _replica(v)
-        {
-            *_xarray = v;
         }
 
         bool is_sliced() const
@@ -256,7 +263,7 @@ namespace x
 
 
     template<typename T>
-    static tensor_i::ptr_type register_tensor(std::shared_ptr<DPTensorX<T>> t)
+    static typename DPTensorX<T>::typed_ptr_type register_tensor(typename DPTensorX<T>::typed_ptr_type t)
     {
         auto id = theMediator->register_array(t);
         t->set_id(id);
@@ -274,21 +281,21 @@ namespace x
         }
 
         template<typename ...Ts>
-        static DPTensorBaseX::ptr_type mk_tx(Ts&&... args)
+        static typename DPTensorX<T>::typed_ptr_type mk_tx(Ts&&... args)
         {
-            return register_tensor(std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...));
+            return register_tensor<T>(std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...));
         }
             
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {
-            return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
+            return register_tensor<typename X::value_type>(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
         }
 
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const typename DPTensorX<T>::typed_ptr_type & tx, X && x)
         {
-            return register_tensor(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
+            return register_tensor<typename X::value_type>(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
         }
     };
 

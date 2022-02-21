@@ -56,9 +56,20 @@ for func in api.api_categories["Creator"]:
         exec(
             f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(_cdt.{FUNC}, shape, val, dtype))"
         )
+    elif func == "arange":
+        exec(
+            f"{func} = lambda start, end, step, dtype: dtensor(_cdt.Creator.arange(start, end, step, dtype))"
+        )
 
 for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()
     exec(
         f"{func} = lambda this, dim: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim))"
     )
+
+for func in api.api_categories["ManipOp"]:
+    FUNC = func.upper()
+    if func == "reshape":
+        exec(
+            f"{func} = lambda this, shape: dtensor(_cdt.ManipOp.reshape(this._t, shape))"
+        )

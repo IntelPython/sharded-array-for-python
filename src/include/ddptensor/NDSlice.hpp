@@ -202,6 +202,26 @@ public:
     }
 
     ///
+    /// @return Copy of NDSlice which was trimmed by given slice
+    ///
+    NDSlice trim(const NDSlice & slc) const
+    {
+        return _convert([&](uint64_t i) {
+                return _slice_vec[i].trim(slc.dim(i)._start, slc.dim(i)._end);
+            } );
+    }
+
+    ///
+    /// @return Copy of NDSlice which was trimmed by given slice
+    ///
+    NDSlice overlap(const NDSlice & slc) const
+    {
+        return _convert([&](uint64_t i) {
+                return _slice_vec[i].overlap(slc.dim(i));
+            } );
+    }
+    
+    ///
     /// @return Copy of NDSlice which was trimmed by t_slc and shifted by s_slc._start's
     ///
     NDSlice trim_shift(const NDSlice & t_slc, const NDSlice & s_slc) const

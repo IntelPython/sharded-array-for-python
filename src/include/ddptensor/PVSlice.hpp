@@ -12,6 +12,7 @@ constexpr static int NOSPLIT = -1;
 class BasePVSlice
 {
     uint64_t   _offset;
+    uint64_t   _tile_size;
     shape_type _shape;
     int        _split_dim;
 
@@ -24,15 +25,18 @@ public:
           _shape(shape),
           _split_dim(split)
     {
+        _tile_size = VPROD(_shape) / shape[_split_dim] * _offset;
     }
     BasePVSlice(shape_type && shape, int split=0)
         : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
           _shape(std::move(shape)),
           _split_dim(split)
     {
+        _tile_size = VPROD(_shape) / _shape[_split_dim] * _offset;
     }
 
     uint64_t offset() const { return _offset; }
+    uint64_t tile_size() const { return _tile_size; }
     int split_dim() const { return _split_dim; }
     const shape_type & shape() const { return _shape; }
     shape_type shape(rank_type rank) const
@@ -123,6 +127,11 @@ public:
     const int split_dim() const
     {
         return _base->split_dim();
+    }
+
+    const uint64_t tile_size() const
+    {
+        return _base->tile_size();
     }
 
     const shape_type & shape() const

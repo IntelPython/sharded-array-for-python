@@ -23,6 +23,14 @@ public:
     virtual void barrier();
     virtual void bcast(void * ptr, size_t N, rank_type root);
     virtual void reduce_all(void * inout, DTypeId T, size_t N, RedOpType op);
+    virtual void alltoall(const void* buffer_send,
+                          const int* counts_send,
+                          const int* displacements_send,
+                          DTypeId datatype_send,
+                          void* buffer_recv,
+                          const int* counts_recv,
+                          const int* displacements_recv,
+                          DTypeId datatype_recv);
 
 private:
     rank_type _nranks, _rank;
