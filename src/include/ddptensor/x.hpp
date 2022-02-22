@@ -48,7 +48,6 @@ namespace x
         xt::xstrided_slice_vector _lslice;
         std::shared_ptr<xt::xarray<T>> _xarray;
         mutable T _replica = 0;
-        bool _issliced = false;
 
     public:
         using typed_ptr_type = std::shared_ptr<DPTensorX<T>>;
@@ -80,7 +79,7 @@ namespace x
         DPTensorX(const shape_type & shp, rank_type owner=NOOWNER)
             : _owner(owner),
               _slice(shp),
-              _xarray(std::make_shared<xt::xarray<T>>(xt::empty<T>(_slice.tile_shape())))
+              _xarray(std::make_shared<xt::xarray<T>>(xt::empty<T>(_slice.shape_of_rank())))
         {
         }
 
@@ -99,8 +98,7 @@ namespace x
             : _owner(owner),
               _slice(org._slice, slc),
               _lslice(to_xt(_slice.local_slice_of_rank())),
-              _xarray(org._xarray),
-              _issliced(true)
+              _xarray(org._xarray)
         {
             if(owner == NOOWNER && slice().size() <= 1) {
                 set_owner(org.slice().owner(slc));
@@ -114,15 +112,14 @@ namespace x
             : _owner(theTransceiver->rank()),
               _slice(std::forward<PVSlice>(slc)),
               _lslice(to_xt(_slice.slice())),
-              _xarray(),
-              _issliced(true)
+              _xarray()
         {
             _xarray = org;
         }
 
         bool is_sliced() const
         {
-            return _issliced;
+            return _slice.is_sliced();
         }
         
         virtual std::string __repr__() const
@@ -247,7 +244,7 @@ namespace x
 
         virtual void bufferize(const NDSlice & slc, Buffer & buff) const
         {
-            NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
+            NDSlice lslice = NDSlice(slice().shape_of_rank()).slice(slc);
 
             std::cerr << "lslice=" << lslice << " slc= " << slc << " buffsz=" << buff.size() << " want " << slc.size()*sizeof(T) << std::endl;
 

@@ -111,6 +111,7 @@ namespace x {
     public:
         using ptr_type = DPTensorBaseX::ptr_type;
 
+        // get_slice
         template<typename T>
         static py::object op(const NDSlice & slice, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
@@ -118,30 +119,52 @@ namespace x {
             auto sz = VPROD(shp);
             auto res = py::array_t<T>(sz);
             auto ax = xt::adapt(res.mutable_data(), sz, xt::no_ownership(), shp);
-            std::cerr << ax << std::endl << py::str(res).cast<std::string>() << res.mutable_data() << std::endl;
-            // Create dtensor without creating id: do not use create_dtensor
-            // auto out = DPTensorX<T>(ax, PVSlice(shp, NOSPLIT));
             PVSlice slc{shp, NOSPLIT};
             SetItem::_set_slice<T>(ax, slc, slc.slice(), a_ptr, slice);
-            std::cerr << ax << std::endl << py::str(res).cast<std::string>() << std::endl;
-            // res.reshape(shp);
             return res;
+        }
+
+        // get_local
+        template<typename T>
+        static py::object op(py::handle & handle, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        {
+            auto slc = a_ptr->slice().local_slice_of_rank();
+            auto tshp = a_ptr->slice().tile_shape();
+            auto nd = slc.ndims();
+             // buffer protocol accepts strides in number of bytes not elements!
+            std::vector<uint64_t> strides(nd, sizeof(T));
+            uint64_t off = slc.dim(nd-1)._start * sizeof(T); // start offset
+            for(int i=nd-2; i>=0; --i) {
+                auto slci = slc.dim(i);
+                auto tmp = strides[i+1] * tshp[i+1];
+                strides[i] = slci._step * tmp;
+                off += slci._start * tmp;
+            }
+            off /= sizeof(T); // we need the offset in number of elements
+            strides.back() = slc.dim(nd-1)._step * sizeof(T);
+            T * data = a_ptr->xarray().data();
+            return py::array(std::move(slc.shape()), std::move(strides), data + off, handle);
         }
     };
 
 } // namespace x
 
-void SetItem::__setitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v, x::DPTensorBaseX::ptr_type b)
+void SetItem::__setitem__(tensor_i::ptr_type a, const std::vector<py::slice> & v, tensor_i::ptr_type b)
 {
     return TypeDispatch<x::SetItem>(a, b, NDSlice(v));
 }
 
-tensor_i::ptr_type GetItem::__getitem__(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
+tensor_i::ptr_type GetItem::__getitem__(tensor_i::ptr_type a, const std::vector<py::slice> & v)
 {
     return TypeDispatch<x::GetItem>(a, NDSlice(v));
 }
 
-py::object GetItem::get_slice(x::DPTensorBaseX::ptr_type a, const std::vector<py::slice> & v)
+py::object GetItem::get_slice(tensor_i::ptr_type a, const std::vector<py::slice> & v)
 {
     return TypeDispatch<x::SPMD>(a, NDSlice(v));
+}
+
+py::object GetItem::get_local(tensor_i::ptr_type a, py::handle h)
+{
+    return TypeDispatch<x::SPMD>(a, h);
 }

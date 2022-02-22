@@ -36,7 +36,18 @@ public:
     }
 
     uint64_t offset() const { return _offset; }
-    uint64_t tile_size() const { return _tile_size; }
+    uint64_t tile_size(rank_type rank = theTransceiver->rank()) const
+    {
+        if(rank < theTransceiver->nranks() - 1) return _tile_size;
+        return VPROD(_shape) - (rank-1 * _tile_size);
+    }
+    shape_type tile_shape(rank_type rank = theTransceiver->rank()) const
+    {
+        shape_type r(_shape);
+        if(rank < theTransceiver->nranks() - 1) r[_split_dim] = offset();
+        else r[_split_dim] = r[_split_dim] - (rank-1 * offset());
+        return r;
+    }
     int split_dim() const { return _split_dim; }
     const shape_type & shape() const { return _shape; }
     shape_type shape(rank_type rank) const
@@ -129,9 +140,14 @@ public:
         return _base->split_dim();
     }
 
-    const uint64_t tile_size() const
+    const bool is_sliced() const
     {
-        return _base->tile_size();
+        return base_shape() != shape();
+    }
+
+    const uint64_t tile_size(rank_type rank = theTransceiver->rank()) const
+    {
+        return _base->tile_size(rank);
     }
 
     const shape_type & shape() const
@@ -145,6 +161,11 @@ public:
     }
 
     const shape_type tile_shape(rank_type rank = theTransceiver->rank()) const
+    {
+        return _base->tile_shape(rank);
+    }
+
+    const shape_type shape_of_rank(rank_type rank = theTransceiver->rank()) const
     {
         return slice_of_rank(rank).shape();
     }

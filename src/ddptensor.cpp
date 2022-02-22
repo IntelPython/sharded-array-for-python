@@ -62,7 +62,8 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     m.def("fini", &fini)
         .def("myrank", &myrank)
-        .def("_get_slice", &GetItem::get_slice);
+        .def("_get_slice", &GetItem::get_slice)
+        .def("_get_local", &GetItem::get_local);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)

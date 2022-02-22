@@ -10,6 +10,7 @@ struct GetItem
 {
     static tensor_i::ptr_type __getitem__(tensor_i::ptr_type a, const std::vector<py::slice> & v);
     static py::object get_slice(tensor_i::ptr_type a, const std::vector<py::slice> & v);
+    static py::object get_local(tensor_i::ptr_type a, py::handle h);
 };
 
 struct SetItem

@@ -14,7 +14,7 @@ namespace x {
         {
             if constexpr (std::is_floating_point<T>::value) {
                 PVSlice pvslice(shp);
-                shape_type shape(std::move(pvslice.tile_shape()));
+                shape_type shape(std::move(pvslice.shape_of_rank()));
                 return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::random::rand(std::move(shape), to_native<T>(lower), to_native<T>(upper))));
             }
         }

@@ -14,7 +14,7 @@ namespace x {
         static ptr_type op(CreatorId c, const shape_type & shp)
         {
             PVSlice pvslice(shp);
-            shape_type shape(std::move(pvslice.tile_shape()));
+            shape_type shape(std::move(pvslice.shape_of_rank()));
             switch(c) {
             case EMPTY:
                 return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::empty<T>(std::move(shape))));
@@ -32,7 +32,7 @@ namespace x {
         {
             if(c == FULL) {
                 PVSlice pvslice(shp);
-                shape_type shape(std::move(pvslice.tile_shape()));
+                shape_type shape(std::move(pvslice.shape_of_rank()));
                 auto a = xt::empty<T>(std::move(shape));
                 a.fill(to_native<T>(v));
                 return operatorx<T>::mk_tx(std::move(pvslice), std::move(a));
