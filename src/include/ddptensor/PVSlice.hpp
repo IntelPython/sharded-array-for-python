@@ -27,6 +27,7 @@ public:
     {
         _tile_size = VPROD(_shape) / shape[_split_dim] * _offset;
     }
+
     BasePVSlice(shape_type && shape, int split=0)
         : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
           _shape(std::move(shape)),
@@ -35,21 +36,40 @@ public:
         _tile_size = VPROD(_shape) / _shape[_split_dim] * _offset;
     }
 
-    uint64_t offset() const { return _offset; }
+    bool is_equally_tiled() const
+    {
+        return _shape[_split_dim] == theTransceiver->nranks() * _offset;
+    }
+
+    uint64_t offset() const
+    {
+        return _offset;
+    }
+
     uint64_t tile_size(rank_type rank = theTransceiver->rank()) const
     {
-        if(rank < theTransceiver->nranks() - 1) return _tile_size;
+        if(rank == 0 || rank < theTransceiver->nranks() - 1) return _tile_size;
         return VPROD(_shape) - (rank-1 * _tile_size);
     }
+
     shape_type tile_shape(rank_type rank = theTransceiver->rank()) const
     {
         shape_type r(_shape);
-        if(rank < theTransceiver->nranks() - 1) r[_split_dim] = offset();
+        if(rank == 0 || rank < theTransceiver->nranks() - 1) r[_split_dim] = offset();
         else r[_split_dim] = r[_split_dim] - (rank-1 * offset());
         return r;
     }
-    int split_dim() const { return _split_dim; }
-    const shape_type & shape() const { return _shape; }
+
+    int split_dim() const
+    {
+        return _split_dim;
+    }
+
+    const shape_type & shape() const
+    {
+        return _shape;
+    }
+
     shape_type shape(rank_type rank) const
     {
         if(split_dim() == NOSPLIT) {
@@ -61,6 +81,7 @@ public:
         else shp[_split_dim] = end - _shape[_split_dim];
         return shp;
     }
+
     rank_type owner(const NDSlice & slice) const
     {
         return split_dim() == NOSPLIT ? theTransceiver->rank() : slice.dim(split_dim())._start / offset();
@@ -143,6 +164,11 @@ public:
     const bool is_sliced() const
     {
         return base_shape() != shape();
+    }
+
+    bool is_equally_tiled() const
+    {
+        return _base->is_equally_tiled();
     }
 
     const uint64_t tile_size(rank_type rank = theTransceiver->rank()) const

@@ -63,7 +63,7 @@ namespace x {
     };
 } // namespace x
 
-tensor_i::ptr_type ReduceOp::op(ReduceOpId op, x::DPTensorBaseX::ptr_type a, const dim_vec_type & dim)
+tensor_i::ptr_type ReduceOp::op(ReduceOpId op, tensor_i::ptr_type a, const dim_vec_type & dim)
 {
     return TypeDispatch<x::ReduceOp>(a, op, dim);
 }

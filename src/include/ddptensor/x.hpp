@@ -83,8 +83,8 @@ namespace x
         {
         }
 
-        DPTensorX(const T & v)
-            : _owner(theTransceiver->rank()),
+        DPTensorX(const T & v, rank_type owner=theTransceiver->rank())
+            : _owner(owner),
               _slice(shape_type{1}),
               // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
               _xarray(std::make_shared<xt::xarray<T>>(1)),
@@ -282,7 +282,7 @@ namespace x
         {
             return register_tensor<T>(std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...));
         }
-            
+
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {

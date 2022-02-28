@@ -21,6 +21,7 @@ find_package(MPI REQUIRED)
 #find_package(OpenMP)
 
 set(MKL_LIBRARIES -L$ENV{MKLROOT}/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lrt -ldl -lm)
+#set(CMAKE_INSTALL_RPATH $ENV{MKLROOT}/lib)
 # Use -fPIC even if statically compiled
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -41,7 +42,7 @@ set(MyCppSources ${MyCppSources} ${P2C_HPP})
 
 pybind11_add_module(_ddptensor MODULE ${MyCppSources})
 
-target_compile_definitions(_ddptensor PRIVATE USE_MKL=1 XTENSOR_USE_XSIMD=1 XTENSOR_USE_OPENMP=1 DDPT_2TYPES=1)
+target_compile_definitions(_ddptensor PRIVATE XTENSOR_USE_XSIMD=1 XTENSOR_USE_OPENMP=1 DDPT_2TYPES=1 USE_MKL=1)
 target_include_directories(_ddptensor PRIVATE
   ${PROJECT_SOURCE_DIR}/src/include
   ${PROJECT_SOURCE_DIR}/third_party/xtl/include

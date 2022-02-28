@@ -92,3 +92,21 @@ void MPITransceiver::alltoall(const void* buffer_send,
                   to_mpi(datatype_recv),
                   MPI_COMM_WORLD);
 }
+
+void MPITransceiver::send_recv(void* buffer_send,
+                               int count_send,
+                               DTypeId datatype_send,
+                               int dest,
+                               int source)
+{
+    constexpr int SRTAG = 505;
+    MPI_Sendrecv_replace(buffer_send,
+                         count_send,
+                         to_mpi(datatype_send),
+                         dest,
+                         SRTAG,
+                         source,
+                         SRTAG,
+                         MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+}

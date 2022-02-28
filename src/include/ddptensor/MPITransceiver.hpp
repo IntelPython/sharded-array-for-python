@@ -31,6 +31,11 @@ public:
                           const int* counts_recv,
                           const int* displacements_recv,
                           DTypeId datatype_recv);
+    virtual void send_recv(void* buffer_send,
+                           int count_send,
+                           DTypeId datatype_send,
+                           int dest,
+                           int source);
 
 private:
     rank_type _nranks, _rank;

@@ -38,6 +38,12 @@ public:
                           const int* counts_recv,
                           const int* displacements_recv,
                           DTypeId datatype_recv) = 0;
+
+    virtual void send_recv(void* buffer_send,
+                           int count_send,
+                           DTypeId datatype_send,
+                           int dest,
+                           int source) = 0;
 };
 
 extern Transceiver * theTransceiver;

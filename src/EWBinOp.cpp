@@ -1,4 +1,5 @@
 #include "ddptensor/EWBinOp.hpp"
+#include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
 
@@ -17,14 +18,14 @@ namespace x {
             if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
                 const auto & av = xt::strided_view(ax, a_ptr->lslice());
                 const auto & bv = xt::strided_view(bx, b_ptr->lslice());
-                return do_op(bop, av, bv, a_ptr);
+                return do_op(bop, av, bv, a_ptr, b_ptr);
             }
-            return do_op(bop, ax, bx, a_ptr);
+            return do_op(bop, ax, bx, a_ptr, b_ptr);
         }
 
 #pragma GCC diagnostic ignored "-Wswitch"
-        template<typename T1, typename T2, typename A>
-        static ptr_type do_op(EWBinOpId bop, const T1 & a, const T2 & b, const std::shared_ptr<DPTensorX<A>> & a_ptr)
+        template<typename T1, typename T2, typename A, typename B>
+        static ptr_type do_op(EWBinOpId bop, const T1 & a, const T2 & b, const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
             switch(bop) {
             case __ADD__:
@@ -73,13 +74,20 @@ namespace x {
             case __RTRUEDIV__:
                 return operatorx<A>::mk_tx_(a_ptr, b / a);
             case __MATMUL__:
+                return LinAlgOp::vecdot(a_ptr, b_ptr, 0);
             case __POW__:
             case POW:
+                return operatorx<A>::mk_tx_(a_ptr, xt::pow(a, b));
             case __RPOW__:
+                return operatorx<A>::mk_tx_(a_ptr, xt::pow(b, a));
             case LOGADDEXP:
+                return operatorx<A>::mk_tx_(a_ptr, xt::log(xt::exp(a) + xt::exp(b)));
             case LOGICAL_AND:
+                // return operatorx<A>::mk_tx_(a_ptr, a && b);
             case LOGICAL_OR:
+                // return operatorx<A>::mk_tx_(a_ptr, a || b);
             case LOGICAL_XOR:
+                // return operatorx<A>::mk_tx_(a_ptr, xt::not_equal(!a, !b));
                 // FIXME
                 throw std::runtime_error("Binary operation not implemented");
             }

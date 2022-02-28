@@ -29,6 +29,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/ManipOp.hpp"
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Random.hpp"
+#include "ddptensor/LinAlgOp.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -84,6 +85,9 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<ManipOp>(m, "ManipOp")
         .def("reshape", &ManipOp::reshape);
+
+    py::class_<LinAlgOp>(m, "LinAlgOp")
+        .def("vecdot", &LinAlgOp::vecdot);
 
     py::class_<tensor_i, tensor_i::ptr_type>(m, "DPTensorX")
         .def_property_readonly("dtype", &tensor_i::dtype)

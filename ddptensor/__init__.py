@@ -73,3 +73,18 @@ for func in api.api_categories["ManipOp"]:
         exec(
             f"{func} = lambda this, shape: dtensor(_cdt.ManipOp.reshape(this._t, shape))"
         )
+
+for func in api.api_categories["LinAlgOp"]:
+    FUNC = func.upper()
+    if func in ["tensordot", "vecdot",]:
+        exec(
+            f"{func} = lambda this, other, axis: dtensor(_cdt.LinAlgOp.{func}(this._t, other._t, axis))"
+        )
+    elif func == "matmul":
+        exec(
+            f"{func} = lambda this, other: dtensor(_cdt.LinAlgOp.vecdot(this._t, other._t, 0))"
+        )
+    elif func == "matrix_transpose":
+        exec(
+            f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))"
+        )

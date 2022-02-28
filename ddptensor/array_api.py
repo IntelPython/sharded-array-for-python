@@ -183,6 +183,13 @@ api_categories = OrderedDict({
         "squeeze",  # (x, /, axis)
         "stack",  # (arrays, /, *, axis=0)
     ],
+
+    "LinAlgOp" : [
+        "matmul",  # (x1, x2, /)
+        "matrix_transpose",   # (x, /)
+        "tensordot",  # (x1, x2, /, *, axes=2)
+        "vecdot",  # (x1, x2, /, *, axis=-1)
+    ],
 })
 
 misc_methods = [
