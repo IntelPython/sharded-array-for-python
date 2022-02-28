@@ -83,13 +83,15 @@ namespace x {
             case LOGADDEXP:
                 return operatorx<A>::mk_tx_(a_ptr, xt::log(xt::exp(a) + xt::exp(b)));
             case LOGICAL_AND:
-                // return operatorx<A>::mk_tx_(a_ptr, a && b);
+                return operatorx<A>::mk_tx_(a_ptr, xt::cast<bool>(a) && xt::cast<bool>(b));
             case LOGICAL_OR:
-                // return operatorx<A>::mk_tx_(a_ptr, a || b);
+                return operatorx<A>::mk_tx_(a_ptr, xt::cast<bool>(a) || xt::cast<bool>(b));
             case LOGICAL_XOR:
-                // return operatorx<A>::mk_tx_(a_ptr, xt::not_equal(!a, !b));
-                // FIXME
-                throw std::runtime_error("Binary operation not implemented");
+                {
+                    auto ba = xt::cast<bool>(a);
+                    auto bb = xt::cast<bool>(b);
+                    return operatorx<A>::mk_tx_(a_ptr, (b || a) && xt::not_equal(ba, bb));
+                }
             }
             if constexpr (std::is_integral<A>::value && std::is_integral<typename T2::value_type>::value) {
                 switch(bop) {
