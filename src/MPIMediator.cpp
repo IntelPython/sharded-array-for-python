@@ -15,11 +15,11 @@
 
 using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
 using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
-using array_keeper_type = std::unordered_map<uint64_t, tensor_i::ptr_type>;
+using array_keeper_type = std::unordered_map<uint64_t, tensor_i::ptr_type::weak_type>;
 using locker = std::lock_guard<std::mutex>;
 
 static array_keeper_type s_ak;
-static uint64_t s_last_id = 0;
+static uint64_t s_last_id = Mediator::LOCAL_ONLY;
 constexpr static int PULL_TAG = 4711;
 constexpr static int PUSH_TAG = 4712;
 static std::mutex ak_mutex;
@@ -51,6 +51,11 @@ uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
     locker _l(ak_mutex);
     s_ak[++s_last_id] = ary;
     return s_last_id;
+}
+
+uint64_t MPIMediator::unregister_array(uint64_t id)
+{
+    s_ak.erase(id);
 }
 
 void MPIMediator::pull(rank_type from, const tensor_i & ary, const NDSlice & slice, void * rbuff)
@@ -123,8 +128,9 @@ void MPIMediator::listen()
         if(x == s_ak.end()) throw(std::runtime_error("Encountered pull request for unknown tensor."));
         // Wait for previous answer to complete so that we can re-use the buffer
         MPI_Wait(&request_out, MPI_STATUS_IGNORE);
-        x->second->bufferize(slice, rbuff);
-        if(slice.size() * x->second->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
+        auto ptr = x->second.lock();
+        ptr->bufferize(slice, rbuff);
+        if(slice.size() * ptr->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
         MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, comm, &request_out);
     } while(true);
     // MPI_Cancel(&request_in);

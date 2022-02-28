@@ -42,7 +42,7 @@ namespace x
     template<typename T>
     class DPTensorX : public DPTensorBaseX
     {
-        uint64_t _id = 0;
+        uint64_t _id = Mediator::LOCAL_ONLY;
         mutable rank_type _owner;
         PVSlice _slice;
         xt::xstrided_slice_vector _lslice;
@@ -115,6 +115,11 @@ namespace x
               _xarray()
         {
             _xarray = org;
+        }
+
+        ~DPTensorX()
+        {
+            if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
         }
 
         bool is_sliced() const

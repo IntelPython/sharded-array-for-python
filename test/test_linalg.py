@@ -18,3 +18,5 @@ a = np.reshape(a, (4,6))
 b = np.reshape(b, (6,5))
 c = np.dot(a, b)
 print(c)
+
+dt.fini()
