@@ -103,7 +103,7 @@ namespace x {
                     me = (me + 1) % nr;
                 }
             }
-            return operatorx<A>::mk_tx(std::move(PVSlice({a_ptr->slice().shape()[0], b_ptr->slice().shape()[1]})), cx);
+            return operatorx<A>::mk_tx(std::move(PVSlice({tshpa[0], tshpb[1]})), cx);
         }
     };
 }
