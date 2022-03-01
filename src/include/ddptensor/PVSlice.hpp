@@ -48,15 +48,30 @@ public:
 
     uint64_t tile_size(rank_type rank = theTransceiver->rank()) const
     {
-        if(rank == 0 || rank < theTransceiver->nranks() - 1) return _tile_size;
-        return VPROD(_shape) - (rank-1 * _tile_size);
+        // only rank 0 is guaranteed to have _tile_size, all other parts can be < _tile_size
+        if(rank == 0) return _tile_size;
+        auto sz = VPROD(_shape);
+        auto off = rank * _tile_size;
+        if(sz >= off) return _tile_size;
+        auto r = off - sz;
+        // if r < _tile_size it's the remainder, otherwise we are past the end of the global array
+        return r < _tile_size ? r : 0UL;
     }
 
     shape_type tile_shape(rank_type rank = theTransceiver->rank()) const
     {
+        // only rank 0 is guaranteed to have _tile_size, all other parts can be < _tile_size
         shape_type r(_shape);
-        if(rank == 0 || rank < theTransceiver->nranks() - 1) r[_split_dim] = offset();
-        else r[_split_dim] = r[_split_dim] - (rank-1 * offset());
+        if(rank == 0) r[_split_dim] = offset();
+        else {
+            auto end = (rank+1) * offset();
+            if(r[_split_dim] >= end) r[_split_dim] = offset();
+            else {
+                auto diff = end - r[_split_dim];
+                // if diff < offset() it's the remainder, otherwise we are past the end of the global array
+                r[_split_dim] = diff < offset() ? diff : 0UL;
+            }
+        }
         return r;
     }
 

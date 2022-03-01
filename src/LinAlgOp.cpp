@@ -54,8 +54,6 @@ namespace x {
         template<typename A, typename B>
         static ptr_type matmul_2d(const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr, int axis)
         {
-            if(!a_ptr->slice().is_equally_tiled() || !b_ptr->slice().is_equally_tiled())
-                throw(std::runtime_error("vecdoc_2d supported for eually tiled tensors only"));
             if(a_ptr->slice().split_dim() != 0)
                 throw(std::runtime_error("vecdoc_2d supported for split_dim=0 only"));
 
@@ -64,37 +62,40 @@ namespace x {
             rank_type right = (me + 1) % nr;
             rank_type left = (nr + me - 1) % nr;
             auto tsz = b_ptr->slice().tile_size(0);
-            auto tshpa = a_ptr->slice().tile_shape(0);
-            auto tshpb = b_ptr->slice().tile_shape(0);
+            auto my_tshp_a = a_ptr->slice().tile_shape(me);
+            auto tshp_b = b_ptr->slice().tile_shape(0);
+            auto my_tshp_b = me == 0 ? tshp_b : b_ptr->slice().tile_shape(me);
 
             const auto & ax = a_ptr->xarray();
             const auto & bx = b_ptr->xarray();
-            xt::xarray<A> cx = xt::zeros<A>({tshpa[0], tshpb[1]});
-            auto buff = xt::empty_like(bx);
-            buff = bx;
+            xt::xarray<A> cx = xt::zeros<A>({my_tshp_a[0], tshp_b[1]});
+            auto buff = xt::empty<B>(tshp_b);
+            if(tshp_b[0] == my_tshp_b[0]) {
+                buff = bx;
+            } else { // last partitions can be smaller -> need a view to assign values
+                auto bv = xt::view(buff, xt::range(0, my_tshp_b[0]), xt::range(0, my_tshp_b[1]));
+                bv = bx;
+            }
 
             // We use an algo similar to Canon's
+            // the last partitions can be smaller -> k depends on "me", the source rank of current partition
             for(rank_type i = nr; i>0; --i) {
-                // std::cerr << me*tshpb[0] << " " << (1+me) * tshpb[0] << std::endl;
-                // auto av = xt::view(ax, xt::all(), xt::range(me * tshpb[0], (1+me) * tshpb[0]));
-                // cx = cx + xt::linalg::dot(av, buff);
-                TGEMM<A>::tgemm(CblasRowMajor,
-                                CblasNoTrans,
-                                CblasNoTrans,
-                                tshpa[0],
-                                tshpb[1],
-                                tshpb[0],
-                                1, // alpha
-                                ax.data() + (me * tshpb[0]),
-                                tshpa[1], // lda
-                                buff.data(),
-                                tshpb[1], // ldb
-                                1, // beta
-                                cx.data(),
-                                tshpb[1]); // ldc
-                
+                if(my_tshp_a[0]) {
+                    TGEMM<A>::tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                                    my_tshp_a[0], tshp_b[1], me == 0 ? tshp_b[0] : b_ptr->slice().tile_shape(me)[0],
+                                    1, // alpha
+                                    ax.data() + (me * tshp_b[0]),
+                                    my_tshp_a[1], // lda
+                                    buff.data(),
+                                    tshp_b[1], // ldb
+                                    1, // beta
+                                    cx.data(),
+                                    tshp_b[1]); // ldc
+                }
+
                 if(i > 1) {
                     // data exchange
+                    // FIXME: optimize data transfer: last partition might contain unused data
                     theTransceiver->send_recv(buff.data(),
                                               tsz,
                                               DTYPE<A>::value,
@@ -103,7 +104,7 @@ namespace x {
                     me = (me + 1) % nr;
                 }
             }
-            return operatorx<A>::mk_tx(std::move(PVSlice({tshpa[0], tshpb[1]})), cx);
+            return operatorx<A>::mk_tx(std::move(PVSlice({a_ptr->shape()[0], b_ptr->shape()[1]})), cx);
         }
     };
 }
