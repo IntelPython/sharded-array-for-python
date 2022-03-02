@@ -2,7 +2,7 @@
 
 /*
   A Distributed Data-Parallel Tensor for Python, following the array API.
-  
+
   XTensor handles the actual functionality on each process.
   pybind11 handles the bridge to Python.
 
@@ -10,7 +10,7 @@
   This means the compiler will instantiate the full functionality for all elements types.
   Within kernels we dispatch the operation type by enum values (see x.hpp).
   tensor_i is an abstract class to hide the element type which of the actual tensor.
-  The concrete tensor implementation (DPTensorX, x.hpp) requires the element type 
+  The concrete tensor implementation (DPTensorX, x.hpp) requires the element type
   as a template parameter.
  */
 
@@ -89,6 +89,25 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<LinAlgOp>(m, "LinAlgOp")
         .def("vecdot", &LinAlgOp::vecdot);
 
+    py::class_<tensor_i::future_type>(m, "DPTFuture")
+        .def_property_readonly("dtype", [](const tensor_i::future_type & f) { return f.get()->dtype(); })
+        .def_property_readonly("shape", [](const tensor_i::future_type & f) { return f.get()->shape(); })
+        .def_property_readonly("size", [](const tensor_i::future_type & f) { return f.get()->size(); })
+        .def_property_readonly("ndim", [](const tensor_i::future_type & f) { return f.get()->ndim(); })
+        .def("__bool__", [](const tensor_i::future_type & f) { return f.get()->__bool__(); })
+        .def("__float__", [](const tensor_i::future_type & f) { return f.get()->__float__(); })
+        .def("__int__", [](const tensor_i::future_type & f) { return f.get()->__int__(); })
+        .def("__index__", [](const tensor_i::future_type & f) { return f.get()->__int__(); })
+        .def("__len__", [](const tensor_i::future_type & f) { return f.get()->__len__(); })
+        .def("__repr__", [](const tensor_i::future_type & f) { return f.get()->__repr__(); })
+        .def("__getitem__", &GetItem::__getitem__)
+        .def("__setitem__", &SetItem::__setitem__);
+
+    py::class_<Random>(m, "Random")
+        .def("seed", &Random::seed)
+        .def("uniform", &Random::rand);
+
+#if 0
     py::class_<tensor_i, tensor_i::ptr_type>(m, "DPTensorX")
         .def_property_readonly("dtype", &tensor_i::dtype)
         .def_property_readonly("shape", &tensor_i::shape)
@@ -103,11 +122,6 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("__getitem__", &GetItem::__getitem__)
         .def("__setitem__", &SetItem::__setitem__);
 
-    py::class_<Random>(m, "Random")
-        .def("seed", &Random::seed)
-        .def("uniform", &Random::rand);
-
-#if 0
     py::class_<dtensor>(m, "dtensor")
         .def(py::init<const shape_type &, DTypeId>())
         .def_property_readonly("dtype", &dtensor::dtype)

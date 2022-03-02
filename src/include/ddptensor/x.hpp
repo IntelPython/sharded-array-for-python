@@ -21,6 +21,7 @@
 #include "PVSlice.hpp"
 #include "p2c_ids.hpp"
 #include "tensor_i.hpp"
+#include "Deferred.hpp"
 
 namespace x
 {
@@ -51,6 +52,9 @@ namespace x
 
     public:
         using typed_ptr_type = std::shared_ptr<DPTensorX<T>>;
+
+        DPTensorX(const DPTensorX<T> &) = delete;
+        DPTensorX(DPTensorX<T> &&) = default;
 
         template<typename I>
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
@@ -126,7 +130,7 @@ namespace x
         {
             return _slice.is_sliced();
         }
-        
+
         virtual std::string __repr__() const
         {
             auto v = xt::strided_view(xarray(), lslice());
@@ -199,17 +203,17 @@ namespace x
         {
             return _owner < _OWNER_END;
         }
-        
+
         void set_owner(rank_type o) const
         {
             _owner = o;
         }
-        
+
         rank_type owner() const
         {
             return _owner;
         }
-        
+
         bool is_replicated() const
         {
             return _owner == REPLICATED;
@@ -299,6 +303,13 @@ namespace x
         {
             return register_tensor<typename X::value_type>(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
         }
+
+
+        template<typename ...Ts>
+        static tensor_i::future_type mk_ftx(Ts&&... args)
+        {
+            return UnDeferred(operatorx<T>::mk_tx(std::forward(args)...)).get_future();
+        }
     };
 
     static DPTensorBaseX::ptr_type mk_tx(py::object & b)
@@ -311,6 +322,14 @@ namespace x
             return operatorx<int64_t>::mk_tx(b);
         }
         throw std::runtime_error("Invalid right operand to elementwise binary operation");
+    };
+
+    static tensor_i::future_type mk_ftx(py::object & b)
+    {
+        if(py::isinstance<tensor_i::future_type>(b)) {
+            return b.cast<tensor_i::future_type>();
+        }
+        return UnDeferred(mk_tx(b)).get_future();
     };
 
 } // namespace x

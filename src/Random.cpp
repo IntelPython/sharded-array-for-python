@@ -21,15 +21,31 @@ namespace x {
     };
 }
 
-ptr_type Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
+struct DeferredRandomOp : public Deferred
 {
-    switch(dtype) {
-    case FLOAT64:
-        return x::Rand<double>::op(shape, lower, upper);
-    case FLOAT32:
-        return x::Rand<double>::op(shape, lower, upper);
+    shape_type _shape;
+    py::object _lower, _upper;
+    DTypeId _dtype;
+
+    DeferredRandomOp(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
+        : _shape(shape), _lower(lower), _upper(upper), _dtype(dtype)
+    {}
+
+    void run()
+    {
+        switch(_dtype) {
+        case FLOAT64:
+            set_value(x::Rand<double>::op(_shape, _lower, _upper));
+        case FLOAT32:
+            set_value(x::Rand<float>::op(_shape, _lower, _upper));
+        }
+        throw std::runtime_error("rand: dtype must be a floating point type");
     }
-    throw std::runtime_error("rand: dtype must be a floating point type");
+};
+
+Random::future_type Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
+{
+    return defer<DeferredRandomOp>(dtype, shape, lower, upper);
 }
 
 void Random::seed(uint64_t s)

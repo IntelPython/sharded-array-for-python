@@ -8,5 +8,5 @@
 
 struct IEWBinOp
 {
-    static void op(IEWBinOpId op, tensor_i::ptr_type a, py::object & b);
+    static tensor_i::future_type op(IEWBinOpId op, tensor_i::future_type & a, py::object & b);
 };

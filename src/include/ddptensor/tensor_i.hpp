@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <memory>
+#include <future>
 
 #include "UtilsAndTypes.hpp"
 
@@ -19,6 +20,8 @@ class tensor_i
 {
 public:
     typedef std::shared_ptr<tensor_i> ptr_type;
+    typedef std::promise<ptr_type> promise_type;
+    typedef std::shared_future<ptr_type> future_type;
 
     virtual ~tensor_i() {};
     virtual std::string __repr__() const = 0;

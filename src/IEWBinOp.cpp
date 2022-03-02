@@ -10,39 +10,38 @@ namespace x {
         using ptr_type = DPTensorBaseX::ptr_type;
 
         template<typename A, typename B>
-        static void op(IEWBinOpId iop, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
+        static ptr_type op(IEWBinOpId iop, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
             auto & ax = a_ptr->xarray();
             const auto & bx = b_ptr->xarray();
             if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
                 auto av = xt::strided_view(ax, a_ptr->lslice());
                 const auto & bv = xt::strided_view(bx, b_ptr->lslice());
-                do_op(iop, av, bv);
-            } else {
-                do_op(iop, ax, bx);
+                return do_op(iop, av, bv, a_ptr);
             }
+            return do_op(iop, ax, bx, a_ptr);
         }
 
 #pragma GCC diagnostic ignored "-Wswitch"
-        template<typename T1, typename T2>
-        static void do_op(IEWBinOpId iop, T1 & a, const T2 & b)
+        template<typename A, typename T1, typename T2>
+        static ptr_type do_op(IEWBinOpId iop, T1 & a, const T2 & b, std::shared_ptr<DPTensorX<A>> a_ptr)
         {
             switch(iop) {
             case __IADD__:
                 a += b;
-                return;
+                return a_ptr;
             case __IFLOORDIV__:
                 a = xt::floor(a / b);
-                return;
+                return a_ptr;
             case __IMUL__:
                 a *= b;
-                return;
+                return a_ptr;
             case __ISUB__:
                 a -= b;
-                return;
+                return a_ptr;
             case __ITRUEDIV__:
                 a /= b;
-                return;
+                return a_ptr;
             case __IPOW__:
                 throw std::runtime_error("Binary inplace operation not implemented");
             }
@@ -50,21 +49,21 @@ namespace x {
                 switch(iop) {
                 case __IMOD__:
                     a %= b;
-                    return;
+                    return a_ptr;
                 case __IOR__:
                     a |= b;
-                    return;
+                    return a_ptr;
                 case __IAND__:
                     a &= b;
-                    return;
+                    return a_ptr;
                 case __IXOR__:
                     a ^= b;
                 case __ILSHIFT__:
                     a = xt::left_shift(a, b);
-                    return;
+                    return a_ptr;
                 case __IRSHIFT__:
                     a = xt::right_shift(a, b);
-                    return;
+                    return a_ptr;
                 }
             }
             throw std::runtime_error("Unknown/invalid inplace elementwise binary operation");
@@ -74,8 +73,25 @@ namespace x {
     };
 } // namespace x
 
-void IEWBinOp::op(IEWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b)
+struct DeferredIEWBinOp : public Deferred
 {
-    auto bb = x::mk_tx(b);
-    TypeDispatch<x::IEWBinOp>(a, bb, op);
+    tensor_i::future_type _a;
+    tensor_i::future_type _b;
+    IEWBinOpId _op;
+
+    DeferredIEWBinOp(IEWBinOpId op, tensor_i::future_type & a, tensor_i::future_type & b)
+        : _a(a), _b(b), _op(op)
+    {}
+
+    void run()
+    {
+        auto a = std::move(_a.get());
+        auto b = std::move(_b.get());
+        set_value(TypeDispatch<x::IEWBinOp>(a, b, _op));
+    }
+};
+
+tensor_i::future_type IEWBinOp::op(IEWBinOpId op, tensor_i::future_type & a, py::object & b)
+{
+    return defer<DeferredIEWBinOp>(op, a, x::mk_ftx(b));
 }

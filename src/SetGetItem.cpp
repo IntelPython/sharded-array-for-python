@@ -88,7 +88,7 @@ namespace x {
         // on all procs simultaneously.  Since __setitem__ is collective we could
         // implement a probaly more efficient mechanism which pushes data and/or using RMA.
         template<typename A, typename B>
-        static void op(const NDSlice & slice, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
+        static ptr_type op(const NDSlice & slice, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
             // Use given slice to create a global view into orig array
             PVSlice g_slc_view(a_ptr->slice(), slice);
@@ -103,6 +103,7 @@ namespace x {
             theTransceiver->barrier();
             _set_slice<A>(a_ptr->xarray(), a_ptr->slice(),
                           my_rel_slice, b_ptr, my_norm_slice);
+            return a_ptr;
         }
     };
 
@@ -149,22 +150,58 @@ namespace x {
 
 } // namespace x
 
-void SetItem::__setitem__(tensor_i::ptr_type a, const std::vector<py::slice> & v, tensor_i::ptr_type b)
+struct DeferredSetItem : public Deferred
 {
-    return TypeDispatch<x::SetItem>(a, b, NDSlice(v));
+    tensor_i::future_type _a;
+    tensor_i::future_type _b;
+    NDSlice _slc;
+
+    DeferredSetItem(tensor_i::future_type & a, tensor_i::future_type & b, const std::vector<py::slice> & v)
+        : _a(a), _b(b), _slc(v)
+    {}
+
+    void run()
+    {
+        auto a = std::move(_a.get());
+        auto b = std::move(_b.get());
+        set_value(TypeDispatch<x::SetItem>(a, b, _slc));
+    }
+};
+
+tensor_i::future_type SetItem::__setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, tensor_i::future_type & b)
+{
+    return defer<DeferredSetItem>(a, b, v);
 }
 
-tensor_i::ptr_type GetItem::__getitem__(tensor_i::ptr_type a, const std::vector<py::slice> & v)
+struct DeferredGetItem : public Deferred
 {
-    return TypeDispatch<x::GetItem>(a, NDSlice(v));
+    tensor_i::future_type _a;
+    NDSlice _slc;
+
+    DeferredGetItem(tensor_i::future_type & a, const std::vector<py::slice> & v)
+        : _a(a), _slc(v)
+    {}
+
+    void run()
+    {
+        auto a = std::move(_a.get());
+        set_value(TypeDispatch<x::GetItem>(a, _slc));
+    }
+};
+
+tensor_i::future_type GetItem::__getitem__(tensor_i::future_type & a, const std::vector<py::slice> & v)
+{
+    return defer<DeferredGetItem>(a, v);
 }
 
-py::object GetItem::get_slice(tensor_i::ptr_type a, const std::vector<py::slice> & v)
+py::object GetItem::get_slice(tensor_i::future_type & a, const std::vector<py::slice> & v)
 {
-    return TypeDispatch<x::SPMD>(a, NDSlice(v));
+    auto aa = std::move(a.get());
+    return TypeDispatch<x::SPMD>(aa, NDSlice(v));
 }
 
-py::object GetItem::get_local(tensor_i::ptr_type a, py::handle h)
+py::object GetItem::get_local(tensor_i::future_type & a, py::handle h)
 {
-    return TypeDispatch<x::SPMD>(a, h);
+    auto aa = std::move(a.get());
+    return TypeDispatch<x::SPMD>(aa, h);
 }

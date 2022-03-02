@@ -8,5 +8,5 @@
 
 struct ReduceOp
 {
-    static tensor_i::ptr_type op(ReduceOpId op, tensor_i::ptr_type a, const dim_vec_type & dim);
+    static tensor_i::future_type op(ReduceOpId op, tensor_i::future_type & a, const dim_vec_type & dim);
 };

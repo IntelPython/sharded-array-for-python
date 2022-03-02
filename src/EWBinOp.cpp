@@ -53,6 +53,7 @@ namespace x {
             case __LT__:
             case LESS:
                 return operatorx<A>::mk_tx_(a_ptr, a < b);
+            // __MATMUL__ is handled before dispatching, see below
             case __MUL__:
             case MULTIPLY:
                 return operatorx<A>::mk_tx_(a_ptr, a * b);
@@ -73,8 +74,6 @@ namespace x {
                 return operatorx<A>::mk_tx_(a_ptr, b - a);
             case __RTRUEDIV__:
                 return operatorx<A>::mk_tx_(a_ptr, b / a);
-            case __MATMUL__:
-                return LinAlgOp::vecdot(a_ptr, b_ptr, 0);
             case __POW__:
             case POW:
                 return operatorx<A>::mk_tx_(a_ptr, xt::pow(a, b));
@@ -133,9 +132,30 @@ namespace x {
 
     };
 } // namespace x
-    
-tensor_i::ptr_type EWBinOp::op(EWBinOpId op, x::DPTensorBaseX::ptr_type a, py::object & b)
+
+struct DeferredEWBinOp : public Deferred
 {
-    auto bb = x::mk_tx(b);
-    return TypeDispatch<x::EWBinOp>(a, bb, op);
+    tensor_i::future_type _a;
+    tensor_i::future_type _b;
+    EWBinOpId _op;
+
+    DeferredEWBinOp(EWBinOpId op, tensor_i::future_type & a, tensor_i::future_type & b)
+        : _a(a), _b(b), _op(op)
+    {}
+
+    void run()
+    {
+        auto a = std::move(_a.get());
+        auto b = std::move(_b.get());
+        set_value(TypeDispatch<x::EWBinOp>(a, b, _op));
+    }
+};
+
+tensor_i::future_type EWBinOp::op(EWBinOpId op, tensor_i::future_type & a, py::object & b)
+{
+    if(op == __MATMUL__) {
+        auto bb = x::mk_ftx(b);
+        return LinAlgOp::vecdot(a, bb, 0);
+    }
+    return defer<DeferredEWBinOp>(op, a, x::mk_ftx(b));
 }
