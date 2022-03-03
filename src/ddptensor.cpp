@@ -21,6 +21,7 @@ using namespace pybind11::literals; // to bring _a
 
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/MPIMediator.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/EWBinOp.hpp"
@@ -41,10 +42,14 @@ rank_type myrank()
 
 Transceiver * theTransceiver = nullptr;
 Mediator * theMediator = nullptr;
+std::thread * pprocessor;
 
 // users currently need to call fini to make MPI terminate gracefully
 void fini()
 {
+    Deferred::defer(nullptr);
+    pprocessor->join();
+    delete pprocessor;
     delete theMediator;
     theMediator = nullptr;
     delete theTransceiver;
@@ -56,12 +61,14 @@ void fini()
 PYBIND11_MODULE(_ddptensor, m) {
     theTransceiver = new MPITransceiver();
     theMediator = new MPIMediator();
+    pprocessor = new std::thread(process_promises);
 
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
 
     m.def("fini", &fini)
+        .def("sync", &sync)
         .def("myrank", &myrank)
         .def("_get_slice", &GetItem::get_slice)
         .def("_get_local", &GetItem::get_local);

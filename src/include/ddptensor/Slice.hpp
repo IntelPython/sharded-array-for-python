@@ -231,7 +231,6 @@ struct Slice
     bool covers(const value_type & i) const
     {
         assert(_step > 0 && _start >= 0);
-        // std::cerr << "\t\t\t" << i << " " << _start << " " << _end << " " << _step << " " << ((i - (_start % _step)) % _step) << std::endl;
         return (i >= _start
                 && i < _end
                 && ((i - (_start % _step)) % _step) == 0);

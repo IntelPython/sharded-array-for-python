@@ -43,7 +43,7 @@ namespace x {
 
         static ptr_type op(uint64_t start, uint64_t end, uint64_t step)
         {
-            PVSlice pvslice({Slice(start, end, step).size()});
+            PVSlice pvslice({static_cast<uint64_t>(Slice(start, end, step).size())});
             auto lslc = pvslice.slice_of_rank();
             const auto & l1dslc = lslc.dim(0);
             auto a = xt::arange<T>(start + l1dslc._start*step, start + l1dslc._end * step, l1dslc._step);

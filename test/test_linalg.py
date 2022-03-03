@@ -18,5 +18,5 @@ a = np.reshape(a, (5,7))
 b = np.reshape(b, (7,3))
 c = np.dot(a, b)
 print(c)
-
+dt.sync()
 dt.fini()

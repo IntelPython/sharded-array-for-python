@@ -25,7 +25,8 @@ from ._ddptensor import (
     UINT32 as uint32,
     UINT16 as uint16,
     UINT8 as uint8,
-    fini
+    fini,
+    sync
 )
 from .ddptensor import dtensor
 from os import getenv

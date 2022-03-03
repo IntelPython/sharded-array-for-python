@@ -123,7 +123,7 @@ namespace x
 
         ~DPTensorX()
         {
-            if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
+            // if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
         }
 
         bool is_sliced() const
@@ -221,12 +221,10 @@ namespace x
 
         T replicate() const
         {
-            std::cerr << "is_replicated()=" << is_replicated() << " owner=" << owner() << " shape=" << to_string(shape()) << std::endl;
             if(is_replicated()) return _replica;
             if(has_owner() && _slice.size() == 1) {
                 if(theTransceiver->rank() == owner()) {
                     _replica = *(xt::strided_view(xarray(), lslice()).begin());
-                    std::cerr << "replica: " << _replica << std::endl;
                 }
                 theTransceiver->bcast(&_replica, sizeof(T), owner());
                 set_owner(REPLICATED);
@@ -254,8 +252,6 @@ namespace x
         virtual void bufferize(const NDSlice & slc, Buffer & buff) const
         {
             NDSlice lslice = NDSlice(slice().shape_of_rank()).slice(slc);
-
-            std::cerr << "lslice=" << lslice << " slc= " << slc << " buffsz=" << buff.size() << " want " << slc.size()*sizeof(T) << std::endl;
 
             auto ary_v = xt::strided_view(xarray(), to_xt(lslice));
             buff.resize(slc.size()*sizeof(T));

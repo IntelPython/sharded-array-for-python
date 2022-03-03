@@ -37,3 +37,6 @@ struct UnDeferred : public Deferred
     {
     }
 };
+
+extern void process_promises();
+extern void sync();

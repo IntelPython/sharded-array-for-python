@@ -20,7 +20,7 @@ find_package(pybind11 CONFIG)
 find_package(MPI REQUIRED)
 #find_package(OpenMP)
 
-set(MKL_LIBRARIES -L$ENV{MKLROOT}/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lrt -ldl -lm)
+set(MKL_LIBRARIES -L$ENV{MKLROOT}/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -ltbb -lpthread -lrt -ldl -lm)
 #set(CMAKE_INSTALL_RPATH $ENV{MKLROOT}/lib)
 # Use -fPIC even if statically compiled
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

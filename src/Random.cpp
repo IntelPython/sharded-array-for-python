@@ -36,8 +36,10 @@ struct DeferredRandomOp : public Deferred
         switch(_dtype) {
         case FLOAT64:
             set_value(x::Rand<double>::op(_shape, _lower, _upper));
+            return;
         case FLOAT32:
             set_value(x::Rand<float>::op(_shape, _lower, _upper));
+            return;
         }
         throw std::runtime_error("rand: dtype must be a floating point type");
     }

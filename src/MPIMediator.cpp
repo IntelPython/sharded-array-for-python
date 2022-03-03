@@ -53,8 +53,9 @@ uint64_t MPIMediator::register_array(tensor_i::ptr_type ary)
     return s_last_id;
 }
 
-uint64_t MPIMediator::unregister_array(uint64_t id)
+void MPIMediator::unregister_array(uint64_t id)
 {
+    locker _l(ak_mutex);
     s_ak.erase(id);
 }
 
@@ -72,7 +73,6 @@ void MPIMediator::pull(rank_type from, const tensor_i & ary, const NDSlice & sli
     ser.adapter().flush();
 
     auto sz = slice.size() * ary.item_size();
-    std::cerr << "alsdkjf " << sz << " " << buff.size() << " " << rbuff << std::endl;
     MPI_Irecv(rbuff, sz, MPI_CHAR, from, PUSH_TAG, comm, &request[1]);
     MPI_Isend(buff.data(), buff.size(), MPI_CHAR, from, PULL_TAG, comm, &request[0]);
     auto error_code = MPI_Waitall(2, &request[0], &status[0]);
@@ -123,12 +123,16 @@ void MPIMediator::listen()
         MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, PULL_TAG, comm, &request_in);
 
         // Now find the array in question and send back its bufferized slice
-        locker _l(ak_mutex);
-        auto x = s_ak.find(id);
-        if(x == s_ak.end()) throw(std::runtime_error("Encountered pull request for unknown tensor."));
+        array_keeper_type::iterator x;
+        tensor_i::ptr_type ptr;
+        {
+            locker _l(ak_mutex);
+            x = s_ak.find(id);
+            if(x == s_ak.end()) throw(std::runtime_error("Encountered pull request for unknown tensor."));
+            ptr = x->second.lock();
+        }
         // Wait for previous answer to complete so that we can re-use the buffer
         MPI_Wait(&request_out, MPI_STATUS_IGNORE);
-        auto ptr = x->second.lock();
         ptr->bufferize(slice, rbuff);
         if(slice.size() * ptr->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
         MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, comm, &request_out);
