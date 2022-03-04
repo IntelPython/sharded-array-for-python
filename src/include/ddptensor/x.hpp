@@ -123,7 +123,7 @@ namespace x
 
         ~DPTensorX()
         {
-            // if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
+            if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
         }
 
         bool is_sliced() const
