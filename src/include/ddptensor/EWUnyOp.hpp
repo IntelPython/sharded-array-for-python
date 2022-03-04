@@ -8,5 +8,5 @@
 
 struct EWUnyOp
 {
-    static tensor_i::future_type op(EWUnyOpId op, tensor_i::future_type & a);
+    static tensor_i::future_type op(EWUnyOpId op, const tensor_i::future_type & a);
 };

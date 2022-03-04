@@ -63,24 +63,10 @@ namespace x {
     };
 } // namespace x
 
-struct DeferredReduceOp : public Deferred
+tensor_i::future_type ReduceOp::op(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
 {
-    tensor_i::future_type _a;
-    dim_vec_type _dim;
-    ReduceOpId _op;
-
-    DeferredReduceOp(ReduceOpId op, tensor_i::future_type & a, const dim_vec_type & dim)
-        : _a(a), _dim(dim), _op(op)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        set_value(TypeDispatch<x::ReduceOp>(a, _op, _dim));
-    }
-};
-
-tensor_i::future_type ReduceOp::op(ReduceOpId op, tensor_i::future_type & a, const dim_vec_type & dim)
-{
-    return defer<DeferredReduceOp>(op, a, dim);
+    auto aa = std::move(a.get());
+    return  defer([aa, op, dim](){
+            return TypeDispatch<x::ReduceOp>(aa, op, dim);
+        });
 }

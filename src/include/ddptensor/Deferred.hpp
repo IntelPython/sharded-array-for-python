@@ -23,7 +23,7 @@ struct Deferred : tensor_i::promise_type
 template<typename T, typename... Ts>
 Deferred::future_type defer(Ts&&... args)
 {
-    return Deferred::defer(std::make_unique<T>(args...));
+    return Deferred::defer(std::move(std::make_unique<T>(args...)));
 }
 
 struct UnDeferred : public Deferred
@@ -37,6 +37,27 @@ struct UnDeferred : public Deferred
     {
     }
 };
+
+template<typename L>
+struct DeferredLambda : public Deferred
+{
+    L _l;
+
+    DeferredLambda(L l)
+        : _l(l)
+    {}
+
+    void run()
+    {
+        set_value(std::move(_l()));
+    }
+};
+
+template<typename L>
+Deferred::future_type defer(L && l)
+{
+    return Deferred::defer(std::move(std::make_unique<DeferredLambda<L>>(std::forward<L>(l))));
+}
 
 extern void process_promises();
 extern void sync();

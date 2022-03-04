@@ -48,7 +48,7 @@ auto TypeDispatch(DTypeId dt, Ts&&... args)
 }
 
 template<typename A>
-typename x::DPTensorX<A>::typed_ptr_type _downcast(const tensor_i::ptr_type & a_ptr)
+auto /*typename x::DPTensorX<A>::typed_ptr_type*/_downcast(const tensor_i::ptr_type & a_ptr)
 {
     auto _a = std::dynamic_pointer_cast<x::DPTensorX<A>>(a_ptr);
     if(!_a )
@@ -62,7 +62,7 @@ typename x::DPTensorX<A>::typed_ptr_type _downcast(const tensor_i::ptr_type & a_
 // Downcasted tensor arg is removed from front of arg list and appended to its end.
 // All other arguments are opaquely passed to the operation.
 template<typename OpDispatch, typename... Ts>
-auto TypeDispatch(tensor_i::ptr_type & a_ptr, Ts&&... args)
+auto TypeDispatch(const tensor_i::ptr_type & a_ptr, Ts&&... args)
 {
     using ptr_type = tensor_i::ptr_type;
     switch(a_ptr->dtype()) {

@@ -108,23 +108,10 @@ namespace x {
     };
 } //namespace x
 
-struct DeferredEWUnyOp : public Deferred
+tensor_i::future_type EWUnyOp::op(EWUnyOpId op, const tensor_i::future_type & a)
 {
-    tensor_i::future_type _a;
-    EWUnyOpId _op;
-
-    DeferredEWUnyOp(EWUnyOpId op, tensor_i::future_type & a)
-        : _a(a), _op(op)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        set_value(TypeDispatch<x::EWUnyOp>(a, _op));
-    }
-};
-
-tensor_i::future_type EWUnyOp::op(EWUnyOpId op, tensor_i::future_type & a)
-{
-    return defer<DeferredEWUnyOp>(op, a);
+    auto aa = std::move(a.get());
+    return  defer([op, aa](){
+            return TypeDispatch<x::EWUnyOp>(aa, op);
+        });
 }

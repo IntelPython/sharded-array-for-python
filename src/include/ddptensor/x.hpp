@@ -277,7 +277,7 @@ namespace x
     {
     public:
 
-        static DPTensorBaseX::ptr_type mk_tx(py::object & o)
+        static DPTensorBaseX::ptr_type mk_tx(const py::object & o)
         {
             return std::make_shared<DPTensorX<T>>(o.cast<T>());
         }
@@ -308,7 +308,7 @@ namespace x
         }
     };
 
-    static DPTensorBaseX::ptr_type mk_tx(py::object & b)
+    static tensor_i::ptr_type mk_tx(const py::object & b)
     {
         if(py::isinstance<DPTensorBaseX>(b)) {
             return b.cast<DPTensorBaseX::ptr_type>();
@@ -320,7 +320,7 @@ namespace x
         throw std::runtime_error("Invalid right operand to elementwise binary operation");
     };
 
-    static tensor_i::future_type mk_ftx(py::object & b)
+    static tensor_i::future_type mk_ftx(const py::object & b)
     {
         if(py::isinstance<tensor_i::future_type>(b)) {
             return b.cast<tensor_i::future_type>();

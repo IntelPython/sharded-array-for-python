@@ -23,10 +23,14 @@ class dtensor:
                 f"{method} = lambda self, other: dtensor(_cdt.EWBinOp.op(_cdt.{METHOD}, self._t, other._t if isinstance(other, dtensor) else other))"
             )
 
+    def _inplace(self, t):
+        self._t = t
+        return self
+
     for method in api.api_categories["IEWBinOp"]:
         METHOD = method.upper()
         exec(
-            f"{method} = lambda self, other: (self, _cdt.IEWBinOp.op(_cdt.{METHOD}, self._t, other._t))[0]" # if isinstance(other, dtensor) else other))[0]"
+            f"{method} = lambda self, other: self._inplace(_cdt.IEWBinOp.op(_cdt.{METHOD}, self._t, other._t if isinstance(other, dtensor) else other))"
         )
 
     for method in api.api_categories["EWUnyOp"]:

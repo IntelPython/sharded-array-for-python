@@ -109,25 +109,11 @@ namespace x {
     };
 }
 
-struct DeferredLinAlgOp : public Deferred
+tensor_i::future_type LinAlgOp::vecdot(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis)
 {
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
-    int _axis;
-
-    DeferredLinAlgOp(tensor_i::future_type & a, tensor_i::future_type & b, int axis)
-        : _a(a), _b(b), _axis(axis)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        auto b = std::move(_b.get());
-        set_value(TypeDispatch<x::LinAlgOp>(a, b, _axis));
-    }
-};
-
-tensor_i::future_type LinAlgOp::vecdot(tensor_i::future_type & a, tensor_i::future_type & b, int axis)
-{
-    return defer<DeferredLinAlgOp>(a, b, axis);
+    auto aa = std::move(a.get());
+    auto bb = std::move(b.get());
+    return  defer([aa, bb, axis](){
+            return TypeDispatch<x::LinAlgOp>(aa, bb, axis);
+        });
 }

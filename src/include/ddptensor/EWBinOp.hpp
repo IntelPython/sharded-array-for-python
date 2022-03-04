@@ -8,5 +8,5 @@
 
 struct EWBinOp
 {
-    static tensor_i::future_type op(EWBinOpId op, tensor_i::future_type & a, py::object & b);
+    static tensor_i::future_type op(EWBinOpId op, const tensor_i::future_type & a, const py::object & b);
 };

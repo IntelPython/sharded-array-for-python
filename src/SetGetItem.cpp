@@ -134,58 +134,33 @@ namespace x {
 
 } // namespace x
 
-struct DeferredSetItem : public Deferred
-{
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
-    NDSlice _slc;
-
-    DeferredSetItem(tensor_i::future_type & a, tensor_i::future_type & b, const std::vector<py::slice> & v)
-        : _a(a), _b(b), _slc(v)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        auto b = std::move(_b.get());
-        set_value(TypeDispatch<x::SetItem>(a, b, _slc));
-    }
-};
-
-tensor_i::future_type SetItem::__setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, tensor_i::future_type & b)
-{
-    return defer<DeferredSetItem>(a, b, v);
-}
-
-struct DeferredGetItem : public Deferred
-{
-    tensor_i::future_type _a;
-    NDSlice _slc;
-
-    DeferredGetItem(tensor_i::future_type & a, const std::vector<py::slice> & v)
-        : _a(a), _slc(v)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        set_value(TypeDispatch<x::GetItem>(a, _slc));
-    }
-};
-
-tensor_i::future_type GetItem::__getitem__(tensor_i::future_type & a, const std::vector<py::slice> & v)
-{
-    return defer<DeferredGetItem>(a, v);
-}
-
-py::object GetItem::get_slice(tensor_i::future_type & a, const std::vector<py::slice> & v)
+tensor_i::future_type SetItem::__setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, const tensor_i::future_type & b)
 {
     auto aa = std::move(a.get());
+    auto bb = std::move(b.get());
+    NDSlice _slc(v);
+    return  defer([aa, bb, _slc](){
+            return TypeDispatch<x::SetItem>(aa, bb, _slc);
+        });
+}
+
+tensor_i::future_type GetItem::__getitem__(const tensor_i::future_type & a, const std::vector<py::slice> & v)
+{
+    auto aa = std::move(a.get());
+    NDSlice _slc(v);
+    return  defer([aa, _slc](){
+            return TypeDispatch<x::GetItem>(aa, _slc);
+        });
+}
+
+py::object GetItem::get_slice(const tensor_i::future_type & a, const std::vector<py::slice> & v)
+{
+    const auto & aa = std::move(a.get());
     return TypeDispatch<x::SPMD>(aa, NDSlice(v));
 }
 
-py::object GetItem::get_local(tensor_i::future_type & a, py::handle h)
+py::object GetItem::get_local(const tensor_i::future_type & a, py::handle h)
 {
-    auto aa = std::move(a.get());
+    const auto & aa = std::move(a.get());
     return TypeDispatch<x::SPMD>(aa, h);
 }

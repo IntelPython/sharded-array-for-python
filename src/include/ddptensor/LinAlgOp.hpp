@@ -8,5 +8,5 @@
 
 struct LinAlgOp
 {
-    static tensor_i::future_type vecdot(tensor_i::future_type & a, tensor_i::future_type & b, int axis);
+    static tensor_i::future_type vecdot(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis);
 };

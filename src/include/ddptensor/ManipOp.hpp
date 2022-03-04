@@ -8,5 +8,5 @@
 
 struct ManipOp
 {
-    static tensor_i::future_type reshape(tensor_i::future_type & a, const shape_type & shape);
+    static tensor_i::future_type reshape(const tensor_i::future_type & a, const shape_type & shape);
 };

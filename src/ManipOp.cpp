@@ -23,23 +23,10 @@ namespace x {
     };
 }
 
-struct DeferredManipOp : public Deferred
+tensor_i::future_type ManipOp::reshape(const tensor_i::future_type & a, const shape_type & shape)
 {
-    tensor_i::future_type _a;
-    shape_type _shape;
-
-    DeferredManipOp(tensor_i::future_type & a, const shape_type & shape)
-        : _a(a), _shape(shape)
-    {}
-
-    void run()
-    {
-        auto a = std::move(_a.get());
-        set_value(TypeDispatch<x::ManipOp>(a, _shape));
-    }
-};
-
-tensor_i::future_type ManipOp::reshape(tensor_i::future_type & a, const shape_type & shape)
-{
-    return defer<DeferredManipOp>(a, shape);
+    auto aa = std::move(a.get());
+    return  defer([aa, shape](){
+            return TypeDispatch<x::ManipOp>(aa, shape);
+        });
 }

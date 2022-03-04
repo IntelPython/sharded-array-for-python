@@ -8,12 +8,12 @@
 
 struct GetItem
 {
-    static tensor_i::future_type __getitem__(tensor_i::future_type & a, const std::vector<py::slice> & v);
-    static py::object get_slice(tensor_i::future_type & a, const std::vector<py::slice> & v);
-    static py::object get_local(tensor_i::future_type & a, py::handle h);
+    static tensor_i::future_type __getitem__(const tensor_i::future_type & a, const std::vector<py::slice> & v);
+    static py::object get_slice(const tensor_i::future_type & a, const std::vector<py::slice> & v);
+    static py::object get_local(const tensor_i::future_type & a, py::handle h);
 };
 
 struct SetItem
 {
-    static tensor_i::future_type __setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, tensor_i::future_type & b);
+    static tensor_i::future_type __setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, const tensor_i::future_type & b);
 };
