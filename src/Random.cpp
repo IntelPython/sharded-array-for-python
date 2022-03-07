@@ -31,7 +31,7 @@ struct DeferredRandomOp : public Deferred
 
     void run()
     {
-        set_value(x::Rand<T>::op(_shape, _lower, _upper));
+        set_value(std::move(x::Rand<T>::op(_shape, _lower, _upper)));
     }
 };
 
@@ -39,16 +39,10 @@ Random::future_type Random::rand(DTypeId dtype, const shape_type & shape, const 
 {
     switch(dtype) {
     case FLOAT64: {
-        double lo = x::to_native<double>(lower);
-        double up = x::to_native<double>(upper);
-        return  defer([shape, lo, up](){return x::Rand<double>::op(shape, lo, up);});
-        //return defer<DeferredRandomOp<double>>(shape, x::to_native<double>(lower), x::to_native<double>(upper));
+        return defer<DeferredRandomOp<double>>(shape, x::to_native<double>(lower), x::to_native<double>(upper));
     }
     case FLOAT32: {
-        float lo = x::to_native<float>(lower);
-        float up = x::to_native<float>(upper);
-        return  defer([shape, lo, up](){return x::Rand<float>::op(shape, lo, up);});
-        //return defer<DeferredRandomOp<float>>(shape, x::to_native<double>(lower), x::to_native<double>(upper));
+        return defer<DeferredRandomOp<float>>(shape, x::to_native<float>(lower), x::to_native<float>(upper));
     }
     default:
         throw std::runtime_error("rand: dtype must be a floating point type");

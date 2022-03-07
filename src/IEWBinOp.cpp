@@ -73,12 +73,25 @@ namespace x {
     };
 } // namespace x
 
+struct DeferredIEWBinOp : public Deferred
+ {
+    tensor_i::future_type _a;
+    tensor_i::future_type _b;
+    IEWBinOpId _op;
+
+    DeferredIEWBinOp(IEWBinOpId op, tensor_i::future_type & a, const tensor_i::future_type & b)
+        : _a(a), _b(b), _op(op)
+    {}
+
+    void run()
+    {
+        const auto a = std::move(_a.get());
+        const auto b = std::move(_b.get());
+        set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
+    }
+};
+
 tensor_i::future_type IEWBinOp::op(IEWBinOpId op, tensor_i::future_type & a, const py::object & b)
 {
-    auto bb = x::mk_ftx(b);
-    auto aa = std::move(a.get());
-    auto bbb = std::move(bb.get());
-    return defer([op, aa, bbb](){
-            return TypeDispatch<x::IEWBinOp>(aa, bbb, op);
-        });
+    return defer<DeferredIEWBinOp>(op, a, x::mk_ftx(b));
 }

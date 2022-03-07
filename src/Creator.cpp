@@ -106,7 +106,7 @@ struct DeferredArange : public Deferred
 
     void run()
     {
-        set_value(TypeDispatch<x::Creator>(_dtype, _start, _end, _step));
+        set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
     };
 };
 

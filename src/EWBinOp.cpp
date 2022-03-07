@@ -133,15 +133,29 @@ namespace x {
     };
 } // namespace x
 
+struct DeferredEWBinOp : public Deferred
+{
+    tensor_i::future_type _a;
+    tensor_i::future_type _b;
+    EWBinOpId _op;
+
+    DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
+        : _a(a), _b(b), _op(op)
+    {}
+
+    void run()
+    {
+        const auto a = std::move(_a.get());
+        const auto b = std::move(_b.get());
+        set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
+    }
+};
+
 tensor_i::future_type EWBinOp::op(EWBinOpId op, const tensor_i::future_type & a, const py::object & b)
 {
     auto bb = x::mk_ftx(b);
     if(op == __MATMUL__) {
         return LinAlgOp::vecdot(a, bb, 0);
     }
-    auto aa = std::move(a.get());
-    auto bbb = std::move(bb.get());
-    return  defer([op, aa, bbb](){
-            return TypeDispatch<x::EWBinOp>(aa, bbb, op);
-        });
+    return defer<DeferredEWBinOp>(op, a, bb);
 }
