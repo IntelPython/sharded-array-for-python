@@ -2,6 +2,9 @@
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
+#include "ddptensor/Registry.hpp"
+#include "ddptensor/Creator.hpp"
 
 namespace x {
 
@@ -135,27 +138,43 @@ namespace x {
 
 struct DeferredEWBinOp : public Deferred
 {
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
+    id_type _a;
+    id_type _b;
     EWBinOpId _op;
 
+    DeferredEWBinOp() = default;
     DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : _a(a), _b(b), _op(op)
+        : _a(a.id()), _b(b.id()), _op(op)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
-        const auto b = std::move(_b.get());
+        const auto a = std::move(Registry::get(_a));
+        const auto b = std::move(Registry::get(_b));
         set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
+    }
+
+    FactoryId factory() const
+    {
+        return F_EWBINOP;
+    }
+
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template value<sizeof(_b)>(_b);
+        ser.template value<sizeof(_op)>(_op);
     }
 };
 
 tensor_i::future_type EWBinOp::op(EWBinOpId op, const tensor_i::future_type & a, const py::object & b)
 {
-    auto bb = x::mk_ftx(b);
+    auto bb = Creator::mk_future(b);
     if(op == __MATMUL__) {
         return LinAlgOp::vecdot(a, bb, 0);
     }
     return defer<DeferredEWBinOp>(op, a, bb);
 }
+
+FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);

@@ -14,6 +14,7 @@
   as a template parameter.
  */
 
+#include <stdlib.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11;
@@ -31,6 +32,8 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Random.hpp"
 #include "ddptensor/LinAlgOp.hpp"
+#include "ddptensor/Replicate.hpp"
+#include "ddptensor/Factory.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -43,31 +46,67 @@ rank_type myrank()
 Transceiver * theTransceiver = nullptr;
 Mediator * theMediator = nullptr;
 std::thread * pprocessor;
+bool _is_cw = false;
+
+bool is_cw()
+{
+    return _is_cw && theTransceiver->nranks() > 1;
+}
 
 // users currently need to call fini to make MPI terminate gracefully
 void fini()
 {
-    Deferred::defer(nullptr);
-    pprocessor->join();
-    delete pprocessor;
-    delete theMediator;
+    delete theMediator;  // stop task is sent in here
     theMediator = nullptr;
+    if(pprocessor) {
+        if(theTransceiver->nranks() == 1) Deferred::defer(nullptr, false);
+        pprocessor->join();
+        delete pprocessor;
+    }
     delete theTransceiver;
     theTransceiver = nullptr;
+}
+
+void init(bool cw)
+{
+    if(cw) {
+        _is_cw = true;
+        if(theTransceiver->rank()) {
+            process_promises();
+            fini();
+            exit(0);
+        }
+    }
+    pprocessor = new std::thread(process_promises);
 }
 
 // #########################################################################
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
+    Factory::init<F_ARANGE>();
+    Factory::init<F_FULL>();
+    Factory::init<F_FROMSHAPE>();
+    // Factory::init<F_UNYOP>();
+    Factory::init<F_EWUNYOP>();
+    Factory::init<F_IEWBINOP>();
+    Factory::init<F_EWBINOP>();
+    Factory::init<F_REDUCEOP>();
+    Factory::init<F_MANIPOP>();
+    Factory::init<F_LINALGOP>();
+    Factory::init<F_GETITEM>();
+    Factory::init<F_SETITEM>();
+    Factory::init<F_RANDOM>();
+    Factory::init<F_REPLICATE>();
+
     theTransceiver = new MPITransceiver();
     theMediator = new MPIMediator();
-    pprocessor = new std::thread(process_promises);
 
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
 
     m.def("fini", &fini)
+        .def("init", &init)
         .def("sync", &sync)
         .def("myrank", &myrank)
         .def("_get_slice", &GetItem::get_slice)
@@ -101,10 +140,10 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def_property_readonly("shape", [](const tensor_i::future_type & f) { return f.get()->shape(); })
         .def_property_readonly("size", [](const tensor_i::future_type & f) { return f.get()->size(); })
         .def_property_readonly("ndim", [](const tensor_i::future_type & f) { return f.get()->ndim(); })
-        .def("__bool__", [](const tensor_i::future_type & f) { return f.get()->__bool__(); })
-        .def("__float__", [](const tensor_i::future_type & f) { return f.get()->__float__(); })
-        .def("__int__", [](const tensor_i::future_type & f) { return f.get()->__int__(); })
-        .def("__index__", [](const tensor_i::future_type & f) { return f.get()->__int__(); })
+        .def("__bool__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__bool__(); })
+        .def("__float__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__float__(); })
+        .def("__int__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__int__(); })
+        .def("__index__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__int__(); })
         .def("__len__", [](const tensor_i::future_type & f) { return f.get()->__len__(); })
         .def("__repr__", [](const tensor_i::future_type & f) { return f.get()->__repr__(); })
         .def("__getitem__", &GetItem::__getitem__)

@@ -54,4 +54,4 @@ class dtensor:
         return dtensor(self._t.__getitem__(*args))
 
     def __setitem__(self, key, value):
-        x = self._t.__setitem__(key, value._t) # if isinstance(value, dtensor) else value)
+         self._t = self._t.__setitem__(key, value._t) # if isinstance(value, dtensor) else value)

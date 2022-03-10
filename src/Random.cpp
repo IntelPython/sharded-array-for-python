@@ -1,6 +1,8 @@
 #include <xtensor/xrandom.hpp>
 #include "ddptensor/Random.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
+#include <bitsery/traits/vector.h>
 
 using ptr_type = tensor_i::ptr_type;
 
@@ -13,43 +15,61 @@ namespace x {
         static ptr_type op(const shape_type & shp, T lower, T upper)
         {
             PVSlice pvslice(shp);
-            shape_type shape(std::move(pvslice.shape_of_rank()));
-            return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::random::rand(std::move(shape), lower, upper)));
+            shape_type shape(std::move(pvslice.tile_shape()));
+            auto r = operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::random::rand(std::move(shape), lower, upper)));
+            return r;
         }
     };
 }
 
-template<typename T>
 struct DeferredRandomOp : public Deferred
 {
     shape_type _shape;
-    T _lower, _upper;
+    double _lower, _upper;
+    DTypeId _dtype;
 
-    DeferredRandomOp(const shape_type & shape, T lower, T upper)
-        : _shape(shape), _lower(lower), _upper(upper)
+    DeferredRandomOp() = default;
+    DeferredRandomOp(const shape_type & shape, double lower, double upper, DTypeId dtype)
+        : _shape(shape), _lower(lower), _upper(upper), _dtype(dtype)
     {}
 
     void run()
     {
-        set_value(std::move(x::Rand<T>::op(_shape, _lower, _upper)));
+        switch(_dtype) {
+        case FLOAT64:
+            set_value(std::move(x::Rand<double>::op(_shape, _lower, _upper)));
+            return;
+        case FLOAT32:
+            set_value(std::move(x::Rand<float>::op(_shape, static_cast<float>(_lower), static_cast<float>(_upper))));
+            return;
+        }
+        throw std::runtime_error("rand: dtype must be a floating point type");
+    }
+    
+    FactoryId factory() const
+    {
+        return F_RANDOM;
+    }
+
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
+        ser.template value<sizeof(_lower)>(_lower);
+        ser.template value<sizeof(_upper)>(_upper);
+        ser.template value<sizeof(_dtype)>(_dtype);
     }
 };
 
+
 Random::future_type Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
 {
-    switch(dtype) {
-    case FLOAT64: {
-        return defer<DeferredRandomOp<double>>(shape, x::to_native<double>(lower), x::to_native<double>(upper));
-    }
-    case FLOAT32: {
-        return defer<DeferredRandomOp<float>>(shape, x::to_native<float>(lower), x::to_native<float>(upper));
-    }
-    default:
-        throw std::runtime_error("rand: dtype must be a floating point type");
-    }
+    return defer<DeferredRandomOp>(shape, x::to_native<double>(lower), x::to_native<double>(upper), dtype);
 }
 
 void Random::seed(uint64_t s)
 {
     defer([s](){xt::random::seed(s); return tensor_i::ptr_type();});
 }
+
+FACTORY_INIT(DeferredRandomOp, F_RANDOM);

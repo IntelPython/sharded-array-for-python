@@ -11,6 +11,7 @@ namespace py = pybind11;
 
 #include "Slice.hpp"
 #include "NDIndex.hpp"
+#include "UtilsAndTypes.hpp"
 
 ///
 /// A slice of n-dimensional range with utility features to extract nd-indices.

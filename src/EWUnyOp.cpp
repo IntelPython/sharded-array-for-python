@@ -1,6 +1,7 @@
 #include "ddptensor/EWUnyOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
 
 namespace x {
 
@@ -109,18 +110,31 @@ namespace x {
 } //namespace x
 
 struct DeferredEWUnyOp : public Deferred
- {
-    tensor_i::future_type _a;
+{
+    id_type _a;
     EWUnyOpId _op;
 
+    DeferredEWUnyOp() = default;
     DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type & a)
-        : _a(a), _op(op)
+        : _a(a.id()), _op(op)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
+        const auto a = std::move(Registry::get(_a));
         set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
+    }
+
+    FactoryId factory() const
+    {
+        return F_EWUNYOP;
+    }
+    
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template value<sizeof(_op)>(_op);
     }
 };
 
@@ -128,3 +142,5 @@ tensor_i::future_type EWUnyOp::op(EWUnyOpId op, const tensor_i::future_type & a)
 {
     return defer<DeferredEWUnyOp>(op, a);
 }
+
+FACTORY_INIT(DeferredEWUnyOp, F_EWUNYOP);

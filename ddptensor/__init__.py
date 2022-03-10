@@ -25,6 +25,8 @@ from ._ddptensor import (
     UINT32 as uint32,
     UINT16 as uint16,
     UINT8 as uint8,
+    BOOL as bool,
+    init,
     fini,
     sync
 )
@@ -55,7 +57,7 @@ for func in api.api_categories["Creator"]:
         )
     elif func == "full":
         exec(
-            f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(_cdt.{FUNC}, shape, val, dtype))"
+            f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(shape, val, dtype))"
         )
     elif func == "arange":
         exec(

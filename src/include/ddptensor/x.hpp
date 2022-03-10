@@ -17,7 +17,6 @@
 #include <xtensor/xstrided_view.hpp>
 #include <xtensor/xio.hpp>
 #include <pybind11/numpy.h>
-#include "Mediator.hpp"
 #include "PVSlice.hpp"
 #include "p2c_ids.hpp"
 #include "tensor_i.hpp"
@@ -43,7 +42,6 @@ namespace x
     template<typename T>
     class DPTensorX : public DPTensorBaseX
     {
-        uint64_t _id = Mediator::LOCAL_ONLY;
         mutable rank_type _owner;
         PVSlice _slice;
         xt::xstrided_slice_vector _lslice;
@@ -59,15 +57,17 @@ namespace x
         template<typename I>
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
-              _slice(std::move(slc)),
+              _slice(std::move(slc)), // static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
+            if(owner != NOOWNER)
+                throw(std::runtime_error("Creating from PVSlice must be NOOWNER"));
         }
 
         template<typename I>
         DPTensorX(const shape_type & slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
-              _slice(slc),
+              _slice(slc, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
         }
@@ -75,21 +75,21 @@ namespace x
         template<typename I>
         DPTensorX(shape_type && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
-              _slice(std::move(slc)),
+              _slice(std::move(slc), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
         }
 
         DPTensorX(const shape_type & shp, rank_type owner=NOOWNER)
             : _owner(owner),
-              _slice(shp),
-              _xarray(std::make_shared<xt::xarray<T>>(xt::empty<T>(_slice.shape_of_rank())))
+              _slice(shp, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
+              _xarray(std::make_shared<xt::xarray<T>>(xt::empty<T>(_slice.tile_shape())))
         {
         }
 
         DPTensorX(const T & v, rank_type owner=theTransceiver->rank())
             : _owner(owner),
-              _slice(shape_type{1}),
+              _slice(shape_type{1}, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
               _xarray(std::make_shared<xt::xarray<T>>(1)),
               _replica(v)
@@ -123,7 +123,6 @@ namespace x
 
         ~DPTensorX()
         {
-            if(_id != Mediator::LOCAL_ONLY && theMediator) theMediator->unregister_array(_id);
         }
 
         bool is_sliced() const
@@ -159,19 +158,27 @@ namespace x
             return _slice.size();
         }
 
+        friend struct Replicate;
+
         virtual bool __bool__() const
         {
-            return static_cast<bool>(replicate());
+            if(! is_replicated())
+                throw(std::runtime_error("Cast to scalar bool: tensor is not replicated"));
+            return static_cast<bool>(_replica);
         }
 
         virtual double __float__() const
         {
-            return static_cast<double>(replicate());
+            if(! is_replicated())
+                throw(std::runtime_error("Cast to scalar float: tensor is not replicated"));
+            return static_cast<double>(_replica);
         }
 
         virtual int64_t __int__() const
         {
-            return static_cast<int64_t>(replicate());
+            if(! is_replicated())
+                throw(std::runtime_error("Cast to scalar int: tensor is not replicated"));
+            return static_cast<int64_t>(_replica);
         }
 
         virtual uint64_t __len__() const
@@ -219,39 +226,14 @@ namespace x
             return _owner == REPLICATED;
         }
 
-        T replicate() const
-        {
-            if(is_replicated()) return _replica;
-            if(has_owner() && _slice.size() == 1) {
-                if(theTransceiver->rank() == owner()) {
-                    _replica = *(xt::strided_view(xarray(), lslice()).begin());
-                }
-                theTransceiver->bcast(&_replica, sizeof(T), owner());
-                set_owner(REPLICATED);
-            } else {
-                throw(std::runtime_error("Replication implemented for single element and single owner only."));
-            }
-            return _replica;
-        }
-
         virtual int item_size() const
         {
             return sizeof(T);
         }
 
-        virtual uint64_t id() const
-        {
-            return _id;
-        }
-
-        void set_id(uint64_t id)
-        {
-            _id = id;
-        }
-
         virtual void bufferize(const NDSlice & slc, Buffer & buff) const
         {
-            NDSlice lslice = NDSlice(slice().shape_of_rank()).slice(slc);
+            NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
 
             auto ary_v = xt::strided_view(xarray(), to_xt(lslice));
             buff.resize(slc.size()*sizeof(T));
@@ -263,41 +245,26 @@ namespace x
         }
     };
 
-
-    template<typename T>
-    static typename DPTensorX<T>::typed_ptr_type register_tensor(typename DPTensorX<T>::typed_ptr_type t)
-    {
-        auto id = theMediator->register_array(t);
-        t->set_id(id);
-        return t;
-    }
-
     template<typename T>
     class operatorx
     {
     public:
-
-        static DPTensorBaseX::ptr_type mk_tx(const py::object & o)
-        {
-            return std::make_shared<DPTensorX<T>>(o.cast<T>());
-        }
-
         template<typename ...Ts>
         static typename DPTensorX<T>::typed_ptr_type mk_tx(Ts&&... args)
         {
-            return register_tensor<T>(std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...));
+            return std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...);
         }
 
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {
-            return register_tensor<typename X::value_type>(std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x)));
+            return std::make_shared<DPTensorX<typename X::value_type>>(tx.shape(), std::forward<X>(x));
         }
 
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const typename DPTensorX<T>::typed_ptr_type & tx, X && x)
         {
-            return register_tensor<typename X::value_type>(std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x)));
+            return std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x));
         }
 
 
@@ -306,26 +273,6 @@ namespace x
         {
             return UnDeferred(operatorx<T>::mk_tx(std::forward(args)...)).get_future();
         }
-    };
-
-    static tensor_i::ptr_type mk_tx(const py::object & b)
-    {
-        if(py::isinstance<DPTensorBaseX>(b)) {
-            return b.cast<DPTensorBaseX::ptr_type>();
-        } else if(py::isinstance<py::float_>(b)) {
-            return operatorx<double>::mk_tx(b);
-        } else if(py::isinstance<py::int_>(b)) {
-            return operatorx<int64_t>::mk_tx(b);
-        }
-        throw std::runtime_error("Invalid right operand to elementwise binary operation");
-    };
-
-    static tensor_i::future_type mk_ftx(const py::object & b)
-    {
-        if(py::isinstance<tensor_i::future_type>(b)) {
-            return b.cast<tensor_i::future_type>();
-        }
-        return UnDeferred(mk_tx(b)).get_future();
     };
 
 } // namespace x

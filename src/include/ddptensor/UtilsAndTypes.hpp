@@ -6,14 +6,24 @@
 #include <numeric>
 #include <cstring>
 
+#include <bitsery/bitsery.h>
+#include <bitsery/adapter/buffer.h>
+#include <bitsery/traits/vector.h>
+
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 namespace py = pybind11;
 #include "p2c_ids.hpp"
 
 using shape_type = std::vector<uint64_t>;
 using dim_vec_type = std::vector<int>;
-using Buffer = std::vector<uint8_t>;
 using rank_type = uint64_t;
+
+using Buffer = std::vector<uint8_t>;
+using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
+using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
+using Serializer = bitsery::Serializer<OutputAdapter>;
+using Deserializer = bitsery::Deserializer<InputAdapter>;
 
 enum : rank_type {
     NOOWNER    = std::numeric_limits<rank_type>::max(),
@@ -35,6 +45,39 @@ template<> struct DTYPE<uint8_t>  { constexpr static DTypeId value = UINT8; };
 template<> struct DTYPE<bool>     { constexpr static DTypeId value = BOOL; };
 
 template<typename T> py::object get_impl_dtype() { return get_impl_dtype(DTYPE<T>::value); };
+
+union PyScalar
+{
+    int64_t _int;
+    double _float;
+};
+
+inline PyScalar mk_scalar(const py::object & b, DTypeId dtype)
+{
+    PyScalar s;
+    switch(dtype) {
+    case FLOAT64:
+    case FLOAT32:
+        s._float = b.cast<double>();
+        return s;
+    case INT64:
+    case INT32:
+    case INT16:
+    case INT8:
+    case UINT64:
+    case UINT32:
+    case UINT16:
+    case UINT8:
+        s._int = b.cast<int64_t>();
+        return s;
+        /* FIXME
+    case BOOL:
+        return TypeDispatch2<OpDispatch>(std::forward<Ts>(args)..., _downcast<bool>(a_ptr));
+        */
+    default:
+        throw std::runtime_error("unknown dtype");
+    }
+}
 
 inline py::module_ get_array_impl(const py::object & = py::none())
 {   // FIXME ary.attr("__array_namespace__")();
@@ -146,3 +189,25 @@ py::tuple _make_tuple(const std::vector<T> & v)
     using V = std::vector<T>;
     return _make_tuple(v, [](const V & v){return v.size();}, [](const V & v, int i){return v[i];});
 }
+
+extern bool is_cw();
+
+using id_type = uint64_t;
+
+enum FactoryId : int {
+    F_ARANGE,
+    F_FROMSHAPE,
+    F_FULL,
+    F_UNYOP,
+    F_EWUNYOP,
+    F_IEWBINOP,
+    F_EWBINOP,
+    F_REDUCEOP,
+    F_MANIPOP,
+    F_LINALGOP,
+    F_GETITEM,
+    F_SETITEM,
+    F_RANDOM,
+    F_REPLICATE,
+    FACTORY_LAST
+};

@@ -3,6 +3,7 @@
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
 #include "xtensor-blas/xlinalg.hpp"
 
 namespace x {
@@ -77,7 +78,7 @@ namespace x {
                 bv = bx;
             }
 
-            // We use an algo similar to Canon's
+            // We rotate partitions/blocks of b
             // the last partitions can be smaller -> k depends on "me", the source rank of current partition
             for(rank_type i = nr; i>0; --i) {
                 if(my_tshp_a[0]) {
@@ -111,19 +112,33 @@ namespace x {
 
 struct DeferredLinAlgOp : public Deferred
  {
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
+    id_type _a;
+    id_type _b;
     int _axis;
 
-    DeferredLinAlgOp(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis)
-        : _a(a), _b(b), _axis(axis)
+     DeferredLinAlgOp() = default;
+     DeferredLinAlgOp(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis)
+        : _a(a.id()), _b(b.id()), _axis(axis)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
-        const auto b = std::move(_b.get());
+        const auto a = std::move(Registry::get(_a));
+        const auto b = std::move(Registry::get(_b));
         set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
+    }
+    
+    FactoryId factory() const
+    {
+        return F_LINALGOP;
+    }
+    
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template value<sizeof(_b)>(_b);
+        ser.template value<sizeof(_axis)>(_axis);
     }
 };
 
@@ -131,3 +146,5 @@ tensor_i::future_type LinAlgOp::vecdot(const tensor_i::future_type & a, const te
 {
     return defer<DeferredLinAlgOp>(a, b, axis);
 }
+
+FACTORY_INIT(DeferredLinAlgOp, F_LINALGOP);

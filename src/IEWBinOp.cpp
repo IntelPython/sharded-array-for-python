@@ -1,6 +1,8 @@
 #include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
+#include "ddptensor/Creator.hpp"
 
 namespace x {
 
@@ -74,24 +76,40 @@ namespace x {
 } // namespace x
 
 struct DeferredIEWBinOp : public Deferred
- {
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
+{
+    id_type _a;
+    id_type _b;
     IEWBinOpId _op;
 
+    DeferredIEWBinOp() = default;
     DeferredIEWBinOp(IEWBinOpId op, tensor_i::future_type & a, const tensor_i::future_type & b)
-        : _a(a), _b(b), _op(op)
+        : _a(a.id()), _b(b.id()), _op(op)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
-        const auto b = std::move(_b.get());
+        const auto a = std::move(Registry::get(_a));
+        const auto b = std::move(Registry::get(_b));
         set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
+    }
+     
+    FactoryId factory() const
+    {
+        return F_IEWBINOP;
+
+    }
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template value<sizeof(_b)>(_b);
+        ser.template value<sizeof(_op)>(_op);
     }
 };
 
 tensor_i::future_type IEWBinOp::op(IEWBinOpId op, tensor_i::future_type & a, const py::object & b)
 {
-    return defer<DeferredIEWBinOp>(op, a, x::mk_ftx(b));
+    return defer<DeferredIEWBinOp>(op, a, Creator::mk_future(b));
 }
+
+FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);

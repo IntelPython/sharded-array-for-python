@@ -1,6 +1,7 @@
 #include "ddptensor/ReduceOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Factory.hpp"
 
 namespace x {
 
@@ -18,6 +19,7 @@ namespace x {
             if(slice.need_reduce(dims)) {
                 auto len = VPROD(new_shape);
                 theTransceiver->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
+                if(len == 1) return operatorx<typename X::value_type>::mk_tx(a.data()[0], REPLICATED);
                 owner = REPLICATED;
             }
             return operatorx<typename X::value_type>::mk_tx(std::move(new_shape), a, owner);
@@ -64,19 +66,33 @@ namespace x {
 } // namespace x
 
 struct DeferredReduceOp : public Deferred
- {
-    tensor_i::future_type _a;
+{
+    id_type _a;
     dim_vec_type _dim;
     ReduceOpId _op;
 
+    DeferredReduceOp() = default;
     DeferredReduceOp(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
-        : _a(a), _dim(dim), _op(op)
+        : _a(a.id()), _dim(dim), _op(op)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
+        const auto a = std::move(Registry::get(_a));
         set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
+    }
+
+    FactoryId factory() const
+    {
+        return F_REDUCEOP;
+    }
+    
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template container<sizeof(dim_vec_type::value_type)>(_dim, 8);
+        ser.template value<sizeof(_op)>(_op);
     }
 };
 
@@ -84,3 +100,5 @@ tensor_i::future_type ReduceOp::op(ReduceOpId op, const tensor_i::future_type & 
 {
     return defer<DeferredReduceOp>(op, a, dim);
 }
+
+FACTORY_INIT(DeferredReduceOp, F_REDUCEOP);

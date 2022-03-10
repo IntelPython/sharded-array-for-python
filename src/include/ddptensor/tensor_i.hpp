@@ -19,9 +19,25 @@ class NDSlice;
 class tensor_i
 {
 public:
+
     typedef std::shared_ptr<tensor_i> ptr_type;
     typedef std::promise<ptr_type> promise_type;
-    typedef std::shared_future<ptr_type> future_type;
+
+    class TFuture : public std::shared_future<tensor_i::ptr_type>
+    {
+        id_type _id;
+        
+    public:
+        using std::shared_future<tensor_i::ptr_type>::shared_future;
+        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id)
+            : std::shared_future<tensor_i::ptr_type>(std::move(f)),
+            _id(id)
+        {}
+        
+        uint64_t id() const { return _id; }
+    };
+
+    typedef TFuture future_type;
 
     virtual ~tensor_i() {};
     virtual std::string __repr__() const = 0;
@@ -38,6 +54,16 @@ public:
     virtual void bufferize(const NDSlice & slice, Buffer & buff) const = 0;
     // size of a single element (in bytes)
     virtual int item_size() const = 0;
-    // global id, as assigned by Mediator::register_array
-    virtual uint64_t id() const = 0;
 };
+
+#if 0
+template<typename S>
+void serialize(S & ser, tensor_i::future_type & f)
+{
+    uint64_t id = f.id();
+    ser.value8b(id);
+    if constexpr (std::is_same<Deserializer, S>::value) {
+        
+    }
+}
+#endif

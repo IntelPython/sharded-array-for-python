@@ -1,22 +1,15 @@
-import ddptensor as dt
-a = dt.arange(1, 36, 1, dtype=dt.float64)
-b = dt.arange(1, 22, 1, dtype=dt.float64)
-print("a", a)
-print("b", b)
-a = dt.reshape(a, (5,7))
-b = dt.reshape(b, (7,3))
-print("a", a)
-print("b", b)
-print()
-c = dt.vecdot(a, b, 0)
-print(c)
-
 import numpy as np
-a = np.arange(1, 36, 1, dtype=np.float64)
-b = np.arange(1, 22, 1, dtype=np.float64)
-a = np.reshape(a, (5,7))
-b = np.reshape(b, (7,3))
-c = np.dot(a, b)
-print(c)
-dt.sync()
-dt.fini()
+from mpi4py import MPI
+import ddptensor as dt
+
+class TestLinAlg:
+    def test_vecdot1(self):
+        def gen(m):
+            a = m.arange(1, 36, 1, dtype=m.float64)
+            b = m.arange(1, 22, 1, dtype=m.float64)
+            return m.reshape(a, (5,7)), m.reshape(b, (7,3))
+        a, b = gen(dt)
+        c = float(dt.sum(dt.vecdot(a, b, 0), [0,1]))
+        a, b = gen(np)
+        v = float(np.sum(np.dot(a,b)))
+        assert c == v

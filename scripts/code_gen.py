@@ -17,7 +17,7 @@ print("""// Auto-generated file
 namespace py = pybind11;
 """)
 
-prev = "0"
+prev = 0
 for cat, lst in api.api_categories.items():
     print(f"enum {cat}Id : int {{")
     for x in lst:
@@ -28,7 +28,6 @@ for cat, lst in api.api_categories.items():
     print("};\n")
 
 print("static void def_enums(py::module_ & m)\n{")
-
 for cat, lst in api.api_categories.items():
     print(f'    py::enum_<{cat}Id>(m, "{cat}Id")')
     for x in lst:

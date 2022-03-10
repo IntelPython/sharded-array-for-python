@@ -12,9 +12,8 @@ class MPIMediator : public Mediator
 public:
     MPIMediator();
     virtual ~MPIMediator();
-    virtual uint64_t register_array(tensor_i::ptr_type ary);
-    virtual void unregister_array(uint64_t);
-    virtual void pull(rank_type from, const tensor_i & ary, const NDSlice & slice, void * buffer);
+    virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer);
+    virtual void to_workers(const Deferred::ptr_type & dfrd);
 
 protected:
     void listen();

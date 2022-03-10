@@ -1,6 +1,8 @@
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/x.hpp"
+#include "ddptensor/Mediator.hpp"
+#include "ddptensor/Factory.hpp"
 
 namespace x {
 
@@ -28,18 +30,12 @@ namespace x {
         // copy data from val into (*dest)[slice]
         // this is a non-collective call.
         template<typename T, typename X, typename U>
-        static void _set_slice(X && dest, const PVSlice & org_slice, const NDSlice & dest_slice, const std::shared_ptr<DPTensorX<U>> & val, const NDSlice & val_slice)
-        // (DPTensorX<T> & dest, const NDSlice & dest_slice, const DPTensorX<U> & val, const NDSlice & val_slice)
+        static void _set_slice(X && dest, const PVSlice & dest_view, const std::shared_ptr<DPTensorX<U>> & val, const NDSlice & val_slice, id_type val_guid)
         {
-            // const PVSlice & org_slice = dest.slice();
-            auto nd = org_slice.ndims();
-            if(nd != dest_slice.ndims())
-                throw std::runtime_error("Index dimensionality must match array dimensionality");
-            if(val_slice.size() != dest_slice.size())
+            auto nd = dest_view.ndims();
+            if(val_slice.size() != dest_view.size())
                 throw std::runtime_error("Input and output slices must be of same size");
 
-            // Use given slice to create a global view into orig array
-            PVSlice g_slc_view(org_slice, dest_slice);
             // Create a view into val
             PVSlice needed_val_view(val->slice(), val_slice);
 
@@ -50,7 +46,7 @@ namespace x {
                 NDSlice curr_needed_val_slice = needed_val_view.slice_of_rank(i);
                 NDSlice curr_local_val_slice = val_local_view.map_slice(curr_needed_val_slice);
                 NDSlice curr_needed_norm_slice = needed_val_view.map_slice(curr_needed_val_slice);
-                PVSlice my_curr_needed_view = PVSlice(g_slc_view, curr_needed_norm_slice);
+                PVSlice my_curr_needed_view = PVSlice(dest_view, curr_needed_norm_slice);
                 NDSlice my_curr_local_slice = my_curr_needed_view.local_slice_of_rank(theTransceiver->rank());
 
                 if(curr_needed_norm_slice.size()) {
@@ -64,7 +60,7 @@ namespace x {
                         // pull slice directly into new array
                         xt::xarray<U> from_a = xt::empty<U>(curr_local_val_slice.shape());
                         from_a.fill(static_cast<U>(4711));
-                        theMediator->pull(i, *val.get(), curr_local_val_slice, from_a.data());
+                        theMediator->pull(i, val_guid, curr_local_val_slice, from_a.data());
                         auto to_v = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
                         to_v = from_a;
                     }
@@ -76,17 +72,15 @@ namespace x {
         // on all procs simultaneously.  Since __setitem__ is collective we could
         // implement a probaly more efficient mechanism which pushes data and/or using RMA.
         template<typename A, typename B>
-        static ptr_type op(const NDSlice & slice, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
+        static ptr_type op(const NDSlice & slice, id_type val_guid, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
         {
             // Use given slice to create a global view into orig array
             PVSlice g_slc_view(a_ptr->slice(), slice);
-            NDSlice my_slice = g_slc_view.slice_of_rank();
-            NDSlice my_norm_slice = g_slc_view.map_slice(my_slice);
-            NDSlice my_rel_slice = a_ptr->slice().map_slice(my_slice);
+            PVSlice my_rel_slice(g_slc_view, theTransceiver->rank());
+            NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.slice_of_rank()); //slice());my_slice);
             
             theTransceiver->barrier();
-            _set_slice<A>(a_ptr->xarray(), a_ptr->slice(),
-                          my_rel_slice, b_ptr, my_norm_slice);
+            _set_slice<A>(a_ptr->xarray(), my_rel_slice, b_ptr, my_norm_slice, val_guid);
             return a_ptr;
         }
     };
@@ -98,14 +92,14 @@ namespace x {
 
         // get_slice
         template<typename T>
-        static py::object op(const NDSlice & slice, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static py::object op(const NDSlice & slice, id_type val_guid, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
             auto shp = slice.shape();
             auto sz = VPROD(shp);
             auto res = py::array_t<T>(sz);
             auto ax = xt::adapt(res.mutable_data(), sz, xt::no_ownership(), shp);
             PVSlice slc{shp, NOSPLIT};
-            SetItem::_set_slice<T>(ax, slc, slc.slice(), a_ptr, slice);
+            SetItem::_set_slice<T>(ax, slc, a_ptr, slice, val_guid);
             return res;
         }
 
@@ -135,20 +129,34 @@ namespace x {
 } // namespace x
 
 struct DeferredSetItem : public Deferred
- {
-    tensor_i::future_type _a;
-    tensor_i::future_type _b;
+{
+    id_type _a;
+    id_type _b;
     NDSlice _slc;
-
+    
+    DeferredSetItem() = default;
     DeferredSetItem(tensor_i::future_type & a, const tensor_i::future_type & b, const std::vector<py::slice> & v)
-        : _a(a), _b(b), _slc(v)
+        : _a(a.id()), _b(b.id()), _slc(v)
     {}
-
+    
     void run()
     {
-        const auto a = std::move(_a.get());
-        const auto b = std::move(_b.get());
-        set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc)));
+        const auto a = std::move(Registry::get(_a));
+        const auto b = std::move(Registry::get(_b));
+        set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
+    }
+
+    FactoryId factory() const
+    {
+        return F_SETITEM;
+    }
+
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template value<sizeof(_b)>(_b);
+        ser.template object(_slc);
     }
 };
 
@@ -159,17 +167,30 @@ tensor_i::future_type SetItem::__setitem__(tensor_i::future_type & a, const std:
 
 struct DeferredGetItem : public Deferred
 {
-    tensor_i::future_type _a;
+    id_type _a;
     NDSlice _slc;
 
+    DeferredGetItem() = default;
     DeferredGetItem(const tensor_i::future_type & a, const std::vector<py::slice> & v)
-        : _a(a), _slc(v)
+        : _a(a.id()), _slc(v)
     {}
 
     void run()
     {
-        const auto a = std::move(_a.get());
+        const auto a = std::move(Registry::get(_a));
         set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
+    }
+
+    FactoryId factory() const
+    {
+        return F_GETITEM;
+    }
+
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.template value<sizeof(_a)>(_a);
+        ser.template object(_slc);
     }
 };
 
@@ -181,7 +202,7 @@ tensor_i::future_type GetItem::__getitem__(const tensor_i::future_type & a, cons
 py::object GetItem::get_slice(const tensor_i::future_type & a, const std::vector<py::slice> & v)
 {
     const auto aa = std::move(a.get());
-    return TypeDispatch<x::SPMD>(aa, NDSlice(v));
+    return TypeDispatch<x::SPMD>(aa, NDSlice(v), a.id());
 }
 
 py::object GetItem::get_local(const tensor_i::future_type & a, py::handle h)
@@ -189,3 +210,6 @@ py::object GetItem::get_local(const tensor_i::future_type & a, py::handle h)
     const auto aa = std::move(a.get());
     return TypeDispatch<x::SPMD>(aa, h);
 }
+
+FACTORY_INIT(DeferredGetItem, F_GETITEM);
+FACTORY_INIT(DeferredSetItem, F_SETITEM);
