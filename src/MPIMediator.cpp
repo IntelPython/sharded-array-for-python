@@ -145,7 +145,6 @@ void MPIMediator::listen()
         Deserializer ser{buff.begin(), cnt};
         int tag;
         ser.value<sizeof(tag)>(tag);
-        std::cerr << "Recvd " << cnt << " bytes from " << requester << " tag " << tag << std::endl;
         
         switch(tag) {
         case DEFER_TAG: {
@@ -170,7 +169,6 @@ void MPIMediator::listen()
             MPI_Wait(&request_out, MPI_STATUS_IGNORE);
             ptr->bufferize(slice, rbuff);
             if(slice.size() * ptr->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
-            std::cerr << "Sending " << rbuff.size() << " bytes to " << requester << " tag PUSH_TAG" << std::endl;
             MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, comm, &request_out);
             break;
         }

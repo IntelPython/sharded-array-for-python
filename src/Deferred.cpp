@@ -42,7 +42,6 @@ void process_promises()
     while(true) {
         Deferred::ptr_type d;
         _deferred.pop(d);
-        std::cerr << "Executing something" << std::endl;
         if(d) d->run();
         else break;
         d.reset();
