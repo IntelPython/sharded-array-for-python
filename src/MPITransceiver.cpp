@@ -16,6 +16,9 @@ MPITransceiver::MPITransceiver()
                                      "Please use a thread-safe MPI implementation.");
         }
     } else {
+        MPI_Query_thread(&flag);
+        if(flag != MPI_THREAD_MULTIPLE)
+            throw(std::logic_error("MPI had been initialized incorrectly: not MPI_THREAD_MULTIPLE"));
         std::cerr << "MPI already initialized\n";
     }
     int nranks, rank;
