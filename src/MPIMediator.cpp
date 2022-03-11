@@ -21,8 +21,13 @@ static std::mutex ak_mutex;
 void send_to_workers(const Deferred::ptr_type & dfrd, bool self = false);
 
 MPIMediator::MPIMediator()
-    : _listener(&MPIMediator::listen, this)
+    : _listener(nullptr)
 {
+    MPI_Comm comm = MPI_COMM_WORLD;
+    int sz;
+    MPI_Comm_size(comm, &sz);
+    if(sz > 1)
+        _listener = new std::thread(&MPIMediator::listen, this);
 }
 
 MPIMediator::~MPIMediator()
@@ -36,7 +41,11 @@ MPIMediator::~MPIMediator()
     if(is_cw() && rank == 0) to_workers(nullptr);
     MPI_Barrier(comm);
     if(!is_cw() || rank == 0) send_to_workers(nullptr, true);
-    _listener.join();
+    if(_listener) {
+        _listener->join();
+        delete _listener;
+        _listener = nullptr;
+    }
 }
 
 void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void * rbuff)

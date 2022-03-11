@@ -7,7 +7,7 @@
 
 class MPIMediator : public Mediator
 {
-    std::thread _listener;
+    std::thread * _listener;
 
 public:
     MPIMediator();

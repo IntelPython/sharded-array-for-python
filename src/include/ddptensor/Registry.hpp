@@ -17,4 +17,5 @@ namespace Registry {
     extern void put(id_type id, tensor_i::ptr_type ptr);
     tensor_i::ptr_type get(id_type id);
     void del(id_type id);
+    void fini();
 };

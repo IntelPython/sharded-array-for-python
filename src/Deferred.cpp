@@ -37,6 +37,11 @@ Deferred::ptr_type Deferred::undefer_next()
     return r;
 }
 
+void Deferred::fini()
+{
+    _deferred.clear();
+}
+
 void process_promises()
 {
     while(true) {
@@ -55,3 +60,4 @@ void sync()
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
+

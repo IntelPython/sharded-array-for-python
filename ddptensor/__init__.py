@@ -13,6 +13,7 @@ https://data-apis.org/array-api/latest
 # At this point there are no checks of input arguments whatsoever, arguments
 # are simply forwarded as-is.
 
+_bool = bool
 from . import _ddptensor as _cdt
 from ._ddptensor import (
     FLOAT64 as float64,
@@ -26,14 +27,21 @@ from ._ddptensor import (
     UINT16 as uint16,
     UINT8 as uint8,
     BOOL as bool,
-    init,
+    init as _init,
     fini,
     sync
 )
+
 from .ddptensor import dtensor
 from os import getenv
 from . import array_api as api
 from . import spmd
+
+_ddpt_cw = _bool(int(getenv('DDPT_CW', True)))
+
+def init(cw=None):
+    cw = _ddpt_cw if cw is None else cw
+    _init(cw)
 
 for op in api.api_categories["EWBinOp"]:
     if not op.startswith("__"):

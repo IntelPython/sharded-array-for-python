@@ -24,6 +24,7 @@ struct Deferred : tensor_i::promise_type
 
     static future_type defer(ptr_type &&, bool);
     static ptr_type undefer_next();
+    static void fini();
 };
 
 template<typename T, typename... Ts>

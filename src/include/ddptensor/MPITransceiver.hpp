@@ -8,6 +8,7 @@ class MPITransceiver : public Transceiver
 {
 public:
     MPITransceiver();
+    ~MPITransceiver();
 
     rank_type nranks() const
     {

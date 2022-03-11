@@ -1,10 +1,10 @@
 import numpy as np
 from mpi4py import MPI
 import ddptensor as dt
-from conftest import ddpt_cw
+from ddptensor import _ddpt_cw
 import pytest
 
-@pytest.mark.skipif(ddpt_cw, reason="Only applicable to SPMD mode")
+@pytest.mark.skipif(_ddpt_cw, reason="Only applicable to SPMD mode")
 class TestSPMD:
     def test_get_slice(self):
         a = dt.ones((2+MPI.COMM_WORLD.size*2, 2+MPI.COMM_WORLD.size*2), dt.float64)

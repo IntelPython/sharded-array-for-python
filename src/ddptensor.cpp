@@ -53,9 +53,13 @@ bool is_cw()
     return _is_cw && theTransceiver->nranks() > 1;
 }
 
+static bool inited = false;
+static bool finied = false;
+
 // users currently need to call fini to make MPI terminate gracefully
 void fini()
 {
+    if(finied) return;
     delete theMediator;  // stop task is sent in here
     theMediator = nullptr;
     if(pprocessor) {
@@ -65,10 +69,15 @@ void fini()
     }
     delete theTransceiver;
     theTransceiver = nullptr;
+    Deferred::fini();
+    Registry::fini();
+    inited = false;
+    finied = true;
 }
 
 void init(bool cw)
 {
+    if(inited) return;
     if(cw) {
         _is_cw = true;
         if(theTransceiver->rank()) {
@@ -78,6 +87,8 @@ void init(bool cw)
         }
     }
     pprocessor = new std::thread(process_promises);
+    inited = true;
+    finied = false;
 }
 
 // #########################################################################

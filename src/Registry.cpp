@@ -37,4 +37,10 @@ namespace Registry {
         locker _l(_mutex);
         _keeper.erase(id);
     }
+
+    void fini()
+    {
+        locker _l(_mutex);
+        _keeper.clear();
+    }
 }

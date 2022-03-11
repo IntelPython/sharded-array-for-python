@@ -15,6 +15,8 @@ MPITransceiver::MPITransceiver()
             throw std::runtime_error("Your MPI implementation is not MPI_THREAD_MULTIPLE. "
                                      "Please use a thread-safe MPI implementation.");
         }
+    } else {
+        std::cerr << "MPI already initialized\n";
     }
     int nranks, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &nranks);
@@ -22,6 +24,14 @@ MPITransceiver::MPITransceiver()
     _nranks = nranks;
     _rank = rank;
 };
+
+MPITransceiver::~MPITransceiver()
+{
+    int flag;
+    MPI_Finalized(&flag);
+    if(!flag)
+        MPI_Finalize();
+}
 
 static MPI_Datatype to_mpi(DTypeId T)
 {
