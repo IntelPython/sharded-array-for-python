@@ -158,7 +158,7 @@ namespace x
             return _slice.size();
         }
 
-        friend struct Replicate;
+        friend struct Service;
 
         virtual bool __bool__() const
         {

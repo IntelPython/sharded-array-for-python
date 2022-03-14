@@ -123,8 +123,8 @@ struct DeferredLinAlgOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
-        const auto b = std::move(Registry::get(_b));
+        const auto a = std::move(Registry::get(_a).get());
+        const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
     }
     
@@ -142,9 +142,9 @@ struct DeferredLinAlgOp : public Deferred
     }
 };
 
-tensor_i::future_type LinAlgOp::vecdot(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis)
+ddptensor * LinAlgOp::vecdot(const ddptensor & a, const ddptensor & b, int axis)
 {
-    return defer<DeferredLinAlgOp>(a, b, axis);
+    return new ddptensor(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
 }
 
 FACTORY_INIT(DeferredLinAlgOp, F_LINALGOP);

@@ -3,10 +3,10 @@
 #pragma once
 
 #include "UtilsAndTypes.hpp"
-#include "tensor_i.hpp"
+#include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
 struct LinAlgOp
 {
-    static tensor_i::future_type vecdot(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis);
+    static ddptensor * vecdot(const ddptensor & a, const ddptensor & b, int axis);
 };

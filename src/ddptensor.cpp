@@ -32,7 +32,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Random.hpp"
 #include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/Replicate.hpp"
+#include "ddptensor/Service.hpp"
 #include "ddptensor/Factory.hpp"
 
 // #########################################################################
@@ -53,8 +53,13 @@ bool is_cw()
     return _is_cw && theTransceiver->nranks() > 1;
 }
 
-static bool inited = false;
-static bool finied = false;
+bool is_spmd()
+{
+    return !_is_cw && theTransceiver->nranks() > 1;
+}
+
+bool inited = false;
+bool finied = false;
 
 // users currently need to call fini to make MPI terminate gracefully
 void fini()
@@ -107,7 +112,7 @@ PYBIND11_MODULE(_ddptensor, m) {
     Factory::init<F_GETITEM>();
     Factory::init<F_SETITEM>();
     Factory::init<F_RANDOM>();
-    Factory::init<F_REPLICATE>();
+    Factory::init<F_SERVICE>();
 
     theTransceiver = new MPITransceiver();
     theMediator = new MPIMediator();
@@ -146,19 +151,21 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<LinAlgOp>(m, "LinAlgOp")
         .def("vecdot", &LinAlgOp::vecdot);
 
-    py::class_<tensor_i::future_type>(m, "DPTFuture")
-        .def_property_readonly("dtype", [](const tensor_i::future_type & f) { return f.get()->dtype(); })
-        .def_property_readonly("shape", [](const tensor_i::future_type & f) { return f.get()->shape(); })
-        .def_property_readonly("size", [](const tensor_i::future_type & f) { return f.get()->size(); })
-        .def_property_readonly("ndim", [](const tensor_i::future_type & f) { return f.get()->ndim(); })
-        .def("__bool__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__bool__(); })
-        .def("__float__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__float__(); })
-        .def("__int__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__int__(); })
-        .def("__index__", [](const tensor_i::future_type & f) { return Replicate::replicate(f).get()->__int__(); })
-        .def("__len__", [](const tensor_i::future_type & f) { return f.get()->__len__(); })
-        .def("__repr__", [](const tensor_i::future_type & f) { return f.get()->__repr__(); })
+#define GET_REPL(_f) std::unique_ptr<ddptensor>(Service::replicate(f))->get().get()
+    py::class_<ddptensor>(m, "DDPTFuture")
+        .def_property_readonly("dtype", [](const ddptensor & f) { return f.get().get()->dtype(); })
+        .def_property_readonly("shape", [](const ddptensor & f) { return f.get().get()->shape(); })
+        .def_property_readonly("size", [](const ddptensor & f) { return f.get().get()->size(); })
+        .def_property_readonly("ndim", [](const ddptensor & f) { return f.get().get()->ndim(); })
+        .def("__bool__", [](const ddptensor & f) { return GET_REPL(f)->__bool__(); })
+        .def("__float__", [](const ddptensor & f) { return GET_REPL(f)->__float__(); })
+        .def("__int__", [](const ddptensor & f) { return GET_REPL(f)->__int__(); })
+        .def("__index__", [](const ddptensor & f) { return GET_REPL(f)->__int__(); })
+        .def("__len__", [](const ddptensor & f) { return f.get().get()->__len__(); })
+        .def("__repr__", [](const ddptensor & f) { return f.get().get()->__repr__(); })
         .def("__getitem__", &GetItem::__getitem__)
         .def("__setitem__", &SetItem::__setitem__);
+#undef GET_REPL
 
     py::class_<Random>(m, "Random")
         .def("seed", &Random::seed)

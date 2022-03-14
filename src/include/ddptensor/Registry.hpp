@@ -14,8 +14,8 @@ namespace Registry {
     constexpr static id_type NOGUID = -1;
 
     id_type get_guid();
-    extern void put(id_type id, tensor_i::ptr_type ptr);
-    tensor_i::ptr_type get(id_type id);
+    extern void put(const tensor_i::future_type & ptr);
+    tensor_i::future_type get(id_type id);
     void del(id_type id);
     void fini();
 };

@@ -79,8 +79,9 @@ namespace x {
             PVSlice my_rel_slice(g_slc_view, theTransceiver->rank());
             NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.slice_of_rank()); //slice());my_slice);
             
-            theTransceiver->barrier();
+            if(is_spmd()) theTransceiver->barrier();
             _set_slice<A>(a_ptr->xarray(), my_rel_slice, b_ptr, my_norm_slice, val_guid);
+            theTransceiver->barrier();
             return a_ptr;
         }
     };
@@ -135,14 +136,14 @@ struct DeferredSetItem : public Deferred
     NDSlice _slc;
     
     DeferredSetItem() = default;
-    DeferredSetItem(tensor_i::future_type & a, const tensor_i::future_type & b, const std::vector<py::slice> & v)
+    DeferredSetItem(const tensor_i::future_type & a, const tensor_i::future_type & b, const std::vector<py::slice> & v)
         : _a(a.id()), _b(b.id()), _slc(v)
     {}
     
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
-        const auto b = std::move(Registry::get(_b));
+        const auto a = std::move(Registry::get(_a).get());
+        const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
     }
 
@@ -160,9 +161,9 @@ struct DeferredSetItem : public Deferred
     }
 };
 
-tensor_i::future_type SetItem::__setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, const tensor_i::future_type & b)
+ddptensor * SetItem::__setitem__(ddptensor & a, const std::vector<py::slice> & v, const ddptensor & b)
 {
-    return defer<DeferredSetItem>(a, b, v);
+    return new ddptensor(defer<DeferredSetItem>(a.get(), b.get(), v));
 }
 
 struct DeferredGetItem : public Deferred
@@ -177,7 +178,7 @@ struct DeferredGetItem : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
+        const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
     }
 
@@ -194,20 +195,20 @@ struct DeferredGetItem : public Deferred
     }
 };
 
-tensor_i::future_type GetItem::__getitem__(const tensor_i::future_type & a, const std::vector<py::slice> & v)
- {
-    return defer<DeferredGetItem>(a, v);
+ddptensor * GetItem::__getitem__(const ddptensor & a, const std::vector<py::slice> & v)
+{
+    return new ddptensor(defer<DeferredGetItem>(a.get(), v));
 }
 
-py::object GetItem::get_slice(const tensor_i::future_type & a, const std::vector<py::slice> & v)
+py::object GetItem::get_slice(const ddptensor & a, const std::vector<py::slice> & v)
 {
     const auto aa = std::move(a.get());
-    return TypeDispatch<x::SPMD>(aa, NDSlice(v), a.id());
+    return TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
 }
 
-py::object GetItem::get_local(const tensor_i::future_type & a, py::handle h)
+py::object GetItem::get_local(const ddptensor & a, py::handle h)
 {
-    const auto aa = std::move(a.get());
+    const auto aa = std::move(a.get().get());
     return TypeDispatch<x::SPMD>(aa, h);
 }
 

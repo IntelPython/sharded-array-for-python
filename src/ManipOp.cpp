@@ -36,7 +36,7 @@ struct DeferredManipOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
+        const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::ManipOp>(a, _shape)));
     }
 
@@ -53,9 +53,9 @@ struct DeferredManipOp : public Deferred
     }
 };
 
-tensor_i::future_type ManipOp::reshape(const tensor_i::future_type & a, const shape_type & shape)
+ddptensor * ManipOp::reshape(const ddptensor & a, const shape_type & shape)
 {
-    return defer<DeferredManipOp>(a, shape);
+    return new ddptensor(defer<DeferredManipOp>(a.get(), shape));
 }
 
 FACTORY_INIT(DeferredManipOp, F_MANIPOP);

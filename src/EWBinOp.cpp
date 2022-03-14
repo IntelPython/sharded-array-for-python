@@ -149,8 +149,8 @@ struct DeferredEWBinOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
-        const auto b = std::move(Registry::get(_b));
+        const auto a = std::move(Registry::get(_a).get());
+        const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
     }
 
@@ -168,13 +168,13 @@ struct DeferredEWBinOp : public Deferred
     }
 };
 
-tensor_i::future_type EWBinOp::op(EWBinOpId op, const tensor_i::future_type & a, const py::object & b)
+ddptensor * EWBinOp::op(EWBinOpId op, const ddptensor & a, const py::object & b)
 {
     auto bb = Creator::mk_future(b);
     if(op == __MATMUL__) {
-        return LinAlgOp::vecdot(a, bb, 0);
+        return LinAlgOp::vecdot(a, *bb, 0);
     }
-    return defer<DeferredEWBinOp>(op, a, bb);
+    return new ddptensor(defer<DeferredEWBinOp>(op, a.get(), bb->get()));
 }
 
 FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);

@@ -11,6 +11,7 @@ Deferred::future_type Deferred::get_future()
     return {std::move(tensor_i::promise_type::get_future()), _guid};
 }
 
+#if 0
 void Deferred::set_value(tensor_i::ptr_type && v)
 {
     if(_guid != Registry::NOGUID) {
@@ -18,6 +19,7 @@ void Deferred::set_value(tensor_i::ptr_type && v)
     }
     tensor_i::promise_type::set_value(std::forward<tensor_i::ptr_type>(v));
 }
+#endif
 
 Deferred::future_type Deferred::defer(Deferred::ptr_type && d, bool is_global)
 {
@@ -26,6 +28,7 @@ Deferred::future_type Deferred::defer(Deferred::ptr_type && d, bool is_global)
         if(d) d->_guid = Registry::get_guid();
     }
     auto f = d ? d->get_future() : Deferred::future_type();
+    Registry::put(f);
     _deferred.push(std::move(d));
     return f;
 }

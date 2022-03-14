@@ -82,14 +82,14 @@ struct DeferredIEWBinOp : public Deferred
     IEWBinOpId _op;
 
     DeferredIEWBinOp() = default;
-    DeferredIEWBinOp(IEWBinOpId op, tensor_i::future_type & a, const tensor_i::future_type & b)
+    DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
         : _a(a.id()), _b(b.id()), _op(op)
     {}
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
-        const auto b = std::move(Registry::get(_b));
+        const auto a = std::move(Registry::get(_a).get());
+        const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
     }
      
@@ -107,9 +107,10 @@ struct DeferredIEWBinOp : public Deferred
     }
 };
 
-tensor_i::future_type IEWBinOp::op(IEWBinOpId op, tensor_i::future_type & a, const py::object & b)
+ddptensor * IEWBinOp::op(IEWBinOpId op, ddptensor & a, const py::object & b)
 {
-    return defer<DeferredIEWBinOp>(op, a, Creator::mk_future(b));
+    auto bb = Creator::mk_future(b);
+    return new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb->get()));
 }
 
 FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);

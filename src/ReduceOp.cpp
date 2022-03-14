@@ -78,7 +78,7 @@ struct DeferredReduceOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
+        const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
     }
 
@@ -96,9 +96,9 @@ struct DeferredReduceOp : public Deferred
     }
 };
 
-tensor_i::future_type ReduceOp::op(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
+ddptensor * ReduceOp::op(ReduceOpId op, const ddptensor & a, const dim_vec_type & dim)
 {
-    return defer<DeferredReduceOp>(op, a, dim);
+    return new ddptensor(defer<DeferredReduceOp>(op, a.get(), dim));
 }
 
 FACTORY_INIT(DeferredReduceOp, F_REDUCEOP);

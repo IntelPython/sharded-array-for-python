@@ -121,7 +121,7 @@ struct DeferredEWUnyOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a));
+        const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
     }
 
@@ -138,9 +138,9 @@ struct DeferredEWUnyOp : public Deferred
     }
 };
 
-tensor_i::future_type EWUnyOp::op(EWUnyOpId op, const tensor_i::future_type & a)
+ddptensor * EWUnyOp::op(EWUnyOpId op, const ddptensor & a)
 {
-    return defer<DeferredEWUnyOp>(op, a);
+    return new ddptensor(defer<DeferredEWUnyOp>(op, a.get()));
 }
 
 FACTORY_INIT(DeferredEWUnyOp, F_EWUNYOP);

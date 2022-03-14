@@ -62,9 +62,9 @@ struct DeferredRandomOp : public Deferred
 };
 
 
-Random::future_type Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
+ddptensor * Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
 {
-    return defer<DeferredRandomOp>(shape, x::to_native<double>(lower), x::to_native<double>(upper), dtype);
+    return new ddptensor(defer<DeferredRandomOp>(shape, x::to_native<double>(lower), x::to_native<double>(upper), dtype));
 }
 
 void Random::seed(uint64_t s)

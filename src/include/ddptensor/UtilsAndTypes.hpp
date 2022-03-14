@@ -191,6 +191,7 @@ py::tuple _make_tuple(const std::vector<T> & v)
 }
 
 extern bool is_cw();
+extern bool is_spmd();
 
 using id_type = uint64_t;
 
@@ -208,6 +209,6 @@ enum FactoryId : int {
     F_GETITEM,
     F_SETITEM,
     F_RANDOM,
-    F_REPLICATE,
+    F_SERVICE,
     FACTORY_LAST
 };

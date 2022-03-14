@@ -33,8 +33,11 @@ public:
             : std::shared_future<tensor_i::ptr_type>(std::move(f)),
             _id(id)
         {}
+        ~TFuture()
+        {
+        }
         
-        uint64_t id() const { return _id; }
+        id_type id() const { return _id; }
     };
 
     typedef TFuture future_type;

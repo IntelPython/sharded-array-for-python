@@ -118,6 +118,10 @@ struct Slice
     Slice map(const Slice & slc) const
     {
         value_type diff = slc._start - _start;
+        if(diff < 0) {
+            assert(slc.size() == 0);
+            return {0, 0, 1};
+        }
         value_type start = diff / _step;
         assert(diff % _step == 0);
         assert((slc._step == _step));

@@ -16,7 +16,7 @@ struct Deferred : tensor_i::promise_type
     Deferred() = default;
     Deferred(const Deferred &) = delete;
     future_type get_future();
-    void set_value(tensor_i::ptr_type &&);
+    // void set_value(tensor_i::ptr_type &&);
 
     virtual ~Deferred() {}
     virtual void run() = 0;

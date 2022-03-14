@@ -3,10 +3,10 @@
 #pragma once
 
 #include "UtilsAndTypes.hpp"
-#include "tensor_i.hpp"
+#include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
 struct EWBinOp
 {
-    static tensor_i::future_type op(EWBinOpId op, const tensor_i::future_type & a, const py::object & b);
+    static ddptensor * op(EWBinOpId op, const ddptensor & a, const py::object & b);
 };

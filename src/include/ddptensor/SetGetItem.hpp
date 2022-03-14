@@ -3,17 +3,17 @@
 #pragma once
 
 #include "UtilsAndTypes.hpp"
-#include "tensor_i.hpp"
+#include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
 struct GetItem
 {
-    static tensor_i::future_type __getitem__(const tensor_i::future_type & a, const std::vector<py::slice> & v);
-    static py::object get_slice(const tensor_i::future_type & a, const std::vector<py::slice> & v);
-    static py::object get_local(const tensor_i::future_type & a, py::handle h);
+    static ddptensor * __getitem__(const ddptensor & a, const std::vector<py::slice> & v);
+    static py::object get_slice(const ddptensor & a, const std::vector<py::slice> & v);
+    static py::object get_local(const ddptensor & a, py::handle h);
 };
 
 struct SetItem
 {
-    static tensor_i::future_type __setitem__(tensor_i::future_type & a, const std::vector<py::slice> & v, const tensor_i::future_type & b);
+    static ddptensor * __setitem__(ddptensor & a, const std::vector<py::slice> & v, const ddptensor & b);
 };

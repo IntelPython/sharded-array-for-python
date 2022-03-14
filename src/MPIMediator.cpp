@@ -64,7 +64,7 @@ void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void
     ser.adapter().flush();
     int cnt = static_cast<int>(ser.adapter().writtenBytesCount());
 
-    auto sz = slice.size() * Registry::get(id)->item_size();
+    auto sz = slice.size() * Registry::get(id).get()->item_size();
     MPI_Irecv(rbuff, sz, MPI_CHAR, from, PUSH_TAG, comm, &request[1]);
     MPI_Isend(buff.data(), cnt, MPI_CHAR, from, REQ_TAG, comm, &request[0]);
     auto error_code = MPI_Waitall(2, &request[0], &status[0]);
@@ -173,7 +173,7 @@ void MPIMediator::listen()
             MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, comm, &request_in);
             
             // Now find the array in question and send back its bufferized slice
-            tensor_i::ptr_type ptr = Registry::get(id);
+            tensor_i::ptr_type ptr = Registry::get(id).get();
             // Wait for previous answer to complete so that we can re-use the buffer
             MPI_Wait(&request_out, MPI_STATUS_IGNORE);
             ptr->bufferize(slice, rbuff);

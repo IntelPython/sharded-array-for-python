@@ -89,9 +89,9 @@ struct DeferredFromShape : public Deferred
     }
 };
 
-tensor_i::future_type Creator::create_from_shape(CreatorId op, const shape_type & shape, DTypeId dtype)
+ddptensor * Creator::create_from_shape(CreatorId op, const shape_type & shape, DTypeId dtype)
 {
-    return defer<DeferredFromShape>(op, shape, dtype);
+    return new ddptensor(defer<DeferredFromShape>(op, shape, dtype));
 }
 
 struct DeferredFull : public Deferred
@@ -125,10 +125,10 @@ struct DeferredFull : public Deferred
     }
 };
 
-tensor_i::future_type Creator::full(const shape_type & shape, const py::object & val, DTypeId dtype)
+ddptensor * Creator::full(const shape_type & shape, const py::object & val, DTypeId dtype)
 {
     auto v = mk_scalar(val, dtype);
-    return defer<DeferredFull>(shape, v, dtype);
+    return new ddptensor(defer<DeferredFull>(shape, v, dtype));
 }
 
 struct DeferredArange : public Deferred
@@ -161,15 +161,15 @@ struct DeferredArange : public Deferred
     }
 };
 
-tensor_i::future_type Creator::arange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype)
+ddptensor * Creator::arange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype)
 {
-    return defer<DeferredArange>(start, end, step, dtype);
+    return new ddptensor(defer<DeferredArange>(start, end, step, dtype));
 }
 
-tensor_i::future_type Creator::mk_future(const py::object & b)
+ddptensor * Creator::mk_future(const py::object & b)
 {
-    if(py::isinstance<tensor_i::future_type>(b)) {
-        return b.cast<tensor_i::future_type>();
+    if(py::isinstance<ddptensor>(b)) {
+        return b.cast<ddptensor*>();
     } else if(py::isinstance<py::float_>(b)) {
         return Creator::full({1}, b, FLOAT64);
     } else if(py::isinstance<py::int_>(b)) {
