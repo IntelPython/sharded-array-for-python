@@ -58,6 +58,7 @@ namespace x
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
               _slice(std::move(slc)), // static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
+              _lslice(to_xt(_slice.local_slice_of_rank())),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
             if(owner != NOOWNER)
@@ -115,7 +116,7 @@ namespace x
         DPTensorX(O && org, PVSlice && slc)
             : _owner(theTransceiver->rank()),
               _slice(std::forward<PVSlice>(slc)),
-              _lslice(to_xt(_slice.slice())),
+              _lslice(to_xt(_slice.local_slice_of_rank())),
               _xarray()
         {
             _xarray = org;

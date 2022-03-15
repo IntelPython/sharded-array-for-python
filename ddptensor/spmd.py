@@ -5,3 +5,6 @@ def get_slice(obj, *args):
 
 def get_local(obj):
     return  _cdt._get_local(obj._t, obj)
+
+def gather(obj):
+    return  _cdt._gather(obj._t)

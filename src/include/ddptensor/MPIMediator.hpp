@@ -2,12 +2,14 @@
 
 #pragma once
 
+#include <mpi.h>
 #include <thread>
 #include "Mediator.hpp"
 
 class MPIMediator : public Mediator
 {
     std::thread * _listener;
+    MPI_Comm _comm;
 
 public:
     MPIMediator();

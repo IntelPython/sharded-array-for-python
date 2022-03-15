@@ -83,6 +83,8 @@ void fini()
 void init(bool cw)
 {
     if(inited) return;
+    theTransceiver = new MPITransceiver();
+    theMediator = new MPIMediator();
     if(cw) {
         _is_cw = true;
         if(theTransceiver->rank()) {
@@ -114,9 +116,6 @@ PYBIND11_MODULE(_ddptensor, m) {
     Factory::init<F_RANDOM>();
     Factory::init<F_SERVICE>();
 
-    theTransceiver = new MPITransceiver();
-    theMediator = new MPIMediator();
-
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
@@ -126,7 +125,8 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("sync", &sync)
         .def("myrank", &myrank)
         .def("_get_slice", &GetItem::get_slice)
-        .def("_get_local", &GetItem::get_local);
+        .def("_get_local", &GetItem::get_local)
+        .def("_gather", &GetItem::gather);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)

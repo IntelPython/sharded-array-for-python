@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <mpi.h>
 #include "Transceiver.hpp"
 
 class MPITransceiver : public Transceiver
@@ -19,6 +20,11 @@ public:
     {
         return _rank;
     }
+
+    MPI_Comm comm() const
+    {
+        return _comm;
+    }
     
 
     virtual void barrier();
@@ -32,6 +38,10 @@ public:
                           const int* counts_recv,
                           const int* displacements_recv,
                           DTypeId datatype_recv);
+    virtual void allgather(void* buffer,
+                           const int* counts,
+                           const int* displacements,
+                           DTypeId datatype);
     virtual void send_recv(void* buffer_send,
                            int count_send,
                            DTypeId datatype_send,
@@ -40,4 +50,5 @@ public:
 
 private:
     rank_type _nranks, _rank;
+    MPI_Comm _comm;
 };

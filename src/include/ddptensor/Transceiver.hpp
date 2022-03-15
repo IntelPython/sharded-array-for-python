@@ -39,6 +39,11 @@ public:
                           const int* displacements_recv,
                           DTypeId datatype_recv) = 0;
 
+    virtual void allgather(void* buffer,
+                           const int* counts,
+                           const int* displacements,
+                           DTypeId datatype) = 0;
+
     virtual void send_recv(void* buffer_send,
                            int count_send,
                            DTypeId datatype_send,

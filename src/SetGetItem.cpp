@@ -14,11 +14,11 @@ namespace x {
         template<typename T>
         static ptr_type op(const NDSlice & slice, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            auto nd = a_ptr->shape().size();
-            if(nd != slice.ndims())
+            const auto & slc = a_ptr->slice();
+            if(slc.ndims() != slice.ndims())
                 throw std::runtime_error("Index dimensionality must match array dimensionality");
 
-            return operatorx<T>::mk_tx(*a_ptr.get(), slice);
+            return operatorx<T>::mk_tx(*a_ptr.get(), slice.trim(slc.slice()));
         }
     };
 
@@ -50,7 +50,6 @@ namespace x {
                 NDSlice my_curr_local_slice = my_curr_needed_view.local_slice_of_rank(theTransceiver->rank());
 
                 if(curr_needed_norm_slice.size()) {
-                    py::tuple tpl = _make_tuple(my_curr_local_slice); //my_curr_view.slice());
                     if(i == theTransceiver->rank()) {
                         // copy locally
                         auto to_v   = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
@@ -124,6 +123,44 @@ namespace x {
             strides.back() = slc.dim(nd-1)._step * sizeof(T);
             T * data = a_ptr->xarray().data();
             return py::array(std::move(slc.shape()), std::move(strides), data + off, handle);
+        }
+
+        // gather
+        // We simply create a local buffer, copy our local data to the right place
+        // and then call AllGatherV via inplace operation.
+        template<typename T>
+        static py::object op(const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        {
+            auto nranks = theTransceiver->nranks();
+            auto rank = theTransceiver->rank();
+            const auto & slc = a_ptr->slice();
+
+            // create buffer/numpy array
+            auto res = py::array_t<T>(std::move(slc.shape()));
+            T * ptr = reinterpret_cast<T*>(res.mutable_data());
+            int displacements[nranks];
+            int counts[nranks];
+            int off = 0;
+            // for each rank compute counts and displacements
+            for(auto i=0; i<nranks; ++i) {
+                uint64_t szi = slc.slice_of_rank(i).size();
+                counts[i] = szi;
+                displacements[i] = off;
+                // copy our local data
+                if(i == rank) {
+                    if(a_ptr->is_sliced()) {
+                        // if non-contiguous copy element by element
+                        const auto & av = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
+                        uint64_t i = off-1;
+                        for(auto v : av) ptr[++i] = v;
+                    } else {
+                        memcpy(&ptr[off], a_ptr->xarray().data(), szi*sizeof(T));
+                    }
+                }
+                off += szi;
+            }
+            theTransceiver->allgather(ptr, counts, displacements, DTYPE<T>::value);
+            return res;
         }
     };
 
@@ -210,6 +247,12 @@ py::object GetItem::get_local(const ddptensor & a, py::handle h)
 {
     const auto aa = std::move(a.get().get());
     return TypeDispatch<x::SPMD>(aa, h);
+}
+
+py::object GetItem::gather(const ddptensor & a)
+{
+    const auto aa = std::move(a.get().get());
+    return TypeDispatch<x::SPMD>(aa);
 }
 
 FACTORY_INIT(DeferredGetItem, F_GETITEM);

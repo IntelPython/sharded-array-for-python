@@ -8,6 +8,7 @@
 
 #include "ddptensor/UtilsAndTypes.hpp"
 #include "ddptensor/MPIMediator.hpp"
+#include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/NDSlice.hpp"
 #include "ddptensor/Factory.hpp"
 
@@ -18,14 +19,16 @@ constexpr static int DEFER_TAG = 14714;
 constexpr static int EXIT_TAG = 14715;
 static std::mutex ak_mutex;
 
-void send_to_workers(const Deferred::ptr_type & dfrd, bool self = false);
+void send_to_workers(const Deferred::ptr_type & dfrd, bool self, MPI_Comm comm);
 
 MPIMediator::MPIMediator()
     : _listener(nullptr)
 {
-    MPI_Comm comm = MPI_COMM_WORLD;
+    auto c = dynamic_cast<MPITransceiver*>(theTransceiver);
+    if(c == nullptr) throw std::runtime_error("Expected Transceiver to be MPITransceiver.");
+    _comm = c->comm();
     int sz;
-    MPI_Comm_size(comm, &sz);
+    MPI_Comm_size(_comm, &sz);
     if(sz > 1)
         _listener = new std::thread(&MPIMediator::listen, this);
 }
@@ -33,14 +36,13 @@ MPIMediator::MPIMediator()
 MPIMediator::~MPIMediator()
 {
     std::cerr << "MPIMediator::~MPIMediator()" << std::endl;
-    MPI_Comm comm = MPI_COMM_WORLD;
     int rank, sz;
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &sz);
+    MPI_Comm_rank(_comm, &rank);
+    MPI_Comm_size(_comm, &sz);
 
     if(is_cw() && rank == 0) to_workers(nullptr);
-    MPI_Barrier(comm);
-    if(!is_cw() || rank == 0) send_to_workers(nullptr, true);
+    MPI_Barrier(_comm);
+    if(!is_cw() || rank == 0) send_to_workers(nullptr, true, _comm);
     if(_listener) {
         _listener->join();
         delete _listener;
@@ -50,7 +52,6 @@ MPIMediator::~MPIMediator()
 
 void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void * rbuff)
 {
-    MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Request request[2];
     MPI_Status status[2];
     Buffer buff;
@@ -65,8 +66,8 @@ void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void
     int cnt = static_cast<int>(ser.adapter().writtenBytesCount());
 
     auto sz = slice.size() * Registry::get(id).get()->item_size();
-    MPI_Irecv(rbuff, sz, MPI_CHAR, from, PUSH_TAG, comm, &request[1]);
-    MPI_Isend(buff.data(), cnt, MPI_CHAR, from, REQ_TAG, comm, &request[0]);
+    MPI_Irecv(rbuff, sz, MPI_CHAR, from, PUSH_TAG, _comm, &request[1]);
+    MPI_Isend(buff.data(), cnt, MPI_CHAR, from, REQ_TAG, _comm, &request[0]);
     auto error_code = MPI_Waitall(2, &request[0], &status[0]);
     if (error_code != MPI_SUCCESS) {
         throw std::runtime_error("MPI_Waitall returned error code " + std::to_string(error_code));
@@ -81,10 +82,9 @@ void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void
     if(cnt != sz) throw(std::runtime_error("Received unexpected message size."));
 }
 
-void send_to_workers(const Deferred::ptr_type & dfrd, bool self)
+void send_to_workers(const Deferred::ptr_type & dfrd, bool self, MPI_Comm comm)
 {
     int rank, sz;
-    MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &sz);
 
@@ -126,22 +126,21 @@ void send_to_workers(const Deferred::ptr_type & dfrd, bool self)
 
 void MPIMediator::to_workers(const Deferred::ptr_type & dfrd)
 {
-    send_to_workers(dfrd);
+    send_to_workers(dfrd, false, _comm);
 }
 
 void MPIMediator::listen()
 {
     int nranks;
-    MPI_Comm_size(MPI_COMM_WORLD, &nranks);
+    MPI_Comm_size(_comm, &nranks);
     if(nranks < 2 ) return;
 
     constexpr int BSZ = 256;
-    MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Request request_in = MPI_REQUEST_NULL, request_out = MPI_REQUEST_NULL;
     Buffer rbuff;
     // Issue async recv request
     Buffer buff(BSZ);
-    MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, comm, &request_in);
+    MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, _comm, &request_in);
     do {
         MPI_Status status;
         // Wait for any request
@@ -170,7 +169,7 @@ void MPIMediator::listen()
             
             // Issue async recv request for next msg
             buff.resize(BSZ);
-            MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, comm, &request_in);
+            MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, _comm, &request_in);
             
             // Now find the array in question and send back its bufferized slice
             tensor_i::ptr_type ptr = Registry::get(id).get();
@@ -178,7 +177,7 @@ void MPIMediator::listen()
             MPI_Wait(&request_out, MPI_STATUS_IGNORE);
             ptr->bufferize(slice, rbuff);
             if(slice.size() * ptr->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
-            MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, comm, &request_out);
+            MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, _comm, &request_out);
             break;
         }
         case EXIT_TAG:
@@ -190,7 +189,7 @@ void MPIMediator::listen()
         if(request_in == MPI_REQUEST_NULL) {
             // Issue async recv request for next msg
             buff.resize(BSZ);
-            MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, comm, &request_in);
+            MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, _comm, &request_in);
         }
     } while(true);
     // MPI_Cancel(&request_in);

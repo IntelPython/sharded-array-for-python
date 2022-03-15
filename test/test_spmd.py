@@ -36,3 +36,19 @@ class TestSPMD:
         v = 32*32-MPI.COMM_WORLD.size
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
+
+    def test_gather(self):
+        a = dt.reshape(dt.arange(0, 110, 1, dtype=dt.float64), [11, 10])
+        b = dt.spmd.gather(a)
+        c = np.sum(b)
+        v = np.sum(np.reshape(np.arange(0, 110, 1, dtype=np.float64), (11, 10)))
+        assert float(c) == v
+        MPI.COMM_WORLD.barrier()
+
+    def test_gather_strided(self):
+        a = dt.reshape(dt.arange(0, 110, 1, dtype=dt.float64), [11, 10])
+        b = dt.spmd.gather(a[4:12:2, 1:11:3])
+        c = np.sum(b)
+        v = np.sum(np.reshape(np.arange(0, 110, 1, dtype=np.float64), (11, 10))[4:12:2, 1:11:3])
+        assert float(c) == v
+        MPI.COMM_WORLD.barrier()

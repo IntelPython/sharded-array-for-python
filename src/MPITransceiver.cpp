@@ -2,9 +2,11 @@
 
 #include <mpi.h>
 #include <limits>
+#include <sstream>
 #include "ddptensor/MPITransceiver.hpp"
 
 MPITransceiver::MPITransceiver()
+    : _nranks(1), _rank(0), _comm(MPI_COMM_WORLD)
 {
     int flag;
     MPI_Initialized(&flag);
@@ -21,9 +23,81 @@ MPITransceiver::MPITransceiver()
             throw(std::logic_error("MPI had been initialized incorrectly: not MPI_THREAD_MULTIPLE"));
         std::cerr << "MPI already initialized\n";
     }
+
     int nranks, rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &nranks);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(_comm, &rank);
+    MPI_Comm parentComm;
+    MPI_Comm_get_parent(&parentComm);
+
+    // rank father-of-all checks if he's requested to spawn processes:
+    if(rank == 0 && parentComm == MPI_COMM_NULL) {
+        // Ok, let's spawn the clients.
+        // I need some information for the startup.
+        // 1. Name of the executable (default is the current exe)
+        const char * _tmp = getenv("DDPT_MPI_SPAWN");
+        if(_tmp) {
+            int nClientsToSpawn = atol(_tmp);
+            _tmp = getenv("DDPT_MPI_EXECUTABLE");
+            std::string clientExe(_tmp ? _tmp : getenv("PYTHON_EXE"));
+            if(clientExe.empty()) throw std::runtime_error("Spawning MPI processes requires setting 'DDPT_MPI_EXECUTABLE' or 'PYTHON_EXE'");
+
+            // 2. arguments
+            _tmp = getenv("DDPT_MPI_EXE_ARGS");
+            std::vector<std::string> args;
+            if(_tmp) {
+                std::istringstream iss(_tmp);
+                std::copy(std::istream_iterator<std::string>(iss),
+                          std::istream_iterator<std::string>(),
+                          std::back_inserter(args));
+            } else {
+                _tmp = "-c import ddptensor as dt; dt.init(True)";
+                args.push_back("-c");
+                args.push_back("import ddptensor as dt; dt.init(True)");
+            }
+            const char * clientArgs[args.size()+1];
+            for(int i=0; i<args.size(); ++i) clientArgs[i] = args[i].c_str();
+            clientArgs[args.size()] = nullptr;
+
+            // 3. Special setting for MPI_Info: hosts
+            const char * clientHost = getenv("DDPT_MPI_HOSTS");
+
+            // Prepare MPI_Info object:
+            MPI_Info clientInfo = MPI_INFO_NULL;
+            if(clientHost) {
+                MPI_Info_create(&clientInfo);
+                MPI_Info_set(clientInfo, const_cast< char * >("host"), const_cast< char * >(clientHost));
+                std::cerr << "[DDPT " << rank << "] Set MPI_Info_set(\"host\", \"" << clientHost << "\")\n";
+            }
+            // Now spawn the client processes:
+            // can't use Speaker yet, need Channels to be inited
+            std::cerr << "[DDPT " << rank << "] Spawning " << nClientsToSpawn << " MPI processes ("
+                      << clientExe << " "  << _tmp << ")" << std::endl;
+            int* errCodes = new int[nClientsToSpawn];
+            MPI_Comm interComm;
+            int err = MPI_Comm_spawn(const_cast< char * >(clientExe.c_str()),
+                                     const_cast< char ** >(clientArgs),
+                                     nClientsToSpawn, clientInfo, 0,
+                                     MPI_COMM_WORLD, &interComm, errCodes);
+            delete [] errCodes;
+            if (err) {
+                // can't use Speaker yet, need Channels to be inited
+                std::cerr << "[DDPT " << rank << "] Error in MPI_Comm_spawn. Skipping process spawning";
+            } else {
+                MPI_Intercomm_merge(interComm, 0, &_comm);
+            }
+        } // else {
+        // No process spawning
+        // MPI-1 situation: all clients to be started by mpiexec
+        //                    _comm = MPI_COMM_WORLD;
+        //}
+    }
+    if(parentComm != MPI_COMM_NULL) {
+        // I am a child. Build intra-comm to the parent.
+        MPI_Intercomm_merge(parentComm, 1, &_comm);
+    }
+
+    MPI_Comm_size(_comm, &nranks);
+    MPI_Comm_rank(_comm, &rank);
     _nranks = nranks;
     _rank = rank;
 };
@@ -73,17 +147,17 @@ static MPI_Op to_mpi(RedOpType o)
 
 void MPITransceiver::barrier()
 {
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(_comm);
 }
 
 void MPITransceiver::bcast(void * ptr, size_t N, rank_type root)
 {
-    MPI_Bcast(ptr, N, MPI_CHAR, root, MPI_COMM_WORLD);
+    MPI_Bcast(ptr, N, MPI_CHAR, root, _comm);
 }
 
 void MPITransceiver::reduce_all(void * inout, DTypeId T, size_t N, RedOpType op)
 {
-    MPI_Allreduce(MPI_IN_PLACE, inout, N, to_mpi(T), to_mpi(op), MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, inout, N, to_mpi(T), to_mpi(op), _comm);
 }
 
 void MPITransceiver::alltoall(const void* buffer_send,
@@ -103,7 +177,17 @@ void MPITransceiver::alltoall(const void* buffer_send,
                   counts_recv,
                   displacements_recv,
                   to_mpi(datatype_recv),
-                  MPI_COMM_WORLD);
+                  _comm);
+}
+
+void MPITransceiver::allgather(void* buffer,
+                               const int* counts,
+                               const int* displacements,
+                               DTypeId datatype)
+{
+    MPI_Allgatherv(MPI_IN_PLACE, 0, to_mpi(datatype),
+                   buffer, counts, displacements, to_mpi(datatype),
+                   _comm);
 }
 
 void MPITransceiver::send_recv(void* buffer_send,
@@ -120,6 +204,6 @@ void MPITransceiver::send_recv(void* buffer_send,
                          SRTAG,
                          source,
                          SRTAG,
-                         MPI_COMM_WORLD,
+                         _comm,
                          MPI_STATUS_IGNORE);
 }
