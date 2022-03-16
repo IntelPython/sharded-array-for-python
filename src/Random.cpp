@@ -69,7 +69,7 @@ ddptensor * Random::rand(DTypeId dtype, const shape_type & shape, const py::obje
 
 void Random::seed(uint64_t s)
 {
-    defer([s](){xt::random::seed(s); return tensor_i::ptr_type();});
+    defer_lambda([s](){xt::random::seed(s); return tensor_i::ptr_type();});
 }
 
 FACTORY_INIT(DeferredRandomOp, F_RANDOM);

@@ -15,7 +15,7 @@ public:
     MPIMediator();
     virtual ~MPIMediator();
     virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer);
-    virtual void to_workers(const Deferred::ptr_type & dfrd);
+    virtual void to_workers(const Runable * dfrd);
 
 protected:
     void listen();

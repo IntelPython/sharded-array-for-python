@@ -11,7 +11,8 @@ struct GetItem
     static ddptensor * __getitem__(const ddptensor & a, const std::vector<py::slice> & v);
     static py::object get_slice(const ddptensor & a, const std::vector<py::slice> & v);
     static py::object get_local(const ddptensor & a, py::handle h);
-    static py::object gather(const ddptensor & a);
+    static py::object gather(const ddptensor & a, rank_type root);
+    static py::object do_gather(const tensor_i::ptr_type & a, rank_type root);
 };
 
 struct SetItem

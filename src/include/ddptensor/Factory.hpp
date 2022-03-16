@@ -10,8 +10,8 @@ struct Factory
     using ptr_type = std::unique_ptr<Factory>;
 
     virtual ~Factory() {};
-    virtual Deferred::ptr_type create(Deserializer &) const = 0;
-    virtual void serialize(Serializer & ser, const Deferred::ptr_type & ptr) const = 0;
+    virtual Runable::ptr_type create(Deserializer &) const = 0;
+    virtual void serialize(Serializer & ser, const Runable * ptr) const = 0;
     virtual FactoryId id() const = 0;
 
     template<FactoryId ID> static void init();
@@ -22,19 +22,19 @@ struct Factory
 template<typename D, FactoryId fid>
 struct FactoryImpl : public Factory
 {
-    Deferred::ptr_type create(Deserializer & ser) const
+    Runable::ptr_type create(Deserializer & ser) const
     {
         auto dfrd = std::make_unique<D>();
         dfrd->serialize(ser);
         return dfrd;
     }
 
-    void serialize(Serializer & ser, const Deferred::ptr_type & ptr) const
+    void serialize(Serializer & ser, const Runable * ptr) const
     {
-        D * dfrd = dynamic_cast<D *>(ptr.get());
+        auto dfrd = dynamic_cast<const D *>(ptr);
         if(!dfrd)
             throw std::runtime_error("Invalid Deferred object: dynamic cast failed");
-        dfrd->serialize(ser);
+        const_cast<D *>(dfrd)->serialize(ser);
     }
 
     FactoryId id() const

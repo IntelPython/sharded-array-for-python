@@ -25,7 +25,7 @@ using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
 using Serializer = bitsery::Serializer<OutputAdapter>;
 using Deserializer = bitsery::Deserializer<InputAdapter>;
 
-enum : rank_type {
+enum _RANKS: rank_type {
     NOOWNER    = std::numeric_limits<rank_type>::max(),
     REPLICATED = std::numeric_limits<rank_type>::max() - 1,
     _OWNER_END = std::numeric_limits<rank_type>::max() - 1
@@ -210,5 +210,6 @@ enum FactoryId : int {
     F_SETITEM,
     F_RANDOM,
     F_SERVICE,
+    F_TONUMPY,
     FACTORY_LAST
 };

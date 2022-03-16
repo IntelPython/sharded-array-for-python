@@ -34,6 +34,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/Service.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/IO.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -68,7 +69,7 @@ void fini()
     delete theMediator;  // stop task is sent in here
     theMediator = nullptr;
     if(pprocessor) {
-        if(theTransceiver->nranks() == 1) Deferred::defer(nullptr, false);
+        if(theTransceiver->nranks() == 1) defer(nullptr);
         pprocessor->join();
         delete pprocessor;
     }
@@ -115,10 +116,13 @@ PYBIND11_MODULE(_ddptensor, m) {
     Factory::init<F_SETITEM>();
     Factory::init<F_RANDOM>();
     Factory::init<F_SERVICE>();
+    Factory::init<F_TONUMPY>();
 
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
+    py::enum_<_RANKS>(m, "_Ranks")
+        .value("_REPLICATED", REPLICATED);
 
     m.def("fini", &fini)
         .def("init", &init)
@@ -126,7 +130,8 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("myrank", &myrank)
         .def("_get_slice", &GetItem::get_slice)
         .def("_get_local", &GetItem::get_local)
-        .def("_gather", &GetItem::gather);
+        .def("_gather", &GetItem::gather)
+        .def("to_numpy", &IO::to_numpy);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)

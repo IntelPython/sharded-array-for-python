@@ -77,7 +77,7 @@ namespace x {
             PVSlice g_slc_view(a_ptr->slice(), slice);
             PVSlice my_rel_slice(g_slc_view, theTransceiver->rank());
             NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.slice_of_rank()); //slice());my_slice);
-            
+
             if(is_spmd()) theTransceiver->barrier();
             _set_slice<A>(a_ptr->xarray(), my_rel_slice, b_ptr, my_norm_slice, val_guid);
             theTransceiver->barrier();
@@ -129,21 +129,29 @@ namespace x {
         // We simply create a local buffer, copy our local data to the right place
         // and then call AllGatherV via inplace operation.
         template<typename T>
-        static py::object op(const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static py::object op(rank_type root, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
             auto nranks = theTransceiver->nranks();
             auto rank = theTransceiver->rank();
+            bool sendonly = root != REPLICATED && root != rank;
             const auto & slc = a_ptr->slice();
+            auto mysz = slc.slice_of_rank().size();
 
             // create buffer/numpy array
-            auto res = py::array_t<T>(std::move(slc.shape()));
-            T * ptr = reinterpret_cast<T*>(res.mutable_data());
+            T * ptr = nullptr;
+            py::array res;
+            if(sendonly) {
+                if(mysz > 0 && a_ptr->is_sliced()) ptr = new T[mysz];
+            } else {
+                res = py::array_t<T>(std::move(slc.shape()));
+                ptr = reinterpret_cast<T*>(res.mutable_data());
+            }
             int displacements[nranks];
             int counts[nranks];
             int off = 0;
             // for each rank compute counts and displacements
             for(auto i=0; i<nranks; ++i) {
-                uint64_t szi = slc.slice_of_rank(i).size();
+                uint64_t szi = i == rank ? mysz : slc.slice_of_rank(i).size();
                 counts[i] = szi;
                 displacements[i] = off;
                 // copy our local data
@@ -151,15 +159,17 @@ namespace x {
                     if(a_ptr->is_sliced()) {
                         // if non-contiguous copy element by element
                         const auto & av = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
-                        uint64_t i = off-1;
-                        for(auto v : av) ptr[++i] = v;
+                        uint64_t j = sendonly ? -1 : off - 1;
+                        for(auto v : av) ptr[++j] = v;
                     } else {
-                        memcpy(&ptr[off], a_ptr->xarray().data(), szi*sizeof(T));
+                        if(sendonly && mysz > 0) ptr = a_ptr->xarray().data();
+                        else memcpy(&ptr[off], a_ptr->xarray().data(), szi*sizeof(T));
                     }
                 }
                 off += szi;
             }
-            theTransceiver->allgather(ptr, counts, displacements, DTYPE<T>::value);
+            theTransceiver->gather(ptr, counts, displacements, DTYPE<T>::value, root);
+            if(sendonly && mysz > 0 && a_ptr->is_sliced()) delete [] ptr;
             return res;
         }
     };
@@ -171,12 +181,12 @@ struct DeferredSetItem : public Deferred
     id_type _a;
     id_type _b;
     NDSlice _slc;
-    
+
     DeferredSetItem() = default;
     DeferredSetItem(const tensor_i::future_type & a, const tensor_i::future_type & b, const std::vector<py::slice> & v)
         : _a(a.id()), _b(b.id()), _slc(v)
     {}
-    
+
     void run()
     {
         const auto a = std::move(Registry::get(_a).get());
@@ -249,10 +259,15 @@ py::object GetItem::get_local(const ddptensor & a, py::handle h)
     return TypeDispatch<x::SPMD>(aa, h);
 }
 
-py::object GetItem::gather(const ddptensor & a)
+py::object GetItem::do_gather(const tensor_i::ptr_type & a, rank_type root)
+{
+    return TypeDispatch<x::SPMD>(a, root);
+}
+
+py::object GetItem::gather(const ddptensor & a, rank_type root)
 {
     const auto aa = std::move(a.get().get());
-    return TypeDispatch<x::SPMD>(aa);
+    return do_gather(aa, root);
 }
 
 FACTORY_INIT(DeferredGetItem, F_GETITEM);

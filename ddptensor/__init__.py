@@ -43,6 +43,9 @@ def init(cw=None):
     cw = _ddpt_cw if cw is None else cw
     _init(cw)
 
+def to_numpy(a):
+    return _cdt.to_numpy(a._t)
+
 for op in api.api_categories["EWBinOp"]:
     if not op.startswith("__"):
         OP = op.upper()

@@ -38,10 +38,11 @@ public:
                           const int* counts_recv,
                           const int* displacements_recv,
                           DTypeId datatype_recv);
-    virtual void allgather(void* buffer,
-                           const int* counts,
-                           const int* displacements,
-                           DTypeId datatype);
+    virtual void gather(void* buffer,
+                        const int* counts,
+                        const int* displacements,
+                        DTypeId datatype,
+                        rank_type root);
     virtual void send_recv(void* buffer_send,
                            int count_send,
                            DTypeId datatype_send,

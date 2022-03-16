@@ -4,43 +4,49 @@
 #include "include/ddptensor/Mediator.hpp"
 #include "include/ddptensor/Registry.hpp"
 
-static tbb::concurrent_bounded_queue<Deferred::ptr_type> _deferred;
+static tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
+
+void push_runable(Runable::ptr_type && r)
+{
+    _deferred.push(std::move(r));
+}
+
+void _dist(const Runable * p)
+{
+    if(is_cw() && theTransceiver->rank() == 0)
+        theMediator->to_workers(p);
+}
 
 Deferred::future_type Deferred::get_future()
 {
-    return {std::move(tensor_i::promise_type::get_future()), _guid};
+    return {std::move(tensor_i::promise_type::get_future().share()), _guid};
 }
 
-#if 0
-void Deferred::set_value(tensor_i::ptr_type && v)
+Deferred::future_type defer_tensor(Runable::ptr_type && _d, bool is_global)
 {
-    if(_guid != Registry::NOGUID) {
-        Registry::put(_guid, v);
-    }
-    tensor_i::promise_type::set_value(std::forward<tensor_i::ptr_type>(v));
-}
-#endif
-
-Deferred::future_type Deferred::defer(Deferred::ptr_type && d, bool is_global)
-{
+    Deferred * d = dynamic_cast<Deferred*>(_d.get());
+    if(!d) throw std::runtime_error("Expected Deferred Tensor promise");
     if(is_global) {
-        if(is_cw() && theTransceiver->rank() == 0) theMediator->to_workers(d);
-        if(d) d->_guid = Registry::get_guid();
+        _dist(d);
+        d->_guid = Registry::get_guid();
     }
-    auto f = d ? d->get_future() : Deferred::future_type();
+    auto f = d->get_future();
     Registry::put(f);
-    _deferred.push(std::move(d));
+    push_runable(std::move(_d));
     return f;
 }
 
-Deferred::ptr_type Deferred::undefer_next()
+void Deferred::defer(Runable::ptr_type && p)
 {
-    Deferred::ptr_type r;
-    _deferred.pop(r);
-    return r;
+    defer_tensor(std::move(p), true);
 }
 
-void Deferred::fini()
+void Runable::defer(Runable::ptr_type && p)
+{
+    push_runable(std::move(p));
+}
+
+void Runable::fini()
 {
     _deferred.clear();
 }
@@ -48,7 +54,7 @@ void Deferred::fini()
 void process_promises()
 {
     while(true) {
-        Deferred::ptr_type d;
+        Runable::ptr_type d;
         _deferred.pop(d);
         if(d) d->run();
         else break;

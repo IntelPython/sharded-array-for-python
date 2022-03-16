@@ -19,7 +19,7 @@ constexpr static int DEFER_TAG = 14714;
 constexpr static int EXIT_TAG = 14715;
 static std::mutex ak_mutex;
 
-void send_to_workers(const Deferred::ptr_type & dfrd, bool self, MPI_Comm comm);
+void send_to_workers(const Runable * dfrd, bool self, MPI_Comm comm);
 
 MPIMediator::MPIMediator()
     : _listener(nullptr)
@@ -82,7 +82,7 @@ void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void
     if(cnt != sz) throw(std::runtime_error("Received unexpected message size."));
 }
 
-void send_to_workers(const Deferred::ptr_type & dfrd, bool self, MPI_Comm comm)
+void send_to_workers(const Runable * dfrd, bool self, MPI_Comm comm)
 {
     int rank, sz;
     MPI_Comm_rank(comm, &rank);
@@ -124,7 +124,7 @@ void send_to_workers(const Deferred::ptr_type & dfrd, bool self, MPI_Comm comm)
     }
 }
 
-void MPIMediator::to_workers(const Deferred::ptr_type & dfrd)
+void MPIMediator::to_workers(const Runable * dfrd)
 {
     send_to_workers(dfrd, false, _comm);
 }
@@ -158,7 +158,8 @@ void MPIMediator::listen()
         case DEFER_TAG: {
             FactoryId fctryid;
             ser.value<sizeof(fctryid)>(fctryid);
-            Deferred::defer(Factory::get(fctryid)->create(ser), true);
+            auto uptr = Factory::get(fctryid)->create(ser);
+            uptr.get()->defer(std::move(uptr)); // grmpf
             break;
         }
         case PULL_TAG: {
@@ -181,7 +182,7 @@ void MPIMediator::listen()
             break;
         }
         case EXIT_TAG:
-            Deferred::defer(nullptr, false);
+            defer(nullptr);
             return;
         default:
             throw(std::runtime_error("Received unexpected message tag."));
