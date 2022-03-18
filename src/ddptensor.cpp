@@ -14,6 +14,7 @@
   as a template parameter.
  */
 
+#include <sched.h>
 #include <stdlib.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -86,6 +87,8 @@ void init(bool cw)
     if(inited) return;
     theTransceiver = new MPITransceiver();
     theMediator = new MPIMediator();
+    int cpu = sched_getcpu();
+    std::cerr << "rank " << theTransceiver->rank() << " is running on core " << cpu << std::endl;
     if(cw) {
         _is_cw = true;
         if(theTransceiver->rank()) {

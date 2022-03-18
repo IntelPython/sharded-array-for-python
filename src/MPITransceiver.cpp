@@ -37,23 +37,29 @@ MPITransceiver::MPITransceiver()
         const char * _tmp = getenv("DDPT_MPI_SPAWN");
         if(_tmp) {
             int nClientsToSpawn = atol(_tmp);
-            _tmp = getenv("DDPT_MPI_EXECUTABLE");
-            std::string clientExe(_tmp ? _tmp : getenv("PYTHON_EXE"));
-            if(clientExe.empty()) throw std::runtime_error("Spawning MPI processes requires setting 'DDPT_MPI_EXECUTABLE' or 'PYTHON_EXE'");
-
-            // 2. arguments
-            _tmp = getenv("DDPT_MPI_EXE_ARGS");
+            std::string clientExe;
             std::vector<std::string> args;
-            if(_tmp) {
-                std::istringstream iss(_tmp);
-                std::copy(std::istream_iterator<std::string>(iss),
-                          std::istream_iterator<std::string>(),
-                          std::back_inserter(args));
-            } else {
+            _tmp = getenv("DDPT_MPI_EXECUTABLE");
+            if(!_tmp) {
+                _tmp = getenv("PYTHON_EXE");
+                if(!_tmp) throw std::runtime_error("Spawning MPI processes requires setting 'DDPT_MPI_EXECUTABLE' or 'PYTHON_EXE'");
+                clientExe = _tmp;
+                // 2. arguments
                 _tmp = "-c import ddptensor as dt; dt.init(True)";
                 args.push_back("-c");
                 args.push_back("import ddptensor as dt; dt.init(True)");
+            } else {
+                clientExe = _tmp;
+                // 2. arguments
+                _tmp = getenv("DDPT_MPI_EXE_ARGS");
+                if(_tmp) {
+                    std::istringstream iss(_tmp);
+                    std::copy(std::istream_iterator<std::string>(iss),
+                              std::istream_iterator<std::string>(),
+                              std::back_inserter(args));
+                }
             }
+
             const char * clientArgs[args.size()+1];
             for(int i=0; i<args.size(); ++i) clientArgs[i] = args[i].c_str();
             clientArgs[args.size()] = nullptr;
@@ -69,7 +75,6 @@ MPITransceiver::MPITransceiver()
                 std::cerr << "[DDPT " << rank << "] Set MPI_Info_set(\"host\", \"" << clientHost << "\")\n";
             }
             // Now spawn the client processes:
-            // can't use Speaker yet, need Channels to be inited
             std::cerr << "[DDPT " << rank << "] Spawning " << nClientsToSpawn << " MPI processes ("
                       << clientExe << " "  << _tmp << ")" << std::endl;
             int* errCodes = new int[nClientsToSpawn];
@@ -80,7 +85,6 @@ MPITransceiver::MPITransceiver()
                                      MPI_COMM_WORLD, &interComm, errCodes);
             delete [] errCodes;
             if (err) {
-                // can't use Speaker yet, need Channels to be inited
                 std::cerr << "[DDPT " << rank << "] Error in MPI_Comm_spawn. Skipping process spawning";
             } else {
                 MPI_Intercomm_merge(interComm, 0, &_comm);
