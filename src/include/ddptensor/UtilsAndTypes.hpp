@@ -6,49 +6,78 @@
 #include <numeric>
 #include <cstring>
 
+#include <bitsery/bitsery.h>
+#include <bitsery/adapter/buffer.h>
+#include <bitsery/traits/vector.h>
+
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 namespace py = pybind11;
+#include "p2c_ids.hpp"
 
 using shape_type = std::vector<uint64_t>;
 using dim_vec_type = std::vector<int>;
-using Buffer = std::vector<uint8_t>;
 using rank_type = uint64_t;
 
-enum DType {
-    DT_FLOAT32,
-    DT_FLOAT64,
-    DT_INT8,
-    DT_INT16,
-    DT_INT32,
-    DT_INT64,
-    DT_UINT8,
-    DT_UINT16,
-    DT_UINT32,
-    DT_UINT64,
-    DT_BOOL,
-    _DT_END
-};
+using Buffer = std::vector<uint8_t>;
+using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
+using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
+using Serializer = bitsery::Serializer<OutputAdapter>;
+using Deserializer = bitsery::Deserializer<InputAdapter>;
 
-enum : rank_type {
+enum _RANKS: rank_type {
     NOOWNER    = std::numeric_limits<rank_type>::max(),
     REPLICATED = std::numeric_limits<rank_type>::max() - 1,
     _OWNER_END = std::numeric_limits<rank_type>::max() - 1
 };
 
 template<typename T> struct DTYPE {};
-template<> struct DTYPE<double>   { constexpr static DType value = DT_FLOAT64; };
-template<> struct DTYPE<float>    { constexpr static DType value = DT_FLOAT32; };
-template<> struct DTYPE<int64_t>  { constexpr static DType value = DT_INT64; };
-template<> struct DTYPE<int32_t>  { constexpr static DType value = DT_INT32; };
-template<> struct DTYPE<int16_t>  { constexpr static DType value = DT_INT16; };
-template<> struct DTYPE<int8_t>   { constexpr static DType value = DT_INT8; };
-template<> struct DTYPE<uint64_t> { constexpr static DType value = DT_UINT64; };
-template<> struct DTYPE<uint32_t> { constexpr static DType value = DT_UINT32; };
-template<> struct DTYPE<uint16_t> { constexpr static DType value = DT_UINT16; };
-template<> struct DTYPE<uint8_t>  { constexpr static DType value = DT_UINT8; };
-template<> struct DTYPE<bool>     { constexpr static DType value = DT_BOOL; };
+template<> struct DTYPE<double>   { constexpr static DTypeId value = FLOAT64; };
+template<> struct DTYPE<float>    { constexpr static DTypeId value = FLOAT32; };
+template<> struct DTYPE<int64_t>  { constexpr static DTypeId value = INT64; };
+template<> struct DTYPE<int32_t>  { constexpr static DTypeId value = INT32; };
+template<> struct DTYPE<int16_t>  { constexpr static DTypeId value = INT16; };
+template<> struct DTYPE<int8_t>   { constexpr static DTypeId value = INT8; };
+template<> struct DTYPE<uint64_t> { constexpr static DTypeId value = UINT64; };
+template<> struct DTYPE<uint32_t> { constexpr static DTypeId value = UINT32; };
+template<> struct DTYPE<uint16_t> { constexpr static DTypeId value = UINT16; };
+template<> struct DTYPE<uint8_t>  { constexpr static DTypeId value = UINT8; };
+template<> struct DTYPE<bool>     { constexpr static DTypeId value = BOOL; };
 
 template<typename T> py::object get_impl_dtype() { return get_impl_dtype(DTYPE<T>::value); };
+
+union PyScalar
+{
+    int64_t _int;
+    double _float;
+};
+
+inline PyScalar mk_scalar(const py::object & b, DTypeId dtype)
+{
+    PyScalar s;
+    switch(dtype) {
+    case FLOAT64:
+    case FLOAT32:
+        s._float = b.cast<double>();
+        return s;
+    case INT64:
+    case INT32:
+    case INT16:
+    case INT8:
+    case UINT64:
+    case UINT32:
+    case UINT16:
+    case UINT8:
+        s._int = b.cast<int64_t>();
+        return s;
+        /* FIXME
+    case BOOL:
+        return TypeDispatch2<OpDispatch>(std::forward<Ts>(args)..., _downcast<bool>(a_ptr));
+        */
+    default:
+        throw std::runtime_error("unknown dtype");
+    }
+}
 
 inline py::module_ get_array_impl(const py::object & = py::none())
 {   // FIXME ary.attr("__array_namespace__")();
@@ -61,52 +90,37 @@ inline py::module_ get_array_impl(const py::object & = py::none())
     return _array_ns;
 }
 
-inline const py::object & get_impl_dtype(const DType dt)
+inline const py::object & get_impl_dtype(const DTypeId dt)
 {
-    static py::object _dtypes [_DT_END] {py::none()};
-    if(_dtypes[DT_FLOAT32].is(py::none())) {
+    static py::object _dtypes [DTYPE_LAST] {py::none()};
+    if(_dtypes[FLOAT32].is(py::none())) {
         auto mod = get_array_impl();
-        _dtypes[DT_FLOAT32] = mod.attr("float32");
-        _dtypes[DT_FLOAT64] = mod.attr("float64");
-        _dtypes[DT_INT16] = mod.attr("int16");
-        _dtypes[DT_INT32] = mod.attr("int32");
-        _dtypes[DT_INT64] = mod.attr("int64");
+        _dtypes[FLOAT32] = mod.attr("float32");
+        _dtypes[FLOAT64] = mod.attr("float64");
+        _dtypes[INT16] = mod.attr("int16");
+        _dtypes[INT32] = mod.attr("int32");
+        _dtypes[INT64] = mod.attr("int64");
 #if 0 // FIXME torch
-        _dtypes[DT_UINT16] = mod.attr("uint16");
-        _dtypes[DT_UINT32] = mod.attr("uint32");
-        _dtypes[DT_UINT64] = mod.attr("uint64");
+        _dtypes[UINT16] = mod.attr("uint16");
+        _dtypes[UINT32] = mod.attr("uint32");
+        _dtypes[UINT64] = mod.attr("uint64");
 #endif
-        _dtypes[DT_BOOL] = mod.attr("bool");
+        _dtypes[BOOL] = mod.attr("bool");
     }
     return _dtypes[dt];
 }
 
-// identifies reduction operation
-enum RedOpType {
-    OP_MAX = 100,
-    OP_MIN,
-    OP_SUM,
-    OP_PROD,
-    OP_MEAN,
-    OP_STD,
-    OP_VAR,
-    OP_LAND,
-    OP_BAND,
-    OP_LOR,
-    OP_BOR,
-    OP_LXOR,
-    OP_BXOR
-};
+using RedOpType = ReduceOpId;
 
 inline RedOpType red_op(const char * op)
 {
-    if(!strcmp(op, "max")) return OP_MAX;
-    if(!strcmp(op, "min")) return OP_MIN;
-    if(!strcmp(op, "sum")) return OP_SUM;
-    if(!strcmp(op, "prod")) return OP_PROD;
-    if(!strcmp(op, "mean")) return OP_MEAN;
-    if(!strcmp(op, "std")) return OP_STD;
-    if(!strcmp(op, "var")) return OP_VAR;
+    if(!strcmp(op, "max")) return MAX;
+    if(!strcmp(op, "min")) return MIN;
+    if(!strcmp(op, "sum")) return SUM;
+    if(!strcmp(op, "prod")) return PROD;
+    if(!strcmp(op, "mean")) return MEAN;
+    if(!strcmp(op, "std")) return STD;
+    if(!strcmp(op, "var")) return VAR;
     throw std::logic_error("unsupported reduction operation");
 }
 
@@ -175,3 +189,27 @@ py::tuple _make_tuple(const std::vector<T> & v)
     using V = std::vector<T>;
     return _make_tuple(v, [](const V & v){return v.size();}, [](const V & v, int i){return v[i];});
 }
+
+extern bool is_cw();
+extern bool is_spmd();
+
+using id_type = uint64_t;
+
+enum FactoryId : int {
+    F_ARANGE,
+    F_FROMSHAPE,
+    F_FULL,
+    F_UNYOP,
+    F_EWUNYOP,
+    F_IEWBINOP,
+    F_EWBINOP,
+    F_REDUCEOP,
+    F_MANIPOP,
+    F_LINALGOP,
+    F_GETITEM,
+    F_SETITEM,
+    F_RANDOM,
+    F_SERVICE,
+    F_TONUMPY,
+    FACTORY_LAST
+};

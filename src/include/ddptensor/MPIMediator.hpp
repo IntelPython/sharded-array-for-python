@@ -2,18 +2,20 @@
 
 #pragma once
 
+#include <mpi.h>
 #include <thread>
 #include "Mediator.hpp"
 
 class MPIMediator : public Mediator
 {
-    std::thread _listener;
+    std::thread * _listener;
+    MPI_Comm _comm;
 
 public:
     MPIMediator();
     virtual ~MPIMediator();
-    virtual uint64_t register_array(tensor_i::ptr_type ary);
-    virtual void pull(rank_type from, const tensor_i * ary, const NDSlice & slice, void * buffer);
+    virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer);
+    virtual void to_workers(const Runable * dfrd);
 
 protected:
     void listen();

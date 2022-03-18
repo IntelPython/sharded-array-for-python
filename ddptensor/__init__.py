@@ -1,119 +1,104 @@
+"""
+Distributed implementation of the array API as defined here:
+https://data-apis.org/array-api/latest
+"""
+
+# Many features of the API are very uniformly defined.
+# We make use of that by providing lists of operations which are similar
+# (see array_api.py). __init__.py and ddptensor.py simply generate the API
+# by iterating through these lists and forwarding the function calls the the
+# C++-extension. Python functions are defined and added by using "eval".
+# For many operations we assume the C++-extension defines enums which allow
+# us identifying each operation.
+# At this point there are no checks of input arguments whatsoever, arguments
+# are simply forwarded as-is.
+
+_bool = bool
 from . import _ddptensor as _cdt
-from .ddptensor import float64, int64, fini, dtensor
+from ._ddptensor import (
+    FLOAT64 as float64,
+    FLOAT32 as float32,
+    INT64 as int64,
+    INT32 as int32,
+    INT16  as int16,
+    INT8 as int8,
+    UINT64 as uint64,
+    UINT32 as uint32,
+    UINT16 as uint16,
+    UINT8 as uint8,
+    BOOL as bool,
+    init as _init,
+    fini,
+    sync
+)
+
+from .ddptensor import dtensor
 from os import getenv
+from . import array_api as api
+from . import spmd
 
-__impl_str = getenv("DDPNP_ARRAY", 'numpy')
-exec(f"import {__impl_str} as __impl")
+_ddpt_cw = _bool(int(getenv('DDPT_CW', True)))
 
-ew_binary_ops = [
-    "add",  # (x1, x2, /)
-    "atan2",  # (x1, x2, /)
-    "bitwise_and",  # (x1, x2, /)
-    "bitwise_left_shift",  # (x1, x2, /)
-    "bitwise_or",  # (x1, x2, /)
-    "bitwise_right_shift",  # (x1, x2, /)
-    "bitwise_xor",  # (x1, x2, /)
-    "divide",  # (x1, x2, /)
-    "equal",  # (x1, x2, /)
-    "floor_divide",  # (x1, x2, /)
-    "greater",  # (x1, x2, /)
-    "greater_equal",  # (x1, x2, /)
-    "less_equal",  # (x1, x2, /)
-    "logaddexp",  # (x1, x2)
-    "logical_and",  # (x1, x2, /)
-    "logical_or",  # (x1, x2, /)
-    "logical_xor",  # (x1, x2, /)
-    "multiply",  # (x1, x2, /)
-    "less",  # (x1, x2, /)
-    "not_equal",  # (x1, x2, /)
-    "pow",  # (x1, x2, /)
-    "remainder",  # (x1, x2, /)
-    "subtract",  # (x1, x2, /)
-]
+def init(cw=None):
+    cw = _ddpt_cw if cw is None else cw
+    _init(cw)
 
-for op in ew_binary_ops:
+def to_numpy(a):
+    return _cdt.to_numpy(a._t)
+
+for op in api.api_categories["EWBinOp"]:
+    if not op.startswith("__"):
+        OP = op.upper()
+        exec(
+            f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t if isinstance(other, ddptensor) else other))"
+        )
+
+for op in api.api_categories["EWUnyOp"]:
+    if not op.startswith("__"):
+        OP = op.upper()
+        exec(
+            f"{op} = lambda this: dtensor(_cdt.EWUnyOp.op(_cdt.{OP}, this._t))"
+        )
+
+for func in api.api_categories["Creator"]:
+    FUNC = func.upper()
+    if func in ["empty", "ones", "zeros",]:
+        exec(
+            f"{func} = lambda shape, dtype: dtensor(_cdt.Creator.create_from_shape(_cdt.{FUNC}, shape, dtype))"
+        )
+    elif func == "full":
+        exec(
+            f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(shape, val, dtype))"
+        )
+    elif func == "arange":
+        exec(
+            f"{func} = lambda start, end, step, dtype: dtensor(_cdt.Creator.arange(start, end, step, dtype))"
+        )
+
+for func in api.api_categories["ReduceOp"]:
+    FUNC = func.upper()
     exec(
-        f"{op} = lambda this, other: dtensor(_cdt.ew_binary_op(this._t, '{op}', other._t if isinstance(other, ddptensor) else other, False))"
+        f"{func} = lambda this, dim: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim))"
     )
 
-ew_unary_ops = [
-    "abs",  # (x, /)
-    "acos",  # (x, /)
-    "acosh",  # (x, /)
-    "asin",  # (x, /)
-    "asinh",  # (x, /)
-    "atan",  # (x, /)
-    "atanh",  # (x, /)
-    "bitwise_invert",  # (x, /)
-    "ceil",  # (x, /)
-    "cos",  # (x, /)
-    "cosh",  # (x, /)
-    "exp",  # (x, /)
-    "expm1",  # (x, /)
-    "floor",  # (x, /)
-    "isfinite",  # (x, /)
-    "isinf",  # (x, /)
-    "isnan",  # (x, /)
-    "logical_not",  # (x, /)
-    "log",  # (x, /)
-    "log1p",  # (x, /)
-    "log2",  # (x, /)
-    "log10",  # (x, /)
-    "negative",  # (x, /)
-    "positive",  # (x, /)
-    "round",  # (x, /)
-    "sign",  # (x, /)
-    "sin",  # (x, /)
-    "sinh",  # (x, /)
-    "square",  # (x, /)
-    "sqrt",  # (x, /)
-    "tan",  # (x, /)
-    "tanh",  # (x, /)
-    "trunc",  # (x, /)
-]
+for func in api.api_categories["ManipOp"]:
+    FUNC = func.upper()
+    if func == "reshape":
+        exec(
+            f"{func} = lambda this, shape: dtensor(_cdt.ManipOp.reshape(this._t, shape))"
+        )
 
-for op in ew_unary_ops:
-    exec(
-        f"{op} = lambda this: dtensor(_cdt.ew_unary_op(this._t, '{op}', False))"
-    )
-
-creators_with_shape = [
-    "empty",  # (shape, *, dtype=None, device=None)
-    "full",   # (shape, fill_value, *, dtype=None, device=None)
-    "ones",   # (shape, *, dtype=None, device=None)
-    "zeros",  # (shape, *, dtype=None, device=None)
-]
-
-for func in creators_with_shape:
-    exec(
-        f"{func} = lambda shape, *args, **kwargs: dtensor(_cdt.create(shape, '{func}', '{__impl_str}', *args, **kwargs))"
-    )
-
-statisticals = [
-    "max",   # (x, /, *, axis=None, keepdims=False)
-    "mean",  # (x, /, *, axis=None, keepdims=False)
-    "min",   # (x, /, *, axis=None, keepdims=False)
-    "prod",  # (x, /, *, axis=None, keepdims=False)
-    "sum",   # (x, /, *, axis=None, keepdims=False)
-    "std",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
-    "var",   # (x, /, *, axis=None, correction=0.0, keepdims=False)
-]
-
-for func in statisticals:
-    exec(
-        f"{func} = lambda this, **kwargs: dtensor(_cdt.reduce_op(this._t, '{func}', **kwargs))"
-    )
-
-
-creators = [
-    "arange",  # (start, /, stop=None, step=1, *, dtype=None, device=None)
-    "asarray",  # (obj, /, *, dtype=None, device=None, copy=None)
-    "empty_like",  # (x, /, *, dtype=None, device=None)
-    "eye",  # (n_rows, n_cols=None, /, *, k=0, dtype=None, device=None)
-    "from_dlpack",  # (x, /)
-    "full_like",  # (x, /, fill_value, *, dtype=None, device=None)
-    "linspace",  # (start, stop, /, num, *, dtype=None, device=None, endpoint=True)
-    "meshgrid",  # (*arrays, indexing=’xy’)
-    "ones_like",  # (x, /, *, dtype=None, device=None)
-    "zeros_like",  # (x, /, *, dtype=None, device=None)
-]
+for func in api.api_categories["LinAlgOp"]:
+    FUNC = func.upper()
+    if func in ["tensordot", "vecdot",]:
+        exec(
+            f"{func} = lambda this, other, axis: dtensor(_cdt.LinAlgOp.{func}(this._t, other._t, axis))"
+        )
+    elif func == "matmul":
+        exec(
+            f"{func} = lambda this, other: dtensor(_cdt.LinAlgOp.vecdot(this._t, other._t, 0))"
+        )
+    elif func == "matrix_transpose":
+        exec(
+            f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))"
+        )

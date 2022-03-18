@@ -6,44 +6,67 @@
 #include <cstdint>
 #include <string>
 #include <memory>
+#include <future>
 
 #include "UtilsAndTypes.hpp"
 
 class NDSlice;
-class PVSlice;
 
 ///
 /// Abstract interface for a tensor implementation.
-/// Used for type elimination so we can bridge dynamic array types in Python to C++.
+/// Used to hide the element type so we can bridge dynamic array types in Python to C++.
 ///
 class tensor_i
 {
 public:
+
     typedef std::shared_ptr<tensor_i> ptr_type;
+    typedef std::promise<ptr_type> promise_type;
 
-    virtual ~tensor_i(){}
+    class TFuture : public std::shared_future<tensor_i::ptr_type>
+    {
+        id_type _id;
+        
+    public:
+        using std::shared_future<tensor_i::ptr_type>::shared_future;
+        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id)
+            : std::shared_future<tensor_i::ptr_type>(std::move(f)),
+            _id(id)
+        {}
+        ~TFuture()
+        {
+        }
+        
+        id_type id() const { return _id; }
+    };
 
-    virtual const PVSlice & pvslice() = 0;
-    virtual void bufferize(const NDSlice & slice, Buffer & buff) = 0;
-    virtual int item_size() const = 0;
-    virtual uint64_t id() const = 0;
-    
-    virtual ptr_type __getitem__(const NDSlice & slice) const = 0;
-    virtual void __setitem__(const NDSlice & slice, const ptr_type &) = 0;
+    typedef TFuture future_type;
+
+    virtual ~tensor_i() {};
     virtual std::string __repr__() const = 0;
-    virtual const shape_type & shape() const = 0;
-    virtual DType dtype() const = 0;
+    virtual DTypeId dtype() const = 0;
+    virtual shape_type shape() const = 0;
+    virtual int ndim() const = 0;
+    virtual uint64_t size() const = 0;
     virtual bool __bool__() const = 0;
     virtual double __float__() const = 0;
     virtual int64_t __int__() const = 0;
+    virtual uint64_t __len__() const = 0;
 
-    virtual ptr_type _ew_op(const char * op, const char * mod, py::args args, const py::kwargs & kwargs) = 0;
-    virtual ptr_type _ew_unary_op(const char * op, bool is_method) const = 0;
-    virtual ptr_type _ew_binary_op(const char * op, const ptr_type & b, bool is_method) const = 0;
-    virtual ptr_type _ew_binary_op(const char * op, const py::object & b, bool is_method) const = 0;
-    virtual void _ew_binary_op_inplace(const char * op, const ptr_type & b) = 0;
-    virtual void _ew_binary_op_inplace(const char * op, const py::object & b) = 0;
-    virtual ptr_type _reduce_op(const char * op, const dim_vec_type & dims) const = 0;
-
-    virtual py::object get_slice(const NDSlice & slice) const = 0;
+    // store all elements for given slice contiguously into provided Buffer
+    virtual void bufferize(const NDSlice & slice, Buffer & buff) const = 0;
+    // size of a single element (in bytes)
+    virtual int item_size() const = 0;
 };
+
+#if 0
+template<typename S>
+void serialize(S & ser, tensor_i::future_type & f)
+{
+    uint64_t id = f.id();
+    ser.value8b(id);
+    if constexpr (std::is_same<Deserializer, S>::value) {
+        
+    }
+}
+#endif

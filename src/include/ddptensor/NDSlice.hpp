@@ -11,6 +11,7 @@ namespace py = pybind11;
 
 #include "Slice.hpp"
 #include "NDIndex.hpp"
+#include "UtilsAndTypes.hpp"
 
 ///
 /// A slice of n-dimensional range with utility features to extract nd-indices.
@@ -89,13 +90,18 @@ public:
         return ret;
     }
 
+    std::vector<Slice> slices() const
+    {
+        return _slice_vec;
+    }
+
     ///
     /// @return total number of elements represented by the nd-slice
     ///
-    value_type::value_type size() const
+    value_type::value_type size(uint64_t dim = 0) const
     {
         if(_sizes.empty()) init_sizes();
-        return _sizes[0];
+        return _sizes[dim];
     }
 
     ///
@@ -113,29 +119,6 @@ public:
     {
         _slice_vec[dim] = slc;
         _sizes.resize(0);
-    }
-
-    ///
-    /// @return ith index-tuple in canonical (flat) order of the expanded slice.
-    /// does not check bounds, e.g. can return indices beyond end of slice
-    ///
-    value_type operator[](value_type::value_type i) const {
-        if(_sizes.empty()) init_sizes();
-        value_type ret(_slice_vec.size(), 0);
-        auto sz = ++(_sizes.begin());
-        auto slc = _slice_vec.rbegin();
-        // iterate over dimensions to compute ith index
-        for(auto v = ret.begin(); v != ret.end(); ++v, ++slc) {
-            if(sz != _sizes.end()) {
-                auto idx = i / (*sz);
-                *v = (*slc)[idx];
-                i -= idx * (*sz);
-                ++sz;
-            } else {
-                *v = (*slc)[i];
-            }
-        }
-        return ret;
     }
 
     template<typename C>
@@ -197,12 +180,32 @@ public:
     }
 
     ///
+    /// @return Copy of NDSlice which was trimmed by given slice
+    ///
+    NDSlice trim(const NDSlice & slc) const
+    {
+        return _convert([&](uint64_t i) {
+                return _slice_vec[i].trim(slc.dim(i)._start, slc.dim(i)._end);
+            } );
+    }
+
+    ///
+    /// @return Copy of NDSlice which was trimmed by given slice
+    ///
+    NDSlice overlap(const NDSlice & slc) const
+    {
+        return _convert([&](uint64_t i) {
+                return _slice_vec[i].overlap(slc.dim(i));
+            } );
+    }
+    
+    ///
     /// @return Copy of NDSlice which was trimmed by t_slc and shifted by s_slc._start's
     ///
     NDSlice trim_shift(const NDSlice & t_slc, const NDSlice & s_slc) const
     {
         return _convert([&](uint64_t i) {
-                return _slice_vec[i].trim(t_slc.dim(i)._start, t_slc.dim(i)._end, s_slc.dim(i)._start);
+                return _slice_vec[i].trim(t_slc.dim(i)._start, t_slc.dim(i)._end).shift(s_slc.dim(i)._start);
             } );
     }
 

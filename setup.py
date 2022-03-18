@@ -1,26 +1,62 @@
 import os
-from os.path import join as jp
-from glob import glob
-from setuptools import setup
-from pybind11.setup_helpers import Pybind11Extension
+import pathlib
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext as build_ext_orig
 
-mpiroot = os.environ.get('MPIROOT')
 
-ext_modules = [
-    Pybind11Extension(
-        "ddptensor._ddptensor",
-        glob("src/*.cpp"),
-        include_dirs=[jp(mpiroot, "include"), jp("third_party", "bitsery", "include"), jp("src", "include"), ],
-        extra_compile_args=["-DUSE_MKL", "-std=c++17", "-Wno-unused-but-set-variable", "-Wno-sign-compare", "-Wno-unused-local-typedefs", "-Wno-reorder", "-O0", "-g"],
-        libraries=["mpi", "rt", "pthread", "dl", "mkl_intel_lp64", "mkl_intel_thread", "mkl_core", "iomp5", "m"],
-        library_dirs=[jp(mpiroot, "lib")],
-        language='c++'
-    ),
-]
+class CMakeExtension(Extension):
+
+    def __init__(self, name):
+        # don't invoke the original build_ext for this special extension
+        super().__init__(name, sources=[])
+
+
+class build_ext(build_ext_orig):
+
+    def run(self):
+        for ext in self.extensions:
+            self.build_cmake(ext)
+        super().run()
+
+    def build_cmake(self, ext):
+        cwd = pathlib.Path().absolute()
+
+        # these dirs will be created in build_py, so if you don't have
+        # any python sources to bundle, the dirs will be missing
+        build_temp = pathlib.Path(self.build_temp)
+        build_temp.mkdir(parents=True, exist_ok=True)
+        extdir = pathlib.Path(self.get_ext_fullpath(ext.name))
+        extdir.parent.mkdir(parents=True, exist_ok=True)
+
+        # example of cmake args
+        config = 'Debug' if self.debug else 'RelWithDebInfo' #'Release'
+        cmake_args = [
+            '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + str(extdir.parent.absolute()),
+            '-DCMAKE_BUILD_TYPE=' + config
+        ]
+
+        # example of build args
+        build_args = [
+            '--config', config,
+            #'--', '-j8'
+        ]
+
+        os.chdir(str(build_temp))
+        self.spawn(['cmake', str(cwd)] + cmake_args)
+        if not self.dry_run:
+            self.spawn(['cmake', '--build', '.'] + build_args)
+        # Troubleshooting: if fail on line above then delete all possible 
+        # temporary CMake files including "CMakeCache.txt" in top level dir.
+        os.chdir(str(cwd))
+
 
 setup(name="ddptensor",
       version="0.1",
       description="Distributed Tensor and more",
-      packages=["ddptensor", "ddptensor.numpy", "ddptensor.torch"],
-      ext_modules=ext_modules
+      packages=["ddptensor"],  #, "ddptensor.numpy", "ddptensor.torch"],
+      ext_modules=[CMakeExtension('ddptensor/_ddptensor')],
+      cmdclass=dict(
+          # Enable the CMakeExtension entries defined above
+          build_ext=build_ext  #cmake_build_extension.BuildExtension,
+      ),
 )

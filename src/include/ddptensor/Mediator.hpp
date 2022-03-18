@@ -3,17 +3,18 @@
 #pragma once
 
 #include <vector>
-#include "UtilsAndTypes.hpp"
 #include "tensor_i.hpp"
+#include "Deferred.hpp"
 
 class NDSlice;
 
 class Mediator
 {
 public:
+    enum : uint64_t {LOCAL_ONLY = 0};
     virtual ~Mediator() {}
-    virtual uint64_t register_array(tensor_i::ptr_type ary) = 0;
-    virtual void pull(rank_type from, const tensor_i * ary, const NDSlice & slice, void * buffer) = 0;
+    virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer) = 0;
+    virtual void to_workers(const Runable * dfrd) = 0;
 };
 
 extern Mediator * theMediator;

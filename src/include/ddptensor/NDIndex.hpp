@@ -9,6 +9,7 @@
 ///
 typedef std::vector<int64_t> NDIndex;
 
+#if 0
 ///
 /// @return tile-sizes for each dimension, as if leading dimensions were cut.
 /// @param tile_shape tile-shape in question
@@ -42,3 +43,4 @@ uint64_t linearize(const std::vector<T> & idx, const std::vector<uint64_t> & tss
     }
     return tidx;
 }
+#endif
