@@ -1,3 +1,4 @@
+[![.github/workflows/ci.yml](https://github.com/intel-sandbox/personal.fschlimb.ddptensor/actions/workflows/ci.yml/badge.svg)](https://github.com/intel-sandbox/personal.fschlimb.ddptensor/actions/workflows/ci.yml)
 # Distributed Data-Parallel Python Tensor
 A tensor implementation following the [array API as defined by the data-API consortium](https://data-apis.org/array-api/latest/index.html).
 It supports a controller-worker execution model as well as a CSP-like execution.
