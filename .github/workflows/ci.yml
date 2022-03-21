@@ -1,0 +1,46 @@
+on: [push, pull_request]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build_and_test:
+    name: building and testing ddptensor
+    runs-on: self-hosted
+    container:
+      image: amr-registry-pre.caas.intel.com/tpi/ddpt
+      options: --device=/dev/dri --shm-size=3000M
+    strategy:
+      fail-fast: false
+    steps:
+    - name: Setup
+      run: . activate ddpt
+    - name: Checkout ddptensor and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Build dpptensor
+      run: |
+        . activate ddpt
+        g++ -v
+        export MPIROOT=$CONDA_PREFIX
+        export MKLROOT=$CONDA_PREFIX
+        CMAKE_BUILD_PARALLEL_LEVEL=8 python setup.py develop
+    - name: Run tests
+      run: |
+        . activate ddpt
+        pytest test
+        DDPT_CW=0 pytest test
+        DDPT_CW=1 pytest test
+        DDPT_MPI_SPAWN=1 PYTHON_EXE=`which python` pytest test
+        DDPT_MPI_SPAWN=2 PYTHON_EXE=`which python` pytest test
+        DDPT_MPI_SPAWN=3 PYTHON_EXE=`which python` pytest test
+        DDPT_CW=1 mpirun -n 1 python -m pytest test
+        DDPT_CW=1 mpirun -n 2 python -m pytest test
+        DDPT_CW=1 mpirun -n 3 python -m pytest test
+        DDPT_CW=1 mpirun -n 4 python -m pytest test
+        DDPT_CW=0 mpirun -n 1 python -m pytest test
+        DDPT_CW=0 mpirun -n 2 python -m pytest test
+        DDPT_CW=0 mpirun -n 3 python -m pytest test
+        DDPT_CW=0 mpirun -n 4 python -m pytest test
