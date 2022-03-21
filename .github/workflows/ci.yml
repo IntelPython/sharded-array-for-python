@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
     steps:
     - name: Setup
-      run: conda activate ddpt
+      run: . activate ddpt
     - name: Checkout ddptensor
       uses: actions/checkout@v2
     - name: Build dpptensor
