@@ -24,6 +24,8 @@ jobs:
       run: |
         . activate ddpt
         g++ -v
+	export MPIROOT=$CONDA_PREFIX
+        export MKLROOT=$CONDA_PREFIX
         CMAKE_BUILD_PARALLEL_LEVEL=8 python setup.py develop
     - name: Run tests
       run: |
