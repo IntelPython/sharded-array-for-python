@@ -16,8 +16,10 @@ jobs:
     steps:
     - name: Setup
       run: . activate ddpt
-    - name: Checkout ddptensor
+    - name: Checkout ddptensor and submodules
       uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Build dpptensor
       run: |
         . activate ddpt
