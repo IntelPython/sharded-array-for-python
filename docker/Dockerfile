@@ -2,12 +2,6 @@
 #  are last
 FROM ubuntu:20.04
 
-# Proxies for working inside firewall
-ENV no_proxy=.intel.com
-ENV https_proxy=http://proxy-chain.intel.com:912
-ENV http_proxy=http://proxy-chain.intel.com:911
-ENV ftp_proxy=http://proxy-chain.intel.com:911
-
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && apt-get install -y --no-install-recommends g++ gcc wget \
