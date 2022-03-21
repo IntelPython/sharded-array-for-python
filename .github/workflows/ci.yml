@@ -7,7 +7,7 @@ defaults:
 jobs:
   build_and_test:
     name: building and testing ddptensor
-    runs-on: self-hosted
+    runs-on: [self-hosted, dds-base]
     container:
       image: amr-registry-pre.caas.intel.com/tpi/ddpt
       options: --device=/dev/dri --shm-size=3000M
