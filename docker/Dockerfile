@@ -4,7 +4,7 @@ FROM ubuntu:20.04
 
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
-    && apt-get install -y --no-install-recommends g++ gcc wget make\
+    && apt-get install -y --no-install-recommends g++ gcc wget make git\
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
