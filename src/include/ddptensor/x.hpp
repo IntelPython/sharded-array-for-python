@@ -58,7 +58,7 @@ namespace x
         DPTensorX(PVSlice && slc, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
               _slice(std::move(slc)), // static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
-              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _lslice(to_xt(_slice.tile_slice())),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
         {
             if(owner != NOOWNER)
@@ -102,7 +102,7 @@ namespace x
         DPTensorX(const DPTensorX<O> & org, const NDSlice & slc, rank_type owner=NOOWNER)
             : _owner(owner),
               _slice(org._slice, slc),
-              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _lslice(to_xt(_slice.tile_slice())),
               _xarray(org._xarray)
         {
             if(owner == NOOWNER && slice().size() <= 1) {
@@ -116,7 +116,7 @@ namespace x
         DPTensorX(O && org, PVSlice && slc)
             : _owner(theTransceiver->rank()),
               _slice(std::forward<PVSlice>(slc)),
-              _lslice(to_xt(_slice.local_slice_of_rank())),
+              _lslice(to_xt(_slice.tile_slice())),
               _xarray()
         {
             _xarray = org;
@@ -144,7 +144,7 @@ namespace x
             return DTYPE<T>::value;
         }
 
-        virtual shape_type shape() const
+        virtual const shape_type & shape() const
         {
             return _slice.shape();
         }
@@ -234,14 +234,16 @@ namespace x
 
         virtual void bufferize(const NDSlice & slc, Buffer & buff) const
         {
+            if(slc.size() <= 0) return;
             NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
 
             auto ary_v = xt::strided_view(xarray(), to_xt(lslice));
-            buff.resize(slc.size()*sizeof(T));
-            T * out = reinterpret_cast<T*>(buff.data());
-            int o = 0;
-            for(auto i = ary_v.begin(); i != ary_v.end(); ++i, ++o) {
-                out[o] = *i;
+            auto pos = buff.size();
+            buff.resize(pos + lslice.size()*sizeof(T));
+            T * out = reinterpret_cast<T*>(buff.data() + pos);
+            pos = 0;
+            for(auto i = ary_v.begin(); i != ary_v.end(); ++i, ++pos) {
+                out[pos] = *i;
             }
         }
     };
@@ -267,7 +269,6 @@ namespace x
         {
             return std::make_shared<DPTensorX<typename X::value_type>>(tx->shape(), std::forward<X>(x));
         }
-
 
         template<typename ...Ts>
         static tensor_i::future_type mk_ftx(Ts&&... args)

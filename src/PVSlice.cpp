@@ -111,7 +111,7 @@ PVSlice::PVSlice(const PVSlice & org, const NDSlice & slice)
 }
 
 PVSlice::PVSlice(const PVSlice & org, rank_type rank)
-    : _slice(std::move(org.slice_of_rank(rank))),
+    : _slice(std::move(org.local_slice(rank))),
       _base(org._base),
       _shape()
 {
@@ -129,14 +129,28 @@ uint64_t PVSlice::ndims() const
     return _slice.ndims();
 }
 
-const int PVSlice::split_dim() const
+int PVSlice::split_dim() const
 {
     return _base->split_dim();
 }
 
-const bool PVSlice::is_sliced() const
+bool PVSlice::is_sliced() const
 {
     return base_shape() != shape();
+}
+
+bool PVSlice::local_is_contiguous(rank_type rank) const
+{
+    assert(split_dim() == 0);
+    auto tshp = tile_shape(rank);
+    auto tslc = tile_slice(rank);
+    for(auto i=0; i<ndims(); ++i) {
+        auto slci = tslc.dim(i);
+        if(slci._step != 1
+           || (slci._start > 0 && i>0)
+           || (slci._end < tshp[i] && i>0)) return false;
+    }
+    return true;
 }
 
 bool PVSlice::is_equally_tiled() const
@@ -144,9 +158,9 @@ bool PVSlice::is_equally_tiled() const
     return _base->is_equally_tiled();
 }
 
-const uint64_t PVSlice::tile_size(rank_type rank) const
+const NDSlice & PVSlice::slice() const
 {
-    return _base->tile_size(rank);
+    return _slice;
 }
 
 const shape_type & PVSlice::shape() const
@@ -159,9 +173,48 @@ const shape_type & PVSlice::shape() const
     return _shape;
 }
 
-const shape_type PVSlice::tile_shape(rank_type rank) const
+uint64_t PVSlice::size() const
+{
+    return slice().size();
+}
+
+uint64_t PVSlice::tile_size(rank_type rank) const
+{
+    return _base->tile_size(rank);
+}
+
+shape_type PVSlice::tile_shape(rank_type rank) const
 {
     return _base->tile_shape(rank);
+}
+
+NDSlice PVSlice::tile_slice(rank_type rank) const
+{
+    if(_base->split_dim() == NOSPLIT) {
+        return rank == theTransceiver->rank() ? slice() : NDSlice();
+    }
+    return _slice.trim_shift(_base->split_dim(),
+                             rank * _base->offset(),
+                             (rank+1) * _base->offset(),
+                             rank * _base->offset());
+}
+
+NDSlice PVSlice::local_slice(rank_type rank) const
+{
+    if(_base->split_dim() == NOSPLIT) {
+        return rank == theTransceiver->rank() ? slice() : NDSlice();
+    }
+    return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
+}
+
+shape_type PVSlice::local_shape(rank_type rank) const
+{
+    return local_slice(rank).shape();
+}
+
+uint64_t PVSlice::local_size(rank_type rank) const
+{
+    return local_slice(rank).size();
 }
 
 const shape_type & PVSlice::base_shape() const
@@ -172,16 +225,6 @@ const shape_type & PVSlice::base_shape() const
 rank_type PVSlice::owner(const NDSlice & slice) const
 {
     return _base->owner(slice);
-}
-
-const NDSlice & PVSlice::slice() const
-{
-    return _slice;
-}
-
-uint64_t PVSlice::size() const
-{
-    return slice().size();
 }
 
 #if 0
@@ -196,23 +239,42 @@ NDSlice PVSlice::map_slice(const NDSlice & slc) const
     return _slice.map(slc);
 }
 
-NDSlice PVSlice::slice_of_rank(rank_type rank) const
+std::array<std::vector<NDSlice>, 2> PVSlice::map_ranks(const PVSlice & o_slc) const
 {
-    if(_base->split_dim() == NOSPLIT) {
-        return rank == theTransceiver->rank() ? slice() : NDSlice();
-    }
-    return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
-}
+    auto o_sz = o_slc.size();
+    auto d_sz = size();
+    if(d_sz <= 1 && o_sz > 1) throw std::runtime_error("Cannot map nd-tensor to scalar/0d-tensor.");
+    if(o_sz <= 1) return {};
+                                
+    auto nr = theTransceiver->nranks();
+    std::vector<NDSlice> sends(nr);
+    std::vector<NDSlice> recvs(nr);
 
-NDSlice PVSlice::local_slice_of_rank(rank_type rank) const
-{
-    if(_base->split_dim() == NOSPLIT) {
-        return rank == theTransceiver->rank() ? slice() : NDSlice();
+    // rank's slice of origin, relative to o_slc
+    auto my_o_slc = o_slc.map_slice(o_slc.local_slice());
+    // rank's slice of destination, relative to d_slc
+    auto my_d_slc = this->map_slice(this->local_slice());
+
+    for(auto r=0; r<nr; ++r) {
+        // determine what I receive from rank r
+        // e.g. which parts of my destination slice overlap with rank r's origin slice
+        // Get local slice of rank r of origin array
+        auto r_o_slc = o_slc.map_slice(o_slc.local_slice(r));
+        // Determine overlap with my destination
+        auto roverlap = my_d_slc.overlap(r_o_slc);
+        // push to result
+        recvs[r] = std::move(roverlap);
+
+        // determine what I send to rank r
+        // e.g. which parts of my origin slice overlap with rank r's destination slice
+        // Get local slice of rank r of destination array
+        auto r_d_slc = this->map_slice(this->local_slice(r));
+        // Determine overlap with my destination
+        auto soverlap = my_o_slc.overlap(r_d_slc);
+        // push to result
+        sends[r] = std::move(soverlap);
     }
-    return _slice.trim_shift(_base->split_dim(),
-                             rank * _base->offset(),
-                             (rank+1) * _base->offset(),
-                             rank * _base->offset());
+    return {sends, recvs};
 }
 
 bool PVSlice::need_reduce(const dim_vec_type & dims) const
@@ -227,68 +289,6 @@ bool PVSlice::need_reduce(const dim_vec_type & dims) const
     // *not* reducing over split axis
     return false;
 }  ///
-
-PVSlice::iterator::iterator(const PVSlice * pvslice)
-    : _pvslice(pvslice), _curr_pos(pvslice ? pvslice->ndims() : 0), _curr_idx(-1)
-{
-    if(pvslice) {
-        _curr_idx = 0;
-        auto const bshp = _pvslice->base_shape();
-        uint64_t tsz = 1;
-        for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
-            auto const & cs = _pvslice->slice().dim(d);
-            _curr_pos[d] = cs._start;
-            _curr_idx += cs._start * tsz;
-            tsz *= bshp[d];
-        }
-    }
-}
-
-PVSlice::iterator& PVSlice::iterator::operator++() noexcept
-{
-    auto const bshp = _pvslice->base_shape();
-    uint64_t tsz = 1;
-    for(int64_t d = _pvslice->ndims()-1; d >= 0; --d) {
-        auto const & cs = _pvslice->slice().dim(d);
-        auto x = _curr_pos[d] + cs._step;
-        if(x < cs._end) {
-            _curr_pos[d] = x;
-            _curr_idx += cs._step * tsz;
-            return *this;
-        }
-        _curr_idx += (bshp[d] - (_curr_pos[d] - cs._start)) * tsz;
-        _curr_pos[d] = cs._start;
-        tsz *= bshp[d];
-    }
-    *this = iterator();
-    return *this;
-}
-
-bool PVSlice::iterator::operator!=(const iterator & other) const noexcept
-{
-    return  _pvslice != other._pvslice && _curr_idx != other._curr_idx;
-}
-
-uint64_t PVSlice::iterator::operator*() const noexcept
-{
-    return _curr_idx;
-}
-
-///
-/// @return STL-like Iterator pointing to first element
-///
-PVSlice::iterator PVSlice::begin() const noexcept
-{
-    return slice().size() ? iterator(this) : end();
-}
-
-///
-/// @return STL-like Iterator pointing to first element after end
-///
-PVSlice::iterator PVSlice::end() const noexcept
-{
-    return iterator();
-}
 
 std::ostream &operator<<(std::ostream &output, const PVSlice & slc) {
     output << "{slice=" << slc.slice()

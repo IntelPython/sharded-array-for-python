@@ -45,7 +45,7 @@ public:
     virtual ~tensor_i() {};
     virtual std::string __repr__() const = 0;
     virtual DTypeId dtype() const = 0;
-    virtual shape_type shape() const = 0;
+    virtual const shape_type & shape() const = 0;
     virtual int ndim() const = 0;
     virtual uint64_t size() const = 0;
     virtual bool __bool__() const = 0;

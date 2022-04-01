@@ -176,6 +176,7 @@ void MPIMediator::listen()
             tensor_i::ptr_type ptr = Registry::get(id).get();
             // Wait for previous answer to complete so that we can re-use the buffer
             MPI_Wait(&request_out, MPI_STATUS_IGNORE);
+            rbuff.resize(0);
             ptr->bufferize(slice, rbuff);
             if(slice.size() * ptr->item_size() != rbuff.size()) throw(std::runtime_error("Got unexpected buffer size."));
             MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, _comm, &request_out);

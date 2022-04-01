@@ -43,11 +43,11 @@ namespace x {
             for(rank_type i=0; i<theTransceiver->nranks(); ++i ) {
                 // get local view into val
                 PVSlice val_local_view(val->slice(), i);
-                NDSlice curr_needed_val_slice = needed_val_view.slice_of_rank(i);
+                NDSlice curr_needed_val_slice = needed_val_view.local_slice(i);
                 NDSlice curr_local_val_slice = val_local_view.map_slice(curr_needed_val_slice);
                 NDSlice curr_needed_norm_slice = needed_val_view.map_slice(curr_needed_val_slice);
                 PVSlice my_curr_needed_view = PVSlice(dest_view, curr_needed_norm_slice);
-                NDSlice my_curr_local_slice = my_curr_needed_view.local_slice_of_rank(theTransceiver->rank());
+                NDSlice my_curr_local_slice = my_curr_needed_view.tile_slice(theTransceiver->rank());
 
                 if(curr_needed_norm_slice.size()) {
                     if(i == theTransceiver->rank()) {
@@ -76,7 +76,7 @@ namespace x {
             // Use given slice to create a global view into orig array
             PVSlice g_slc_view(a_ptr->slice(), slice);
             PVSlice my_rel_slice(g_slc_view, theTransceiver->rank());
-            NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.slice_of_rank()); //slice());my_slice);
+            NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.local_slice()); //slice());my_slice);
 
             if(is_spmd()) theTransceiver->barrier();
             _set_slice<A>(a_ptr->xarray(), my_rel_slice, b_ptr, my_norm_slice, val_guid);
@@ -107,7 +107,7 @@ namespace x {
         template<typename T>
         static py::object op(py::handle & handle, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            auto slc = a_ptr->slice().local_slice_of_rank();
+            auto slc = a_ptr->slice().tile_slice();
             auto tshp = a_ptr->slice().tile_shape();
             auto nd = slc.ndims();
              // buffer protocol accepts strides in number of bytes not elements!
@@ -135,7 +135,7 @@ namespace x {
             auto rank = theTransceiver->rank();
             bool sendonly = root != REPLICATED && root != rank;
             const auto & slc = a_ptr->slice();
-            auto mysz = slc.slice_of_rank().size();
+            auto mysz = slc.local_slice().size();
 
             // create buffer/numpy array
             T * ptr = nullptr;
@@ -143,7 +143,7 @@ namespace x {
             if(sendonly) {
                 if(mysz > 0 && a_ptr->is_sliced()) ptr = new T[mysz];
             } else {
-                res = py::array_t<T>(std::move(slc.shape()));
+                res = py::array_t<T>(slc.shape());
                 ptr = reinterpret_cast<T*>(res.mutable_data());
             }
             int displacements[nranks];
@@ -151,7 +151,7 @@ namespace x {
             int off = 0;
             // for each rank compute counts and displacements
             for(auto i=0; i<nranks; ++i) {
-                uint64_t szi = i == rank ? mysz : slc.slice_of_rank(i).size();
+                uint64_t szi = i == rank ? mysz : slc.local_slice(i).size();
                 counts[i] = szi;
                 displacements[i] = off;
                 // copy our local data

@@ -32,6 +32,7 @@ class NDSlice {
 public:
     NDSlice() = default;
     NDSlice(NDSlice &&) = default;
+    NDSlice(const Slice & slc) : _slice_vec(1, slc), _sizes() {}
     NDSlice(const NDSlice & o) : _slice_vec(o._slice_vec), _sizes() {}
     NDSlice(const std::initializer_list<Slice> & slc) : _slice_vec(slc), _sizes() {}
     NDSlice(const ndslice_t & sv) : _slice_vec(sv), _sizes() {}
@@ -67,17 +68,6 @@ public:
     }
 
     ///
-    /// @return true if NDSlice is a lbock, e.g. all steps == 1
-    ///
-    bool is_block() const
-    {
-        for(auto s : _slice_vec) {
-            if(! s.is_block()) return false;
-        }
-        return true;
-    }
-
-    ///
     /// @return number of elements for each dimension-slice as a vector
     ///
     shape_type shape() const
@@ -100,6 +90,7 @@ public:
     ///
     value_type::value_type size(uint64_t dim = 0) const
     {
+        if(_slice_vec.empty()) return 0;
         if(_sizes.empty()) init_sizes();
         return _sizes[dim];
     }
@@ -307,6 +298,123 @@ public:
         return output;
     }
 
+    /// STL-like iterator for iterating through the pvslice (flattened index space).
+    /// Supports pre-increment ++, unequality check != and dereference *
+    class iterator {
+        // we keep a reference to the ndslice
+        const NDSlice * _ndslice;
+        // and the current position
+        NDIndex _curr_pos;
+        // and the current flattened index
+        uint64_t _curr_idx;
+
+    public:
+        iterator(const NDSlice * ndslice = nullptr)
+            : _ndslice(ndslice), _curr_pos(ndslice ? ndslice->ndims() : 0), _curr_idx(-1)
+        {
+            if(ndslice) {
+                _curr_idx = 0;
+                auto const bshp = _ndslice->shape();
+                uint64_t tsz = 1;
+                for(int64_t d = _ndslice->ndims()-1; d >= 0; --d) {
+                    auto const & cs = _ndslice->dim(d);
+                    _curr_pos[d] = cs._start;
+                    _curr_idx += cs._start * tsz;
+                    tsz *= bshp[d];
+                }
+            }
+        }
+
+        iterator& operator++() noexcept
+        {
+            auto const bshp = _ndslice->shape();
+            uint64_t tsz = 1;
+            for(int64_t d = _ndslice->ndims()-1; d >= 0; --d) {
+                auto const & cs = _ndslice->dim(d);
+                auto x = _curr_pos[d] + cs._step;
+                if(x < cs._end) {
+                    _curr_pos[d] = x;
+                    _curr_idx += cs._step * tsz;
+                    return *this;
+                }
+                // rewind: next round we'll increment the full tsz
+                _curr_idx -= (_curr_pos[d] - cs._start) * tsz;
+                _curr_pos[d] = cs._start;
+                tsz *= bshp[d];
+            }
+            *this = iterator();
+            return *this;
+        }
+
+        // FIXME: opt for performance
+        iterator& operator+=(uint64_t inc) noexcept
+        {
+            auto _end = iterator();
+            while(inc > 0) {
+                ++(*this);
+                --inc;
+                if(*this == _end) return *this;
+            }
+            return *this;
+        }
+
+        bool operator!=(const iterator & other) const noexcept
+        {
+            return  _curr_idx != other._curr_idx || _ndslice != other._ndslice;
+        }
+
+        bool operator==(const iterator & other) const noexcept
+        {
+            return !operator!=(other);
+        }
+
+        uint64_t operator*() const noexcept
+        {
+            return _curr_idx;
+        }
+
+        // capacity is number of elements
+        template<typename F, typename T>
+        NDSlice::iterator& fill_buffer(T * buff, uint64_t capacity, uint64_t & ncopied, const F * from) noexcept
+        {
+            ncopied = 0;
+            uint64_t n = capacity;
+            uint64_t i=0;
+            for(; ncopied<n && (*this) != _ndslice->end(); ++ncopied) {
+                buff[ncopied] = static_cast<T>(from[*(*this)]);
+                ++(*this);
+            }
+            return *this;
+        }
+    };
+
+    ///
+    /// @return STL-like Iterator pointing to first element
+    ///
+    iterator begin() const noexcept
+    {
+        return size() ? iterator(this) : end();
+    }
+
+    ///
+    /// @return STL-like Iterator pointing to first element after end
+    ///
+    iterator end() const noexcept
+    {
+        return iterator();
+    }
+};
+
+inline py::tuple _make_tuple(const NDSlice & v)
+{
+    using V = NDSlice;
+    return _make_tuple(v, [](const V & v){return v.ndims();}, [](const V & v, int i){return v.dim(i).pyslice();});
+}
+
+
+
+
+#if 0
     // ###########################################################################
     // ###########################################################################
     ///
@@ -381,10 +489,4 @@ public:
     {
         return iterator();
     }
-};
-
-inline py::tuple _make_tuple(const NDSlice & v)
-{
-    using V = NDSlice;
-    return _make_tuple(v, [](const V & v){return v.ndims();}, [](const V & v, int i){return v.dim(i).pyslice();});
-}
+#endif

@@ -143,14 +143,6 @@ struct Slice
     }
 
     ///
-    /// @return true if Slice is a lbock, e.g. step == 1
-    ///
-    bool is_block() const
-    {
-        return _step == 1;
-    }
-
-    ///
     /// Check if the slice is valid
     ///
     void check() const
