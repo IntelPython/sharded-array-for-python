@@ -38,7 +38,7 @@ class build_ext(build_ext_orig):
         # example of build args
         build_args = [
             '--config', config,
-            #'--', '-j8'
+            '--', '-j8'
         ]
 
         os.chdir(str(build_temp))

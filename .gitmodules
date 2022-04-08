@@ -13,3 +13,9 @@
 [submodule "third_party/xtl"]
 	path = third_party/xtl
 	url = https://github.com/xtensor-stack/xtl
+[submodule "third_party/mlir-extensions"]
+	path = third_party/mlir-extensions
+	url = https://github.com/intel/mlir-extensions
+[submodule "third_party/dpcomp"]
+	path = third_party/dpcomp
+	url = https://github.com/IntelPython/dpcomp.git

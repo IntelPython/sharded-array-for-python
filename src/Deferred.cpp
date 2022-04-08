@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include <oneapi/tbb/concurrent_queue.h>
 #include "include/ddptensor/Deferred.hpp"
 #include "include/ddptensor/Transceiver.hpp"

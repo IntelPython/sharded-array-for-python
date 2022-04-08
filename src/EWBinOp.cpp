@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include <xtensor/xview.hpp>
 using namespace xt::placeholders;
 #include "ddptensor/EWBinOp.hpp"
