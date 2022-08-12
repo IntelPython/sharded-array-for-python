@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.18.2)
 project(ddptensor VERSION 1.0)
 
-set(LLVM_PATH ${PROJECT_SOURCE_DIR}/mlir-llvm)
 if(DEFINED ENV{CONDA_PREFIX})
   set(CONDA_PREFIX $ENV{CONDA_PREFIX})
 else()
@@ -9,16 +8,27 @@ else()
 endif()
 
 if(DEFINED ENV{MKLROOT})
-  set(MKLROOT ENV{MKLROOT})
+  set(MKL_ROOT $ENV{MKLROOT})
 else()
-  set(MKLROOT ${CONDA_PREFIX})
+  set(MKL_ROOT ${CONDA_PREFIX})
 endif()
 if(DEFINED ENV{TBBROOT})
-  set(TBBROOT ENV{TBBROOT})
+  set(TBB_ROOT $ENV{TBBROOT})
 else()
-  set(TBBROOT ${CONDA_PREFIX})
+  set(TBB_ROOT ${CONDA_PREFIX})
 endif()
-
+if(DEFINED ENV{MLIRROOT})
+  set(MLIR_ROOT $ENV{MLIRROOT})
+else()
+  set(MLIR_ROOT ${CONDA_PREFIX})
+endif()
+set(LLVM_ROOT ${MLIR_ROOT})
+if(DEFINED ENV{IMEXROOT})
+  set(IMEX_ROOT $ENV{IMEXROOT})
+else()
+  set(IMEX_ROOT ${CONDA_PREFIX})
+endif()
+message("ll ${IMEX_ROOT}")
 if(MKLROOT STREQUAL UNSET OR TBBROOT STREQUAL UNSET)
   message(FATAL_ERROR "MKLROOT and TBBROOT not set (nor CONDA_PREFIX)")
 endif()
@@ -34,20 +44,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ===============
 # Deps
-# ===============
-list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/third_party/mlir-llvm)
-
-# Find Python3 and NumPy
+# =============== 
+# Find dependent packages like IMEX, Python3 and NumPy
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_package(pybind11 CONFIG)
 find_package(MPI REQUIRED)
-find_package(LLVM REQUIRED CONFIG)
-find_package(MLIR REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+find_package(MLIR REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
+find_package(IMEX REQUIRED CONFIG)
+message(STATUS "Using IMEXConfig.cmake in: ${IMEX_DIR}")
 
+list(APPEND CMAKE_MODULE_PATH "${IMEX_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
-include(AddLLVM)
-include(AddMLIR)
+#include(AddLLVM)
+#include(AddMLIR)
+#include(AddIMEX)
 
 #find_package(OpenMP)
 
@@ -85,23 +99,61 @@ target_include_directories(_ddptensor PRIVATE
   $ENV{MKLROOT}/include
   $ENV{TBBROOT}/include
   ${pybind11_INCLUDE_DIRS}
-  ${MLIR_INCLUDE_DIRS})
+  ${MLIR_INCLUDE_DIRS}
+  ${IMEX_INCLUDE_DIRS})
+
+if (CMAKE_SYSTEM_NAME STREQUAL Linux)
+  target_link_options(_ddptensor PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
+endif()
 
 #target_compile_options(_ddptensor PRIVATE -fopenmp)
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+get_property(mlir_all_libs GLOBAL PROPERTY MLIR_ALL_LIBS)
+get_property(imex_all_libs GLOBAL PROPERTY IMEX_ALL_LIBS)
+
+#llvm_update_compile_flags(_ddpttensor)
+target_link_directories(_ddptensor PRIVATE
+    ${CONDA_PREFIX}/lib
+    ${IMEX_INSTALL_PREFIX}/lib
+)
+
+message(${imex_all_libs})
 target_link_libraries(_ddptensor PRIVATE
     ${MPI_C_LIBRARIES}
     ${MKL_LIBRARIES}
-    LLVM${LLVM_NATIVE_ARCH}CodeGen
-    LLVM${LLVM_NATIVE_ARCH}Desc
-    LLVMTarget
-    MLIRIR
-    MLIRLLVMIR
-    MLIRLLVMToLLVMIRTranslation
-    MLIRTransforms
-    MLIRFuncTransforms
-    MLIRLinalgTransforms
-    MLIRLinalgToLLVM
-    MLIRMathToLLVM
-    MLIRMathToLibm
-    MLIRTensorTransforms
-    MLIRReconcileUnrealizedCasts)
+    ${mlir_all_libs}
+    ${imex_all_libs}
+	  MLIROptLib
+)
+    # LLVM${LLVM_NATIVE_ARCH}CodeGen
+    # LLVM${LLVM_NATIVE_ARCH}Desc
+    # LLVMTarget
+    # MLIRAnalysis
+    # MLIRCallInterfaces
+    # MLIRCastInterfaces
+    # MLIRExecutionEngine
+    # MLIRFuncTransforms
+    # MLIRGPUToGPURuntimeTransforms
+    # MLIRGPUToSPIRV
+    # MLIRIR
+    # MLIRLLVMCommonConversion
+    # MLIRLLVMIR
+    # MLIRLLVMToLLVMIRTranslation
+    # MLIRLinalgToLLVM
+    # MLIRLinalgTransforms
+    # MLIRMathToLLVM
+    # MLIRMathToLibm
+    # MLIRMemRef
+    # MLIRParser
+    # MLIRPass
+    # MLIRReconcileUnrealizedCasts
+    # MLIRSCFToGPU
+    # MLIRSPIRVSerialization
+    # MLIRSPIRVTransforms
+    # MLIRSideEffectInterfaces
+    # MLIRTargetLLVMIRExport
+    # MLIRTensorTransforms
+    # MLIRTransforms
+    # MLIRAffineToStandard
+    # MLIRAffineTransforms)
