@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "ddptensor/jit/mlir.hpp"
+
 #include "mlir/IR/MLIRContext.h"
 
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
@@ -29,6 +31,7 @@
 #include <imex/InitIMEXPasses.h>
 
 #include <cstdlib>
+#include <iostream>
 
 //#include "llvm/ADT/StringRef.h"
 //#include "llvm/IR/Module.h"
@@ -39,6 +42,7 @@
 #include "llvm/Support/TargetSelect.h"
 //#include "llvm/Support/raw_ostream.h"
 
+namespace jit {
 
 static ::mlir::Type makeSignlessType(::mlir::Type type)
 {
@@ -59,37 +63,15 @@ auto createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_
     return builder.create<::mlir::arith::ConstantOp>(loc, attr).getResult();
 }
 
-int processMLIR(::mlir::ModuleOp &module)
-{
-    const char * pl = getenv("DDPT_PASSES");
-    // "convert-ptensor-to-linalg,dist-elim,convert-shape-to-std,arith-bufferize,func.func(linalg-init-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-subview-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,convert-dtensor-to-llvm,reconcile-unrealized-casts",
-    if(!pl) pl = "convert-ptensor-to-linalg,dist-elim,convert-shape-to-std,arith-bufferize,func.func(linalg-init-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-subview-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
-    ::mlir::PassManager pm(module.getContext());
-    if(::mlir::failed(::mlir::parsePassPipeline(pl, pm))) return 3;
-
-    pm.enableStatistics();
-    pm.enableIRPrinting();
-    pm.dump();
-    if (::mlir::failed(pm.run(module))) return 4;
-    
-    return 0;
-}
-
-int runJit(::mlir::ModuleOp & module)
-{
-    // Initialize LLVM targets.
-    ::llvm::InitializeNativeTarget();
-    ::llvm::InitializeNativeTargetAsmPrinter();
-    //::llvm::initializeLLVMPasses();
-
-    // Register the translation from ::mlir to LLVM IR, which must happen before we
-    // can JIT-compile.
-    ::mlir::registerLLVMDialectTranslation(*module->getContext());
+int JIT::run(::mlir::ModuleOp & module, const std::string & fname)
+{    
+    if (::mlir::failed(_pm.run(module)))
+        throw std::runtime_error("failed to run pass manager");
 
     // An optimization pipeline to use within the execution engine.
-    auto optPipeline = ::mlir::makeOptimizingTransformer(0, // /*optLevel=*/enableOpt ? 3 : 0,
-                                                       /*sizeLevel=*/0,
-                                                       /*targetMachine=*/nullptr);
+    auto optPipeline = ::mlir::makeOptimizingTransformer(/*optLevel=*/0,
+                                                         /*sizeLevel=*/0,
+                                                         /*targetMachine=*/nullptr);
 
     // Create an ::mlir execution engine. The execution engine eagerly JIT-compiles
     // the module.
@@ -99,20 +81,52 @@ int runJit(::mlir::ModuleOp & module)
     assert(maybeEngine && "failed to construct an execution engine");
     auto &engine = maybeEngine.get();
 
+
+    const char * fn = getenv("DDPT_FN");
+    if(!fn) fn = fname.c_str();
+
+    MemRefDescriptor<int64_t, 1> result;
+    auto r_ptr = &result;
+    // int64_t arg = 7;
     // Invoke the JIT-compiled function.
-    auto invocationResult = engine->invokePacked("ttt_"); //, {{}, {}});
-    if (invocationResult) {
+    if(engine->invoke(fn, ::mlir::ExecutionEngine::result(r_ptr))) {
         ::llvm::errs() << "JIT invocation failed\n";
-        return -1;
+        throw std::runtime_error("JIT invocation failed");
     }
+    std::cout << "aptr=" << result.allocated << " dptr=" << result.aligned << " offset=" << result.offset << std::endl;
+    std::cout << ((int64_t*)result.aligned)[result.offset] << std::endl;
 
     return 0;
 }
 
-void ttt()
+static const char * pass_pipeline =
+   getenv("DDPT_PASSES")
+   ? getenv("DDPT_PASSES")
+   : "convert-ptensor-to-linalg,dist-elim,convert-shape-to-std,arith-bufferize,func.func(linalg-init-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-subview-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+   
+JIT::JIT()
+    : _context(::mlir::MLIRContext::Threading::DISABLED),
+      _pm(&_context)
 {
-    std::string fname("_mlir_ttt_");
+    // Register the translation from ::mlir to LLVM IR, which must happen before we
+    // can JIT-compile.
+    ::mlir::registerLLVMDialectTranslation(_context);
+    // load the dialects we use
+    _context.getOrLoadDialect<::mlir::arith::ArithmeticDialect>();
+    _context.getOrLoadDialect<::mlir::func::FuncDialect>();
+    _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
+    _context.getOrLoadDialect<::imex::dist::DistDialect>();
+    // create the pass pipeline from string
+    if(::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
+       throw std::runtime_error("failed to parse pass pipeline");
+    // some verbosity
+    _pm.enableStatistics();
+    _pm.enableIRPrinting();
+    _pm.dump();
+}
 
+void init()
+{
     ::mlir::registerAllPasses();
     ::imex::registerAllPasses();
 
@@ -120,17 +134,24 @@ void ttt()
     // ::mlir::registerAllDialects(registry);
     // ::imex::registerAllDialects(registry);
 
-    ::mlir::MLIRContext context(::mlir::MLIRContext::Threading::DISABLED);
+    // Initialize LLVM targets.
+    ::llvm::InitializeNativeTarget();
+    ::llvm::InitializeNativeTargetAsmPrinter();
+    //::llvm::initializeLLVMPasses();
+}
 
-    context.getOrLoadDialect<::mlir::arith::ArithmeticDialect>();
-    // context.getOrLoadDialect<::mlir::tensor::TensorDialect>();
-    // context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
-    context.getOrLoadDialect<::mlir::func::FuncDialect>();
-    // context.getOrLoadDialect<::mlir::shape::ShapeDialect>();
-    context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
-    context.getOrLoadDialect<::imex::dist::DistDialect>();
+// mock function for POC testing
+// delayed execution will do something like the below:
+//  * create module
+//  * create a function and define its types (input and return types)
+//  * create the function body and return op
+//  * add function to module
+//  * compile & run the module
+void ttt()
+{
+    JIT jit;
 
-    ::mlir::OpBuilder builder(&context);
+    ::mlir::OpBuilder builder(&jit._context);
     auto loc = builder.getUnknownLoc();
     auto module = builder.create<::mlir::ModuleOp>(loc);
 
@@ -140,7 +161,11 @@ void ttt()
     auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
     auto rrtype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), dtype), true);
     auto funcType = builder.getFunctionType({}, rrtype);
+
+    std::string fname("tttt");
     auto function = builder.create<::mlir::func::FuncOp>(loc, fname, funcType);
+    // request generation of c-wrapper function
+    function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
 
     // Create an ::mlir function for the given prototype.
     //::mlir::func::FuncOp function(fproto);
@@ -162,54 +187,17 @@ void ttt()
     auto c1 = createI64(loc, builder, 1);
     auto c100 = createI64(loc, builder, 100);
 
+    // return np.sum(np.arange(1,10,1)+np.arange(1,100,10)) -> 495
     auto rangea = builder.create<::imex::ptensor::ARangeOp>(loc, artype, c0, c10, c1, true);
     auto rangeb = builder.create<::imex::ptensor::ARangeOp>(loc, artype, c0, c100, c10, true);
     auto added = builder.create<::imex::ptensor::EWBinOp>(loc, artype, builder.getI32IntegerAttr(::imex::ptensor::ADD), rangea, rangeb);
     auto reduced = builder.create<::imex::ptensor::ReductionOp>(loc, rrtype, builder.getI32IntegerAttr(::imex::ptensor::SUM), added);
     auto ret = builder.create<::mlir::func::ReturnOp>(loc, reduced.getResult());
-
+    // add the function to the module
     module.push_back(function);
-    module.dump();
 
-    if(processMLIR(module)) throw std::runtime_error("failed to process mlir");
-    module.dump();
-    
-    if(runJit(module)) throw std::runtime_error("failed to run jit");
-    
-#if 0                                                  
-    std::vector<int> shape = {16, 16};
-    auto elemType = builder.getF64Type();
-    auto signlessElemType = makeSignlessType(elemType);
-    auto indexType = builder.getIndexType();
-    auto count = shape.size();
-    ::llvm::SmallVector<::mlir::Value> shapeVal(count);
-    ::llvm::SmallVector<int64_t> staticShape(count); // ::mlir::ShapedType::kDynamicSize);
-
-    for(auto it : ::llvm::enumerate(shape)) {
-        auto i = it.index();
-        auto elem = it.value();
-        auto elemVal = getInt(loc, builder, elem);
-        staticShape[i] = elem;
-        shapeVal[i] = elemVal;
-    }
-
-    ::mlir::Value init;
-    if(true) { //initVal.is_none()) {
-        init = builder.create<::mlir::linalg::InitTensorOp>(loc, shapeVal, signlessElemType);
-    }//  else {
-    //     auto val = doCast(builder, loc, ctx.context.unwrapVal(loc, builder, initVal), signlessElemType);
-    //     ::llvm::SmallVector<int64_t> shape(count, ::mlir::ShapedType::kDynamicSize);
-    //     auto type = ::mlir::RankedTensorType::get(shape, signlessElemType);
-    //     auto body = [&](::mlir::OpBuilder &builder, ::mlir::Location loc, ::mlir::ValueRange /*indices*/) {
-    //         builder.create<::mlir::tensor::YieldOp>(loc, val);
-    //     };
-    //     init = builder.create<::mlir::tensor::GenerateOp>(loc, type, shapeVal, body);
-    // }
-    if (::llvm::any_of(staticShape, [](auto val) { return val >= 0; })) {
-        auto newType = ::mlir::RankedTensorType::get(staticShape, signlessElemType);
-        init = builder.create<::mlir::tensor::CastOp>(loc, newType, init);
-    }
-    auto resTensorTypeSigness = init.getType().cast<::mlir::RankedTensorType>();
-    auto resTensorType = ::mlir::RankedTensorType::get(resTensorTypeSigness.getShape(), elemType, resTensorTypeSigness.getEncoding());
-#endif // 0
+    // finally compile and run the module
+    if(jit.run(module, fname)) throw std::runtime_error("failed running jit");
 }
+
+} // namespace jit

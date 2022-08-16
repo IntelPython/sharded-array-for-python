@@ -36,8 +36,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/Service.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/IO.hpp"
-
-extern void ttt();
+#include "ddptensor/jit/mlir.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -123,6 +122,8 @@ PYBIND11_MODULE(_ddptensor, m) {
     Factory::init<F_SERVICE>();
     Factory::init<F_TONUMPY>();
 
+    jit::init();
+
     m.doc() = "A partitioned and distributed tensor";
 
     def_enums(m);
@@ -137,7 +138,7 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("_get_local", &GetItem::get_local)
         .def("_gather", &GetItem::gather)
         .def("to_numpy", &IO::to_numpy)
-        .def("ttt", &ttt);
+        .def("ttt", &jit::ttt);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)
