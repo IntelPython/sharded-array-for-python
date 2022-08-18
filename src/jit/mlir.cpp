@@ -57,7 +57,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type)
     return type;
 }
 
-auto createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_t val)
+::mlir::Value createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_t val)
 {
     auto attr = builder.getI64IntegerAttr(val);
     return builder.create<::mlir::arith::ConstantOp>(loc, attr).getResult();

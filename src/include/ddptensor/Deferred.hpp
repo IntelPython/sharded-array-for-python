@@ -4,6 +4,7 @@
 
 #include "tensor_i.hpp"
 #include "Registry.hpp"
+#include "jit/mlir.hpp"
 
 extern void process_promises();
 extern void sync();
@@ -12,7 +13,10 @@ struct Runable
 {
     using ptr_type = std::unique_ptr<Runable>;
     virtual ~Runable() {};
+    /// actually execute, a deferred will set value of future
     virtual void run() = 0;
+    /// generate MLIR code for jit
+    virtual ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location, jit::IdValueMap & ivm) = 0;
     virtual FactoryId factory() const = 0;
     virtual void defer(ptr_type &&);
     static void fini();
@@ -29,6 +33,12 @@ struct DeferredT : public P, public Runable
 
     DeferredT() = default;
     DeferredT(const DeferredT<P, F> &) = delete;
+
+    // FIXME: from Runable but should be in most derived classes
+    ::mlir::Value generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &) override
+    {
+        return {};
+    };
 };
 
 struct Deferred : public DeferredT<tensor_i::promise_type, tensor_i::future_type>
@@ -36,6 +46,7 @@ struct Deferred : public DeferredT<tensor_i::promise_type, tensor_i::future_type
     using ptr_type = std::unique_ptr<Deferred>;
     id_type _guid = Registry::NOGUID;
     future_type get_future();
+    // from Runable
     void defer(Runable::ptr_type &&);
 };
 
@@ -97,6 +108,13 @@ struct DeferredLambda : public Runable
     {
         _l();
     }
+
+    // FIXME: from Runable but should be in most derived classes
+    ::mlir::Value generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &) override
+    {
+        throw(std::runtime_error("No MLIR support for DeferredLambda."));
+        return {};
+    };
 
     FactoryId factory() const
     {

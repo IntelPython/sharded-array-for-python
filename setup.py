@@ -33,13 +33,14 @@ class build_ext(build_ext_orig):
         cmake_args = [
             '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + str(extdir.parent.absolute()),
             '-DCMAKE_BUILD_TYPE=' + config,
-            '-DCMAKE_VERBOSE_MAKEFILE=ON'
+            '-DCMAKE_VERBOSE_MAKEFILE=ON',
+            '-G=Ninja',
         ]
 
         # example of build args
         build_args = [
             '--config', config,
-            '--', '-j8'
+            # '--', '-j8'
         ]
 
         os.chdir(str(build_temp))

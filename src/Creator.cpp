@@ -4,6 +4,9 @@
 #include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <mlir/IR/Builders.h>
+
 namespace x {
 
     template<typename T>
@@ -141,10 +144,25 @@ struct DeferredArange : public Deferred
         : _start(start), _end(end), _step(step), _dtype(dtype)
     {}
 
-    void run()
+    void run() override
     {
         set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
     };
+    
+    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    {
+        // create start, stop and step
+        auto start = jit::createI64(loc, builder, _start);
+        auto end = jit::createI64(loc, builder, _end);
+        auto step = jit::createI64(loc, builder, _step);
+        // create arange
+        auto dtype = builder.getI64Type();
+        llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
+        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
+        auto ar = builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true);
+        ivm[_guid] = ar;
+        return ar;
+    }
 
     FactoryId factory() const
     {
