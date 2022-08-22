@@ -148,7 +148,7 @@ struct DeferredArange : public Deferred
 
     void run() override
     {
-        set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
+        // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
     };
     
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
@@ -166,8 +166,7 @@ struct DeferredArange : public Deferred
             // FIXME GC assert(allocated == aligned);
             assert(rank == 1);
             assert(strides[0] == 1);
-            shape_type shape(1, sizes[0]);
-            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(shape, reinterpret_cast<uint64_t*>(aligned)+offset)));
+            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {ar, setter};
         return ar;

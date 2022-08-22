@@ -265,6 +265,16 @@ namespace x
             return std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...);
         }
 
+        static typename DPTensorX<T>::typed_ptr_type mk_tx(uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides)
+        {
+            // FIXME strides/slices are not used
+            shape_type shp(rank);
+            for(int i = 0; i < rank; ++i) {
+                shp[i] = sizes[i];
+            }
+            return std::make_shared<DPTensorX<T>>(shp, reinterpret_cast<T*>(aligned) + offset);
+        }
+
         template<typename X>
         static DPTensorBaseX::ptr_type mk_tx_(const DPTensorX<T> & tx, X && x)
         {

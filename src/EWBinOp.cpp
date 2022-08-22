@@ -13,6 +13,9 @@ using namespace xt::placeholders;
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/Chunker.hpp"
 
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <mlir/IR/Builders.h>
+
 // #######################################################################################
 // The 2 operators/tensors can have shifted partitions, e.g. local data might not be the
 // same on a and b. This means we
@@ -366,9 +369,70 @@ namespace x {
                 } else throw std::runtime_error("Unknown/invalid elementwise binary operation");
             }
         }
-#pragma GCC diagnostic pop
     };
 } // namespace x
+
+static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop)
+{
+    switch(bop) {
+    case __ADD__:
+    case ADD:
+    case __RADD__:
+        return ::imex::ptensor::ADD;
+    case ATAN2:
+        return ::imex::ptensor::ATAN2;
+    case __FLOORDIV__:
+    case FLOOR_DIVIDE:
+    case __RFLOORDIV__:
+        return ::imex::ptensor::FLOOR_DIVIDE;
+        // __MATMUL__ is handled before dispatching, see below
+    case __MUL__:
+    case MULTIPLY:
+    case __RMUL__:
+        return ::imex::ptensor::MULTIPLY;
+    case __SUB__:
+    case SUBTRACT:
+    case __RSUB__:
+        return ::imex::ptensor::SUBTRACT;
+    case __TRUEDIV__:
+    case DIVIDE:
+    case __RTRUEDIV__:
+        return ::imex::ptensor::TRUE_DIVIDE;
+    case __POW__:
+    case POW:
+    case __RPOW__:
+        return ::imex::ptensor::POWER;
+    case LOGADDEXP:
+        return ::imex::ptensor::LOGADDEXP;
+    case __LSHIFT__:
+    case BITWISE_LEFT_SHIFT:
+    case __RLSHIFT__:
+        return ::imex::ptensor::BITWISE_LEFT_SHIFT;
+    case __MOD__:
+    case REMAINDER:
+    case __RMOD__:
+        return ::imex::ptensor::MODULO;
+    case __RSHIFT__:
+    case BITWISE_RIGHT_SHIFT:
+    case __RRSHIFT__:
+        return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
+    case __AND__:
+    case BITWISE_AND:
+    case __RAND__:
+        return ::imex::ptensor::BITWISE_AND;
+    case __OR__:
+    case BITWISE_OR:
+    case __ROR__:
+        return ::imex::ptensor::BITWISE_OR;
+    case __XOR__:
+    case BITWISE_XOR:
+    case __RXOR__:
+        return ::imex::ptensor::BITWISE_XOR;
+    default:
+        throw std::runtime_error("Unknown/invalid elementwise binary operation");
+    }
+}
+#pragma GCC diagnostic pop
 
 struct DeferredEWBinOp : public Deferred
 {
@@ -381,11 +445,26 @@ struct DeferredEWBinOp : public Deferred
         : _a(a.id()), _b(b.id()), _op(op)
     {}
 
-    void run()
+    void run() override
     {
+#if 0
         const auto a = std::move(Registry::get(_a).get());
         const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
+#endif
+    }
+
+    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    {
+        // FIXME compute the type of the result (inputs can be heterogeneous)
+        auto rtyp = ivm[_a].first.getType();
+        auto ewbo = builder.create<::imex::ptensor::EWBinOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), ivm[_a].first, ivm[_b].first);
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+            // FIXME GC assert(allocated == aligned);
+            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
+        };
+        ivm[_guid] = {ewbo, setter};
+        return ewbo;
     }
 
     FactoryId factory() const
