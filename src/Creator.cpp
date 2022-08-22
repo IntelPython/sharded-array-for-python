@@ -153,6 +153,7 @@ struct DeferredArange : public Deferred
     
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
+        // FIXME the type of the result is hard-coded to uint64_t
         // create start, stop and step
         auto start = jit::createI64(loc, builder, _start);
         auto end = jit::createI64(loc, builder, _end);

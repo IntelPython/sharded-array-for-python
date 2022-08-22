@@ -3,6 +3,9 @@
 #include "ddptensor/x.hpp"
 #include "ddptensor/Factory.hpp"
 
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <mlir/IR/Builders.h>
+
 namespace x {
 
     class ReduceOp
@@ -65,6 +68,33 @@ namespace x {
     };
 } // namespace x
 
+
+// convert id of our reduction op to id of imex::ptensor reduction op
+static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop)
+{
+#pragma GCC diagnostic ignored "-Wswitch"
+    switch(rop) {
+    case MEAN:
+        return ::imex::ptensor::MEAN;
+    case PROD:
+        return ::imex::ptensor::PROD;
+    case SUM:
+        return ::imex::ptensor::SUM;
+    case STD:
+        return ::imex::ptensor::STD;
+    case VAR:
+        return ::imex::ptensor::VAR;
+    case MAX:
+        return ::imex::ptensor::MAX;
+    case MIN:
+        return ::imex::ptensor::MIN;
+    default:
+        throw std::runtime_error("Unknown reduction operation");
+    }
+}
+
+#pragma GCC diagnostic pop
+
 struct DeferredReduceOp : public Deferred
 {
     id_type _a;
@@ -78,8 +108,32 @@ struct DeferredReduceOp : public Deferred
 
     void run()
     {
+#if 0 
         const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
+#endif
+    }
+
+    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    {
+        // FIXME the type of the result is hard-coded to uint64_t
+        // FIXME reduction over individual dimensions is not supported
+        auto a = ivm[_a].first;
+        auto ptt = a.getType().dyn_cast<::imex::ptensor::PTensorType>();
+        assert(ptt);
+        
+        auto rtyp = ::imex::ptensor::PTensorType::get(
+            builder.getContext(), 
+            ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), ptt.getRtensor().getElementType()),
+            true
+        );
+        auto rop = builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a);
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+            // FIXME GC assert(allocated == aligned);
+            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
+        };
+        ivm[_guid] = {rop, setter};
+        return rop;
     }
 
     FactoryId factory() const

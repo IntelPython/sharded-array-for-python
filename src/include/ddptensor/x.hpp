@@ -268,6 +268,9 @@ namespace x
         static typename DPTensorX<T>::typed_ptr_type mk_tx(uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides)
         {
             // FIXME strides/slices are not used
+            if(rank == 0) {
+                return std::make_shared<DPTensorX<T>>(static_cast<T>(*reinterpret_cast<T*>(aligned)+offset));
+            }
             shape_type shp(rank);
             for(int i = 0; i < rank; ++i) {
                 shp[i] = sizes[i];

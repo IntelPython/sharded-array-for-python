@@ -372,6 +372,7 @@ namespace x {
     };
 } // namespace x
 
+// convert id of our binop to id of imex::ptensor binop
 static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop)
 {
     switch(bop) {
@@ -456,7 +457,7 @@ struct DeferredEWBinOp : public Deferred
 
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
-        // FIXME compute the type of the result (inputs can be heterogeneous)
+        // FIXME the type of the result is hard-coded to uint64_t
         auto rtyp = ivm[_a].first.getType();
         auto ewbo = builder.create<::imex::ptensor::EWBinOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), ivm[_a].first, ivm[_b].first);
         auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
