@@ -74,10 +74,17 @@ namespace x
         }
 
         template<typename I>
-        DPTensorX(shape_type && slc, I && ax, rank_type owner=NOOWNER)
+        DPTensorX(shape_type && shp, I && ax, rank_type owner=NOOWNER)
             : _owner(owner),
-              _slice(std::move(slc), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
+              _slice(std::move(shp), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               _xarray(std::make_shared<xt::xarray<T>>(std::forward<I>(ax)))
+        {
+        }
+
+        DPTensorX(const shape_type & shp, T * ptr, rank_type owner=NOOWNER)
+            : _owner(owner),
+              _slice(shp, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
+              _xarray(std::make_shared<xt::xarray<T>>(xt::adapt(ptr, VPROD(shp), xt::no_ownership(), shp)))
         {
         }
 

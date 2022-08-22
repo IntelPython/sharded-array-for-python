@@ -63,7 +63,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type)
     return builder.create<::mlir::arith::ConstantOp>(loc, attr).getResult();
 }
 
-int JIT::run(::mlir::ModuleOp & module, const std::string & fname)
+int JIT::run(::mlir::ModuleOp & module, const std::string & fname, void * out)
 {    
     if (::mlir::failed(_pm.run(module)))
         throw std::runtime_error("failed to run pass manager");
@@ -85,16 +85,11 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname)
     const char * fn = getenv("DDPT_FN");
     if(!fn) fn = fname.c_str();
 
-    MemRefDescriptor<int64_t, 1> result;
-    auto r_ptr = &result;
-    // int64_t arg = 7;
     // Invoke the JIT-compiled function.
-    if(engine->invoke(fn, ::mlir::ExecutionEngine::result(r_ptr))) {
+    if(engine->invoke(fn, ::mlir::ExecutionEngine::result(out))) {
         ::llvm::errs() << "JIT invocation failed\n";
         throw std::runtime_error("JIT invocation failed");
     }
-    std::cout << "aptr=" << result.allocated << " dptr=" << result.aligned << " offset=" << result.offset << std::endl;
-    std::cout << ((int64_t*)result.aligned)[result.offset] << std::endl;
 
     return 0;
 }
@@ -120,8 +115,8 @@ JIT::JIT()
     if(::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
        throw std::runtime_error("failed to parse pass pipeline");
     // some verbosity
-    _pm.enableStatistics();
-    _pm.enableIRPrinting();
+    // _pm.enableStatistics();
+    // _pm.enableIRPrinting();
     _pm.dump();
 }
 
@@ -196,8 +191,13 @@ void ttt()
     // add the function to the module
     module.push_back(function);
 
+    JIT::MemRefDescriptor<int64_t, 1> result;
+    void * r_ptr = &result;
     // finally compile and run the module
-    if(jit.run(module, fname)) throw std::runtime_error("failed running jit");
+    if(jit.run(module, fname, r_ptr)) throw std::runtime_error("failed running jit");
+
+    std::cout << "aptr=" << result.allocated << " dptr=" << result.aligned << " offset=" << result.offset << std::endl;
+    std::cout << ((int64_t*)result.aligned)[result.offset] << std::endl;
 }
 
 } // namespace jit

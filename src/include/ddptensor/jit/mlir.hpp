@@ -10,10 +10,15 @@
 #include <mlir/IR/Builders.h>
 
 #include <unordered_map>
+#include <functional>
+#include  <utility>
 
 namespace jit {
 
-using IdValueMap = std::unordered_map<id_type, ::mlir::Value>;
+// function type for building body for linalg::generic
+using SetResFunc = std::function<void(
+    uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides)>;
+using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
 
 // initialize jit
 void init();
@@ -38,7 +43,7 @@ public:
 
     JIT();
     // run
-    int run(::mlir::ModuleOp &, const std::string &);
+    int run(::mlir::ModuleOp &, const std::string &, void *);
 
     ::mlir::MLIRContext _context;
     ::mlir::PassManager _pm;

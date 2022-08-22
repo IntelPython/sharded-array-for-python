@@ -55,8 +55,10 @@ namespace x {
             PVSlice pvslice({static_cast<uint64_t>(Slice(start, end, step).size())});
             auto lslc = pvslice.local_slice();
             const auto & l1dslc = lslc.dim(0);
+
             auto a = xt::arange<T>(start + l1dslc._start*step, start + l1dslc._end * step, l1dslc._step);
             auto r = operatorx<T>::mk_tx(std::move(pvslice), std::move(a));
+
             return r;
         }
     }; // class creatorx
@@ -160,7 +162,14 @@ struct DeferredArange : public Deferred
         llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
         auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
         auto ar = builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true);
-        ivm[_guid] = ar;
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+            // FIXME GC assert(allocated == aligned);
+            assert(rank == 1);
+            assert(strides[0] == 1);
+            shape_type shape(1, sizes[0]);
+            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(shape, reinterpret_cast<uint64_t*>(aligned)+offset)));
+        };
+        ivm[_guid] = {ar, setter};
         return ar;
     }
 
