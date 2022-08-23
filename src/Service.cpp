@@ -46,6 +46,7 @@ struct DeferredService : public Deferred
 
     void run()
     {
+#if 0
         switch(_op) {
         case REPLICATE: {
             const auto a = std::move(Registry::get(_a).get());
@@ -58,6 +59,23 @@ struct DeferredService : public Deferred
         default:
                 throw(std::runtime_error("Unkown Service operation requested."));
         }
+#endif
+    }
+
+    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    {
+        switch(_op) {
+        case DROP:
+            if(auto e = ivm.find(_a); e != ivm.end()) {
+                ivm.erase(e);
+                // FIXME create delete op and return it
+            }
+            break;
+        default:
+            throw(std::runtime_error("Unkown Service operation requested."));
+        }
+        
+        return {};
     }
 
     FactoryId factory() const
