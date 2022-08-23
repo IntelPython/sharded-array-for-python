@@ -460,7 +460,7 @@ struct DeferredEWBinOp : public Deferred
         // FIXME the type of the result is hard-coded to uint64_t
         auto rtyp = ivm[_a].first.getType();
         auto ewbo = builder.create<::imex::ptensor::EWBinOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), ivm[_a].first, ivm[_b].first);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             // FIXME GC assert(allocated == aligned);
             this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
         };

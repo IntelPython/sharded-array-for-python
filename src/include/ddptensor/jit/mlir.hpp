@@ -17,7 +17,7 @@ namespace jit {
 
 // function type for building body for linalg::generic
 using SetResFunc = std::function<void(
-    uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides)>;
+    uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides)>;
 using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
 
 // initialize jit

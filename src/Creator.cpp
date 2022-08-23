@@ -163,7 +163,7 @@ struct DeferredArange : public Deferred
         llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
         auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
         auto ar = builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             // FIXME GC assert(allocated == aligned);
             assert(rank == 1);
             assert(strides[0] == 1);

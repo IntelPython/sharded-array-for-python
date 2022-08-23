@@ -74,7 +74,7 @@ struct DeferredService : public Deferred
         default:
             throw(std::runtime_error("Unkown Service operation requested."));
         }
-        
+
         return {};
     }
 

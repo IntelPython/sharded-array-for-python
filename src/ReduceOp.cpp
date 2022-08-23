@@ -128,7 +128,7 @@ struct DeferredReduceOp : public Deferred
             true
         );
         auto rop = builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides) {
+        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             // FIXME GC assert(allocated == aligned);
             this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
         };

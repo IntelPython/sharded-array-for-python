@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <sstream>
 #include <memory>
+#include <algorithm>
 #include <xtensor/xarray.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xstrided_view.hpp>
@@ -265,17 +266,21 @@ namespace x
             return std::make_shared<DPTensorX<T>>(std::forward<Ts>(args)...);
         }
 
-        static typename DPTensorX<T>::typed_ptr_type mk_tx(uint64_t rank, void *allocated, void *aligned, intptr_t offset, intptr_t * sizes, intptr_t * strides)
+        static typename DPTensorX<T>::typed_ptr_type mk_tx(
+            uint64_t rank,
+            void *allocated,
+            void *aligned,
+            intptr_t offset,
+            const intptr_t * sizes,
+            const intptr_t * strides)
         {
             // FIXME strides/slices are not used
+            T * dptr = reinterpret_cast<T*>(aligned) + offset;
             if(rank == 0) {
-                return std::make_shared<DPTensorX<T>>(static_cast<T>(*reinterpret_cast<T*>(aligned)+offset));
+                return std::make_shared<DPTensorX<T>>(*dptr);
             }
-            shape_type shp(rank);
-            for(int i = 0; i < rank; ++i) {
-                shp[i] = sizes[i];
-            }
-            return std::make_shared<DPTensorX<T>>(shp, reinterpret_cast<T*>(aligned) + offset);
+            shape_type shp(sizes, sizes+rank);
+            return std::make_shared<DPTensorX<T>>(shp, dptr);
         }
 
         template<typename X>
