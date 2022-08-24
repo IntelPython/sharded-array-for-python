@@ -1,11 +1,15 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+// Implementation of reduction operations
+
 #include "ddptensor/ReduceOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
 
+#if 0
 namespace x {
 
     class ReduceOp
@@ -67,12 +71,11 @@ namespace x {
 
     };
 } // namespace x
-
+#endif // if 0
 
 // convert id of our reduction op to id of imex::ptensor reduction op
 static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop)
 {
-#pragma GCC diagnostic ignored "-Wswitch"
     switch(rop) {
     case MEAN:
         return ::imex::ptensor::MEAN;
@@ -93,8 +96,6 @@ static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop)
     }
 }
 
-#pragma GCC diagnostic pop
-
 struct DeferredReduceOp : public Deferred
 {
     id_type _a;
@@ -103,7 +104,8 @@ struct DeferredReduceOp : public Deferred
 
     DeferredReduceOp() = default;
     DeferredReduceOp(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
-        : _a(a.id()), _dim(dim), _op(op)
+        : Deferred(a.dtype(), 0), // FIXME rank
+          _a(a.id()), _dim(dim), _op(op)
     {}
 
     void run()
@@ -116,21 +118,19 @@ struct DeferredReduceOp : public Deferred
 
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
-        // FIXME the type of the result is hard-coded to uint64_t
         // FIXME reduction over individual dimensions is not supported
         auto a = ivm[_a].first;
-        auto ptt = a.getType().dyn_cast<::imex::ptensor::PTensorType>();
-        assert(ptt);
+        auto a_ptt = a.getType().dyn_cast<::imex::ptensor::PTensorType>();
+        assert(a_ptt);
         
         auto rtyp = ::imex::ptensor::PTensorType::get(
             builder.getContext(), 
-            ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), ptt.getRtensor().getElementType()),
+            ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), a_ptt.getRtensor().getElementType()),
             true
         );
         auto rop = builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a);
         auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
-            // FIXME GC assert(allocated == aligned);
-            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {rop, setter};
         return rop;

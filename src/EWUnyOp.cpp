@@ -1,8 +1,9 @@
 #include "ddptensor/EWUnyOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 
+#if 0
 namespace x {
 
     class EWUnyOp
@@ -108,6 +109,7 @@ namespace x {
 
     };
 } //namespace x
+#endif // if 0
 
 struct DeferredEWUnyOp : public Deferred
 {
@@ -121,8 +123,8 @@ struct DeferredEWUnyOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
+        // const auto a = std::move(Registry::get(_a).get());
+        // set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
     }
 
     FactoryId factory() const

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "UtilsAndTypes.hpp"
-#include "x.hpp"
+#include "DDPTensorImpl.hpp"
 
 struct CollComm
 {
@@ -24,17 +24,17 @@ struct CollComm
     static map_info_type map(const PVSlice & n_slc, const PVSlice & o_slc);
 
     template<typename T, typename U>
-    static tensor_i::ptr_type coll_copy(std::shared_ptr<x::DPTensorX<T>> b_ptr, const std::shared_ptr<x::DPTensorX<U>> & a_ptr)
+    static tensor_i::ptr_type coll_copy(std::shared_ptr<DDPTensorImpl> b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr)
     {
         assert(! a_ptr->is_sliced() && ! b_ptr->is_sliced());
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
 
-        // Now we can send/recv directly to/from xarray buffers.
-        theTransceiver->alltoall(a_ptr->xarray().data(), // buffer_send
+        // Now we can send/recv directly to/from tensor buffers.
+        theTransceiver->alltoall(a_ptr->data(), // buffer_send
                                  info[0].data(),
                                  info[1].data(),
                                  DTYPE<T>::value,
-                                 b_ptr->xarray().data(), // buffer_recv
+                                 b_ptr->data(), // buffer_recv
                                  info[2].data(),
                                  info[3].data(),
                                  DTYPE<T>::value);
@@ -43,7 +43,7 @@ struct CollComm
     }
 
     template<typename T, typename U>
-    static std::array<int, 4> coll_map(const std::shared_ptr<x::DPTensorX<T>> & b_ptr, const std::shared_ptr<x::DPTensorX<U>> & a_ptr, std::vector<U> & rbuff)
+    static std::array<int, 4> coll_map(const std::shared_ptr<DDPTensorImpl> & b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr, std::vector<U> & rbuff)
     {
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
         
@@ -57,7 +57,7 @@ struct CollComm
         auto my_cnt_recv = info[2][r];
         info[2][r] = 0;
         // auto my_dplc_send = info[3][r];
-        // Now  adjust recv diplacements.
+        // Now  adjust recv displacements.
         // We know data is ordered by ranks, so we can simply shift
         for(auto i=r+1; i<nr; ++i) {
             info[3][i] = info[3][i-1] + info[2][i-1];
@@ -69,10 +69,10 @@ struct CollComm
         const U * sbuff = nullptr;
         // if a_ptr is non-contiguous (strided) we need to first copy into buffer
         if(a_ptr->is_sliced()) {
-            a_ptr->bufferize(a_ptr->tile_slice(), svec);
+            a_ptr->bufferize(NDSlice(a_ptr->slice().tile_shape()), svec);
             sbuff = reinterpret_cast<U*>(svec.data());
-        } else sbuff = a_ptr->xarray().data();
-        // Now we can send/recv directly to/from xarray buffers.
+        } else sbuff = a_ptr->data();
+        // Now we can send/recv directly to/from tensor buffers.
         theTransceiver->alltoall(sbuff, // buffer_send
                                  info[0].data(),
                                  info[1].data(),
@@ -86,7 +86,7 @@ struct CollComm
     }
 
     template<typename A, typename B>
-    static std::array<uint64_t, 2> coll_copy(const std::shared_ptr<x::DPTensorX<A>> & a_ptr, const std::array<std::vector<NDSlice>, 2> & a_overlap, std::vector<B> & rbuff)
+    static std::array<uint64_t, 2> coll_copy(const std::shared_ptr<DDPTensorImpl> & a_ptr, const std::array<std::vector<NDSlice>, 2> & a_overlap, std::vector<B> & rbuff)
     {
         if(a_overlap[0].empty()) return {0, 0};
 

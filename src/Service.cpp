@@ -1,11 +1,12 @@
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
 #include "ddptensor/Deferred.hpp"
 #include "ddptensor/Service.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Registry.hpp"
 #include "ddptensor/ddptensor.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 
+#if 0
 namespace x {
     struct Service
     {
@@ -28,6 +29,7 @@ namespace x {
         }
     };
 }
+#endif // if 0
 
 struct DeferredService : public Deferred
 {

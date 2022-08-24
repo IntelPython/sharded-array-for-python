@@ -11,6 +11,7 @@
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 
 #include <iostream>
+#include <unordered_set>
 
 static tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
 
@@ -27,7 +28,7 @@ void _dist(const Runable * p)
 
 Deferred::future_type Deferred::get_future()
 {
-    return {std::move(tensor_i::promise_type::get_future().share()), _guid};
+    return {std::move(promise_type::get_future().share()), _guid, _dtype, _rank};
 }
 
 Deferred::future_type defer_tensor(Runable::ptr_type && _d, bool is_global)
@@ -36,7 +37,7 @@ Deferred::future_type defer_tensor(Runable::ptr_type && _d, bool is_global)
     if(!d) throw std::runtime_error("Expected Deferred Tensor promise");
     if(is_global) {
         _dist(d);
-        d->_guid = Registry::get_guid();
+        d->set_guid(Registry::get_guid());
     }
     auto f = d->get_future();
     Registry::put(f);
@@ -58,6 +59,25 @@ void Runable::fini()
 {
     _deferred.clear();
 }
+
+#if 0
+class DepManager
+{
+private:
+    IdValueMap _ivm;
+    std::unordered_set<id_type> _args;
+public:
+    ::mlir::Value getDependent(i::mlir::OpBuilder & builder, d_type guid)
+    {
+        if(auto d = _ivm.find(guid); d == _ivm.end()) {
+            _func.insertArg
+            _ivm[guid] = {val, {}}
+        } else {
+            return d->second.first;
+        }
+    }
+};
+#endif
 
 void process_promises()
 {

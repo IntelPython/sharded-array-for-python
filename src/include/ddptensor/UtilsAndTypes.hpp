@@ -44,6 +44,42 @@ template<> struct DTYPE<uint16_t> { constexpr static DTypeId value = UINT16; };
 template<> struct DTYPE<uint8_t>  { constexpr static DTypeId value = UINT8; };
 template<> struct DTYPE<bool>     { constexpr static DTypeId value = BOOL; };
 
+template<DTypeId DT> struct TYPE {};
+template<> struct TYPE<FLOAT64> { using dtype = double; };
+template<> struct TYPE<FLOAT32> { using dtype = float; };
+template<> struct TYPE<INT64>   { using dtype = int64_t; };
+template<> struct TYPE<INT32>   { using dtype = int32_t; };
+template<> struct TYPE<INT16>   { using dtype = int16_t; };
+template<> struct TYPE<INT8>    { using dtype = int8_t; };
+template<> struct TYPE<UINT64>  { using dtype = uint64_t; };
+template<> struct TYPE<UINT32>  { using dtype = uint32_t; };
+template<> struct TYPE<UINT16>  { using dtype = uint16_t; };
+template<> struct TYPE<UINT8>   { using dtype = uint8_t; };
+template<> struct TYPE<BOOL>    { using dtype = bool; };
+
+static size_t sizeof_dtype(const DTypeId dt) {
+    switch(dt) {
+    case FLOAT64:
+    case INT64:
+    case UINT64:
+        return 8;
+    case FLOAT32:
+    case INT32:
+    case UINT32:
+        return 4;
+    case INT16:
+    case UINT16:
+        return 2;
+    case INT8:
+    case UINT8:
+        return 1;
+    case BOOL:
+        return sizeof(bool);
+    default:
+        throw std::runtime_error("unknown dtype");
+    };
+};
+
 template<typename T> py::object get_impl_dtype() { return get_impl_dtype(DTYPE<T>::value); };
 
 union PyScalar

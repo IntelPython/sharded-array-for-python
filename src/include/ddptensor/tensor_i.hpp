@@ -26,18 +26,30 @@ public:
     class TFuture : public std::shared_future<tensor_i::ptr_type>
     {
         id_type _id;
+        DTypeId _dtype;
+        int     _rank;
         
     public:
         using std::shared_future<tensor_i::ptr_type>::shared_future;
-        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id)
+        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id, DTypeId dt, int rank)
             : std::shared_future<tensor_i::ptr_type>(std::move(f)),
-            _id(id)
+            _id(id),
+            _dtype(dt),
+            _rank(rank)
         {}
+
         ~TFuture()
         {
         }
         
+        /// @return globally unique id
         id_type id() const { return _id; }
+
+        /// @return dtype of future tensor
+        DTypeId dtype() const { return _dtype; }
+
+        /// @return rank (number of dims) of future tensor
+        int rank() const { return _rank; }
     };
 
     typedef TFuture future_type;

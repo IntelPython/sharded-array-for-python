@@ -3,10 +3,50 @@
 #pragma once
 
 #include "UtilsAndTypes.hpp"
-#include "tensor_i.hpp"
-#include "x.hpp"
-#include "p2c_ids.hpp"
 
+template<typename DispatchFunc>
+void dispatch(DTypeId dt, void * ptr, DispatchFunc func)
+{
+    switch(dt) {
+    case FLOAT64:
+        func(reinterpret_cast<double*>(ptr));
+        break;
+    case FLOAT32:
+        func(reinterpret_cast<float*>(ptr));
+        break;
+    case INT64:
+        func(reinterpret_cast<int64_t*>(ptr));
+        break;
+    case INT32:
+        func(reinterpret_cast<int32_t*>(ptr));
+        break;
+    case INT16:
+        func(reinterpret_cast<int16_t*>(ptr));
+        break;
+    case INT8:
+        func(reinterpret_cast<int8_t*>(ptr));
+        break;
+    case UINT64:
+        func(reinterpret_cast<uint64_t*>(ptr));
+        break;
+    case UINT32:
+        func(reinterpret_cast<uint32_t*>(ptr));
+        break;
+    case UINT16:
+        func(reinterpret_cast<uint16_t*>(ptr));
+        break;
+    case UINT8:
+        func(reinterpret_cast<uint8_t*>(ptr));
+        break;
+    case BOOL:
+        func(reinterpret_cast<bool*>(ptr));
+        break;
+    default:
+        throw std::runtime_error("unknown dtype");
+    }
+}
+
+#if 0
 // Dependent on dt, dispatch arguments to a operation class.
 // The operation must
 //    * be a template class accepting the element type as argument
@@ -103,3 +143,4 @@ auto TypeDispatch(Ts&&... args)
 {
     return OpDispatch::op(std::forward<Ts>(args)...);
 }
+#endif

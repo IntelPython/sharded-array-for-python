@@ -87,14 +87,10 @@ set(MyCppSources ${MyCppSources} ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp ${P2C_HP
 
 pybind11_add_module(_ddptensor MODULE ${MyCppSources})
 
-target_compile_definitions(_ddptensor PRIVATE XTENSOR_USE_XSIMD=1 XTENSOR_USE_TBB=1 USE_MKL=1 DDPT_2TYPES=1)
+target_compile_definitions(_ddptensor PRIVATE USE_MKL=1 DDPT_2TYPES=1)
 target_compile_options(_ddptensor PRIVATE "-ftemplate-backtrace-limit=0")
 target_include_directories(_ddptensor PRIVATE
   ${PROJECT_SOURCE_DIR}/src/include
-  ${PROJECT_SOURCE_DIR}/third_party/xtl/include
-  ${PROJECT_SOURCE_DIR}/third_party/xsimd/include
-  ${PROJECT_SOURCE_DIR}/third_party/xtensor-blas/include
-  ${PROJECT_SOURCE_DIR}/third_party/xtensor/include
   ${PROJECT_SOURCE_DIR}/third_party/bitsery/include
   ${MPI_INCLUDE_PATH}
   $ENV{MKLROOT}/include

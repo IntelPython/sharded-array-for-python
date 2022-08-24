@@ -1,9 +1,10 @@
 #include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Creator.hpp"
 
+#if 0
 namespace x {
 
     class IEWBinOp
@@ -74,6 +75,7 @@ namespace x {
 
     };
 } // namespace x
+#endif // if 0
 
 struct DeferredIEWBinOp : public Deferred
 {
@@ -88,9 +90,9 @@ struct DeferredIEWBinOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        const auto b = std::move(Registry::get(_b).get());
-        set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
+        // const auto a = std::move(Registry::get(_a).get());
+        // const auto b = std::move(Registry::get(_b).get());
+        // set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
     }
      
     FactoryId factory() const

@@ -1,11 +1,11 @@
-#include <xtensor/xrandom.hpp>
 #include "ddptensor/Random.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 #include <bitsery/traits/vector.h>
 
 using ptr_type = tensor_i::ptr_type;
 
+#if 0
 namespace x {
 
     template<typename T>
@@ -21,6 +21,7 @@ namespace x {
         }
     };
 }
+#endif // if 0
 
 struct DeferredRandomOp : public Deferred
 {
@@ -35,6 +36,7 @@ struct DeferredRandomOp : public Deferred
 
     void run()
     {
+#if 0
         switch(_dtype) {
         case FLOAT64:
             set_value(std::move(x::Rand<double>::op(_shape, _lower, _upper)));
@@ -44,6 +46,7 @@ struct DeferredRandomOp : public Deferred
             return;
         }
         throw std::runtime_error("rand: dtype must be a floating point type");
+#endif // if 0
     }
     
     FactoryId factory() const
@@ -64,12 +67,12 @@ struct DeferredRandomOp : public Deferred
 
 ddptensor * Random::rand(DTypeId dtype, const shape_type & shape, const py::object & lower, const py::object & upper)
 {
-    return new ddptensor(defer<DeferredRandomOp>(shape, x::to_native<double>(lower), x::to_native<double>(upper), dtype));
+    return new ddptensor(defer<DeferredRandomOp>(shape, to_native<double>(lower), to_native<double>(upper), dtype));
 }
 
 void Random::seed(uint64_t s)
 {
-    defer_lambda([s](){xt::random::seed(s); return tensor_i::ptr_type();});
+    // FIXME defer_lambda([s](){xt::random::seed(s); return tensor_i::ptr_type();});
 }
 
 FACTORY_INIT(DeferredRandomOp, F_RANDOM);

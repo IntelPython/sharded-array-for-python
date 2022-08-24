@@ -39,17 +39,52 @@ struct DeferredT : public P, public Runable
     DeferredT(const DeferredT<P, F> &) = delete;
 };
 
-struct Deferred : public DeferredT<tensor_i::promise_type, tensor_i::future_type>
+/// Deferred operation returning/producing a tensor
+/// holds a guid as well as rank and dtype of future tensor
+class Deferred : public DeferredT<tensor_i::promise_type, tensor_i::future_type>
 {
+public:
     using ptr_type = std::unique_ptr<Deferred>;
-    id_type _guid = Registry::NOGUID;
+    
+    Deferred(DTypeId dt, int rank)
+    : _guid(Registry::NOGUID), // might be set later
+      _dtype(dt),
+      _rank(rank)
+    {}
+    Deferred(id_type guid, DTypeId dt, int rank)
+    : _guid(guid),
+      _dtype(dt),
+      _rank(rank)
+    {}
+    // FIXME we should not allow default values for dtype and rank
+    // we should need this only while we are gradually moving to mlir
+    Deferred()
+    : _guid(Registry::NOGUID),
+      _dtype(DTYPE_LAST),
+      _rank(-1)
+    {}
+
+    id_type guid() const { return _guid; }
+    DTypeId dtype() const { return _dtype; }
+    int rank() const { return _rank; }
+
+    void set_guid(id_type guid) {
+        _guid = guid;
+    }
+
     future_type get_future();
     // from Runable
     void defer(Runable::ptr_type &&);
+
+protected:
+    id_type _guid;
+    DTypeId _dtype;
+    int     _rank;
 };
 
 extern void _dist(const Runable * p);
 
+// defer operations which do not return a tensor, e.g. which are not a Deferred
 template<typename T, typename... Ts, std::enable_if_t<!std::is_base_of_v<Deferred, T>, bool> = true>
 typename T::future_type defer(Ts&&... args)
 {
@@ -60,8 +95,10 @@ typename T::future_type defer(Ts&&... args)
     return f;
 }
 
+// implementation details for deferring ops returning tensors 
 extern Deferred::future_type defer_tensor(Runable::ptr_type && d, bool is_global);
 
+// defer operations which do return a tensor, e.g. which are a Deferred
 template<typename T, typename... Ts, std::enable_if_t<std::is_base_of_v<Deferred, T>, bool> = true>
 Deferred::future_type defer(Ts&&... args)
 {

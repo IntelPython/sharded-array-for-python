@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <xtensor/xview.hpp>
-using namespace xt::placeholders;
 #include "ddptensor/EWBinOp.hpp"
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Registry.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/TypePromotion.hpp"
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/Chunker.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
@@ -45,6 +43,7 @@ using namespace xt::placeholders;
 // above regions and apply the op. All buffers/views get linearized/flattened.
 // #######################################################################################
 
+#if 0
 namespace x {
 
     // @return true if operation returs bool, false otherwise
@@ -371,6 +370,7 @@ namespace x {
         }
     };
 } // namespace x
+#endif // if 0
 
 // convert id of our binop to id of imex::ptensor binop
 static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop)
@@ -443,7 +443,8 @@ struct DeferredEWBinOp : public Deferred
 
     DeferredEWBinOp() = default;
     DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : _a(a.id()), _b(b.id()), _op(op)
+        : Deferred(a.dtype(), a.rank()),
+          _a(a.id()), _b(b.id()), _op(op)
     {}
 
     void run() override
@@ -457,12 +458,11 @@ struct DeferredEWBinOp : public Deferred
 
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
-        // FIXME the type of the result is hard-coded to uint64_t
+        // FIXME the type of the result is based on a only
         auto rtyp = ivm[_a].first.getType();
         auto ewbo = builder.create<::imex::ptensor::EWBinOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), ivm[_a].first, ivm[_b].first);
         auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
-            // FIXME GC assert(allocated == aligned);
-            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {ewbo, setter};
         return ewbo;

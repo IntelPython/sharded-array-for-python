@@ -1,9 +1,10 @@
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Mediator.hpp"
 #include "ddptensor/Factory.hpp"
 
+#if 0
 namespace x {
 
     class GetItem
@@ -175,6 +176,7 @@ namespace x {
     };
 
 } // namespace x
+#endif // if 0
 
 struct DeferredSetItem : public Deferred
 {
@@ -189,9 +191,9 @@ struct DeferredSetItem : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        const auto b = std::move(Registry::get(_b).get());
-        set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
+        //const auto a = std::move(Registry::get(_a).get());
+        //const auto b = std::move(Registry::get(_b).get());
+        //set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
     }
 
     FactoryId factory() const
@@ -225,8 +227,8 @@ struct DeferredGetItem : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
+        //const auto a = std::move(Registry::get(_a).get());
+        //set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
     }
 
     FactoryId factory() const
@@ -250,18 +252,18 @@ ddptensor * GetItem::__getitem__(const ddptensor & a, const std::vector<py::slic
 py::object GetItem::get_slice(const ddptensor & a, const std::vector<py::slice> & v)
 {
     const auto aa = std::move(a.get());
-    return TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
+    return {}; // FIXME TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
 }
 
 py::object GetItem::get_local(const ddptensor & a, py::handle h)
 {
     const auto aa = std::move(a.get().get());
-    return TypeDispatch<x::SPMD>(aa, h);
+    return {}; // FIXME TypeDispatch<x::SPMD>(aa, h);
 }
 
 py::object GetItem::do_gather(const tensor_i::ptr_type & a, rank_type root)
 {
-    return TypeDispatch<x::SPMD>(a, root);
+    return {}; // FIXME TypeDispatch<x::SPMD>(a, root);
 }
 
 py::object GetItem::gather(const ddptensor & a, rank_type root)

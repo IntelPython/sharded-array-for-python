@@ -1,12 +1,13 @@
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
 #include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
 
+#if 0
 namespace x {
 
     template<typename T>
@@ -63,6 +64,7 @@ namespace x {
         }
     }; // class creatorx
 } // namespace x
+#endif // if 0
 
 struct DeferredFromShape : public Deferred
 {
@@ -72,13 +74,16 @@ struct DeferredFromShape : public Deferred
 
     DeferredFromShape() = default;
     DeferredFromShape(CreatorId op, const shape_type & shape, DTypeId dtype)
-        : _shape(shape), _dtype(dtype), _op(op)
+        : Deferred(dtype, shape.size()),
+          _shape(shape), _dtype(dtype), _op(op)
     {}
 
     void run()
     {
-        set_value(std::move(TypeDispatch<x::Creator>(_dtype, _op, _shape)));
+        // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _op, _shape)));
     }
+
+    // FIXME mlir
 
     FactoryId factory() const
     {
@@ -107,14 +112,17 @@ struct DeferredFull : public Deferred
 
     DeferredFull() = default;
     DeferredFull(const shape_type & shape, PyScalar val, DTypeId dtype)
-        : _shape(shape), _val(val), _dtype(dtype)
+        : Deferred(dtype, shape.size()),
+          _shape(shape), _val(val), _dtype(dtype)
     {}
 
     void run()
     {
-        auto op = FULL;
-        set_value(std::move(TypeDispatch<x::Creator>(_dtype, op, _shape, _val)));
+        // auto op = FULL;
+        // set_value(std::move(TypeDispatch<x::Creator>(_dtype, op, _shape, _val)));
     }
+
+    // FIXME mlir
 
     FactoryId factory() const
     {
@@ -139,11 +147,11 @@ ddptensor * Creator::full(const shape_type & shape, const py::object & val, DTyp
 struct DeferredArange : public Deferred
 {
     uint64_t _start, _end, _step;
-    DTypeId _dtype;
 
     DeferredArange() = default;
     DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype)
-        : _start(start), _end(end), _step(step), _dtype(dtype)
+        : Deferred(dtype, 1),
+          _start(start), _end(end), _step(step)
     {}
 
     void run() override
@@ -153,21 +161,20 @@ struct DeferredArange : public Deferred
     
     ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
-        // FIXME the type of the result is hard-coded to uint64_t
         // create start, stop and step
         auto start = jit::createI64(loc, builder, _start);
         auto end = jit::createI64(loc, builder, _end);
         auto step = jit::createI64(loc, builder, _step);
         // create arange
         auto dtype = builder.getI64Type();
+        assert(_dtype == INT64 || _dtype == UINT64); // FIXME
         llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
         auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
         auto ar = builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true);
         auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
-            // FIXME GC assert(allocated == aligned);
             assert(rank == 1);
             assert(strides[0] == 1);
-            this->set_value(std::move(x::operatorx<uint64_t>::mk_tx(rank, allocated, aligned, offset, sizes, strides)));
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {ar, setter};
         return ar;

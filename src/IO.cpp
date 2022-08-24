@@ -2,6 +2,7 @@
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/Transceiver.hpp"
 
 using promise_type = std::promise<py::object>;
 using future_type = std::shared_future<py::object>;

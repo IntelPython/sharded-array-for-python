@@ -1,10 +1,11 @@
 #include <mpi.h>
 #include "ddptensor/ManipOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/Factory.hpp"
 
+#if 0
 namespace x {
 
     class ManipOp
@@ -23,6 +24,7 @@ namespace x {
         }
     };
 }
+#endif // if 0
 
 struct DeferredManipOp : public Deferred
 {
@@ -36,8 +38,8 @@ struct DeferredManipOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        set_value(std::move(TypeDispatch<x::ManipOp>(a, _shape)));
+        //const auto a = std::move(Registry::get(_a).get());
+        //set_value(std::move(TypeDispatch<x::ManipOp>(a, _shape)));
     }
 
     FactoryId factory() const

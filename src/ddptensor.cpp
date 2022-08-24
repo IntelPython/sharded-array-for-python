@@ -8,9 +8,9 @@
 
   We bridge dynamic dtypes of the Python array through dynamic type dispatch (TypeDispatch).
   This means the compiler will instantiate the full functionality for all elements types.
-  Within kernels we dispatch the operation type by enum values (see x.hpp).
+  Within kernels we dispatch the operation type by enum values.
   tensor_i is an abstract class to hide the element type which of the actual tensor.
-  The concrete tensor implementation (DPTensorX, x.hpp) requires the element type
+  The concrete tensor implementation (DDPTensorImpl) requires the element type
   as a template parameter.
  */
 
@@ -184,7 +184,7 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("uniform", &Random::rand);
 
 #if 0
-    py::class_<tensor_i, tensor_i::ptr_type>(m, "DPTensorX")
+    py::class_<tensor_i, tensor_i::ptr_type>(m, "DDPTensorImpl")
         .def_property_readonly("dtype", &tensor_i::dtype)
         .def_property_readonly("shape", &tensor_i::shape)
         .def_property_readonly("size", &tensor_i::size)

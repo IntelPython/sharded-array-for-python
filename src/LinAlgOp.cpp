@@ -2,10 +2,10 @@
 //#include <mkl.h>
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/x.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
-#include "xtensor-blas/xlinalg.hpp"
 
+#if 0
 namespace x {
 
     template<typename T> struct TGEMM;
@@ -109,6 +109,7 @@ namespace x {
         }
     };
 }
+#endif // if 0
 
 struct DeferredLinAlgOp : public Deferred
  {
@@ -123,9 +124,9 @@ struct DeferredLinAlgOp : public Deferred
 
     void run()
     {
-        const auto a = std::move(Registry::get(_a).get());
-        const auto b = std::move(Registry::get(_b).get());
-        set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
+        //const auto a = std::move(Registry::get(_a).get());
+        //const auto b = std::move(Registry::get(_b).get());
+        //set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
     }
     
     FactoryId factory() const

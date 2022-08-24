@@ -13,8 +13,8 @@ public:
     ddptensor(tensor_i::future_type && f)
         : _ftx(std::move(f))
     {}
-    ddptensor(std::shared_future<tensor_i::ptr_type> && f, id_type id)
-        : _ftx(std::move(f), id)
+    ddptensor(std::shared_future<tensor_i::ptr_type> && f, id_type id, DTypeId dt, int rank)
+        : _ftx(std::move(f), id, dt, rank)
     {}
 
     ~ddptensor()

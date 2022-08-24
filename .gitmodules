@@ -1,21 +1,6 @@
 [submodule "third_party/bitsery"]
 	path = third_party/bitsery
 	url = https://github.com/fraillt/bitsery
-[submodule "third_party/xtensor"]
-	path = third_party/xtensor
-	url = https://github.com/xtensor-stack/xtensor
-[submodule "third_party/xtensor-blas"]
-	path = third_party/xtensor-blas
-	url = https://github.com/xtensor-stack/xtensor-blas
-[submodule "third_party/xsimd"]
-	path = third_party/xsimd
-	url = https://github.com/xtensor-stack/xsimd
-[submodule "third_party/xtl"]
-	path = third_party/xtl
-	url = https://github.com/xtensor-stack/xtl
 [submodule "third_party/mlir-extensions"]
 	path = third_party/mlir-extensions
 	url = https://github.com/intel/mlir-extensions
-[submodule "third_party/dpcomp"]
-	path = third_party/dpcomp
-	url = https://github.com/IntelPython/dpcomp.git
