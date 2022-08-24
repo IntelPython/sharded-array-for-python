@@ -456,7 +456,7 @@ struct DeferredEWBinOp : public Deferred
 #endif
     }
 
-    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
         // FIXME the type of the result is based on a only
         auto rtyp = ivm[_a].first.getType();
@@ -465,7 +465,7 @@ struct DeferredEWBinOp : public Deferred
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {ewbo, setter};
-        return ewbo;
+        return false;
     }
 
     FactoryId factory() const

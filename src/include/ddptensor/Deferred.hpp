@@ -16,10 +16,11 @@ struct Runable
     /// actually execute, a deferred will set value of future
     virtual void run() = 0;
     /// generate MLIR code for jit
-    virtual ::mlir::Value generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &)
+    /// @return true if last operation in to-be-compiled region, false otherwise
+    virtual bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &)
     {
         throw(std::runtime_error("No MLIR support for this operation."));
-        return {};
+        return false;
     };
     virtual FactoryId factory() const = 0;
     virtual void defer(ptr_type &&);
@@ -142,6 +143,11 @@ struct DeferredLambda : public Runable
     void run()
     {
         _l();
+    }
+
+    bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &)
+    {
+        return _l();
     }
 
     FactoryId factory() const

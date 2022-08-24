@@ -116,7 +116,7 @@ struct DeferredReduceOp : public Deferred
 #endif
     }
 
-    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
         // FIXME reduction over individual dimensions is not supported
         auto a = ivm[_a].first;
@@ -133,7 +133,7 @@ struct DeferredReduceOp : public Deferred
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {rop, setter};
-        return rop;
+        return false;
     }
 
     FactoryId factory() const

@@ -163,21 +163,30 @@ PYBIND11_MODULE(_ddptensor, m) {
     py::class_<LinAlgOp>(m, "LinAlgOp")
         .def("vecdot", &LinAlgOp::vecdot);
 
-#define GET_REPL(_f) std::unique_ptr<ddptensor>(Service::replicate(f))->get().get()
+/// trigger compile&run and return given attribute _x
+#define SYNC_RETURN(_f, _a) Service::run(); return (_f).get().get()->_a()
+/// Rerplicate ddptensor/future and SYNC_RETURN attributre _a
+#define REPL_SYNC_RETURN(_f, _a) auto r_ = std::unique_ptr<ddptensor>(Service::replicate(f)); SYNC_RETURN(r_->get(), _a)
+
     py::class_<ddptensor>(m, "DDPTFuture")
-        .def_property_readonly("dtype", [](const ddptensor & f) { return f.get().get()->dtype(); })
-        .def_property_readonly("shape", [](const ddptensor & f) { return f.get().get()->shape(); })
-        .def_property_readonly("size", [](const ddptensor & f) { return f.get().get()->size(); })
-        .def_property_readonly("ndim", [](const ddptensor & f) { return f.get().get()->ndim(); })
-        .def("__bool__", [](const ddptensor & f) { return GET_REPL(f)->__bool__(); })
-        .def("__float__", [](const ddptensor & f) { return GET_REPL(f)->__float__(); })
-        .def("__int__", [](const ddptensor & f) { return GET_REPL(f)->__int__(); })
-        .def("__index__", [](const ddptensor & f) { return GET_REPL(f)->__int__(); })
-        .def("__len__", [](const ddptensor & f) { return f.get().get()->__len__(); })
-        .def("__repr__", [](const ddptensor & f) { return f.get().get()->__repr__(); })
+        // attributes we can get from the future itself
+        .def_property_readonly("dtype", [](const ddptensor & f) { return f.get().dtype(); })
+        .def_property_readonly("ndim", [](const ddptensor & f) { return f.get().rank(); })
+        // attributes we can get from future without additional computation
+        .def_property_readonly("shape", [](const ddptensor & f) { SYNC_RETURN(f, shape); })
+        .def_property_readonly("size", [](const ddptensor & f) { SYNC_RETURN(f, size); })
+        .def("__len__", [](const ddptensor & f) { SYNC_RETURN(f, __len__); })
+        .def("__repr__", [](const ddptensor & f) { SYNC_RETURN(f, __repr__); })
+        // attributes extracting values require replication
+        .def("__bool__", [](const ddptensor & f) { REPL_SYNC_RETURN(f, __bool__); })
+        .def("__float__", [](const ddptensor & f) { REPL_SYNC_RETURN(f, __float__); })
+        .def("__int__", [](const ddptensor & f) { REPL_SYNC_RETURN(f, __int__); })
+        .def("__index__", [](const ddptensor & f) { REPL_SYNC_RETURN(f, __int__); })
+        // attributes returning a new ddptensor
         .def("__getitem__", &GetItem::__getitem__)
         .def("__setitem__", &SetItem::__setitem__);
-#undef GET_REPL
+#undef REPL_SYNC_RETURN
+#undef SYNC_RETURN
 
     py::class_<Random>(m, "Random")
         .def("seed", &Random::seed)

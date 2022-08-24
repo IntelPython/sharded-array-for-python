@@ -159,7 +159,7 @@ struct DeferredArange : public Deferred
         // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
     };
     
-    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
         // create start, stop and step
         auto start = jit::createI64(loc, builder, _start);
@@ -177,7 +177,7 @@ struct DeferredArange : public Deferred
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         };
         ivm[_guid] = {ar, setter};
-        return ar;
+        return false;
     }
 
     FactoryId factory() const

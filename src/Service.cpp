@@ -35,13 +35,17 @@ struct DeferredService : public Deferred
 {
     enum Op : int {
         REPLICATE,
-        DROP
+        DROP,
+        RUN,
+        SERVICE_LAST
     };
 
     id_type _a;
     Op _op;
 
-    DeferredService() = default;
+    DeferredService(Op op = SERVICE_LAST)
+        : _a(), _op(op)
+    {}
     DeferredService(Op op, const tensor_i::future_type & a)
         : _a(a.id()), _op(op)
     {}
@@ -64,7 +68,7 @@ struct DeferredService : public Deferred
 #endif
     }
 
-    ::mlir::Value generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
     {
         switch(_op) {
         case DROP:
@@ -73,11 +77,13 @@ struct DeferredService : public Deferred
                 // FIXME create delete op and return it
             }
             break;
+        case RUN:
+            return true;
         default:
             throw(std::runtime_error("Unkown Service operation requested."));
         }
 
-        return {};
+        return false;
     }
 
     FactoryId factory() const
@@ -96,6 +102,11 @@ struct DeferredService : public Deferred
 ddptensor * Service::replicate(const ddptensor & a)
 {
     return new ddptensor(defer<DeferredService>(DeferredService::REPLICATE, a.get()));
+}
+
+void Service::run()
+{
+    defer_lambda([](){ return true; });
 }
 
 extern bool inited;
