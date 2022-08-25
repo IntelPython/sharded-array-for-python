@@ -68,14 +68,12 @@ struct DeferredService : public Deferred
 #endif
     }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         switch(_op) {
         case DROP:
-            if(auto e = ivm.find(_a); e != ivm.end()) {
-                ivm.erase(e);
-                // FIXME create delete op and return it
-            }
+            dm.drop(_a);
+            // FIXME create delete op and return it
             break;
         case RUN:
             return true;

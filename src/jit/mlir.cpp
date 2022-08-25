@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "ddptensor/jit/mlir.hpp"
+#include "ddptensor/Registry.hpp"
 
 #include "mlir/IR/MLIRContext.h"
 
@@ -61,6 +62,126 @@ static ::mlir::Type makeSignlessType(::mlir::Type type)
 {
     auto attr = builder.getI64IntegerAttr(val);
     return builder.create<::mlir::arith::ConstantOp>(loc, attr).getResult();
+}
+
+static ::mlir::Type getPTType(::mlir::OpBuilder & builder, DTypeId dtype, int rank)
+{
+    ::mlir::Type etyp;
+
+    switch(dtype) {
+    case FLOAT64:
+        etyp = builder.getF64Type();
+        break;
+    case FLOAT32:
+        etyp = builder.getF32Type();
+        break;
+    case INT64:
+    case UINT64:
+        etyp = builder.getI64Type();
+        break;
+    case INT32:
+    case UINT32:
+        etyp = builder.getI32Type();
+        break;
+    case INT16:
+    case UINT16:
+        etyp = builder.getIntegerType(16);
+        break;
+    case INT8:
+    case UINT8:
+        etyp = builder.getI8Type();
+        break;
+    case BOOL:
+        etyp = builder.getI1Type();
+        break;
+    default:
+        throw std::runtime_error("unknown dtype");
+    };
+
+    llvm::SmallVector<int64_t> shape(rank, -1); //::mlir::ShapedType::kDynamicSize);
+    return ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, etyp), true);
+}
+
+::mlir::Value DepManager::getDependent(::mlir::OpBuilder & builder, id_type guid)
+{
+    auto loc = builder.getUnknownLoc();
+    if(auto d = _ivm.find(guid); d == _ivm.end()) {
+        // Not found -> this must be an input argument to the jit function
+        auto idx = _args.size();
+        auto fut = Registry::get(d->first);
+        auto typ = getPTType(builder, fut.dtype(), fut.rank());
+        _func.insertArgument(idx, typ, {}, loc);
+        auto val = _func.getArgument(idx);
+        _args.push_back(guid);
+        _ivm[guid] = {val, {}};
+        return val;
+    } else {
+        return d->second.first;
+    }
+}
+
+void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb)
+{
+    _ivm[guid] = {val, cb};
+}
+
+void DepManager::drop(id_type guid)
+{
+    if(auto e = _ivm.find(guid); e != _ivm.end()) {
+        _ivm.erase(e);
+        // FIXME create delete op
+    }
+}
+
+// Now we have to define the return type as a ValueRange of all arrays which we have created
+// (runnables have put them into DepManager when generating mlir)
+// We also compute the total size of the struct llvm created for this return type
+// llvm will basically return a struct with all the arrays as members, each of type JIT::MemRefDescriptor
+uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
+{
+    // Need a container to put all return values, will be used to construct TypeRange
+    std::vector<::mlir::Value> ret_values(_ivm.size());
+
+    // remove default result
+    _func.eraseResult(0);
+
+    // here we store the total size of the llvm struct
+    uint64_t sz = 0;
+    unsigned idx = 0;
+    for(auto & v : _ivm) {
+        auto value = v.second.first;
+        // append the type and array/value
+        ret_values[idx] = value;
+        _func.insertResult(idx, value.getType(), {});
+        auto ptt = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
+        assert(ptt);
+        auto rank = ptt.getRtensor().getShape().size();
+        _irm[v.first] = rank;
+        // add sizeof(MemRefDescriptor<elementtype, rank>) to sz
+        sz += 3 + 2 * rank;
+        ++idx;
+    }
+
+    // add return statement
+    auto ret_value = builder.create<::mlir::func::ReturnOp>(builder.getUnknownLoc(), ret_values);
+
+    return sz;
+}
+
+void DepManager::deliver(intptr_t * output, uint64_t sz)
+{
+    size_t pos = 0;
+    for(auto & v : _ivm) {
+        auto value = v.second.first;
+        auto rank = _irm[v.first];
+        void * allocated = reinterpret_cast<void*>(output[pos]);
+        void * aligned = reinterpret_cast<void*>(output[pos+1]);
+        intptr_t offset = output[pos+2];
+        intptr_t * sizes = output + pos + 3;
+        intptr_t * stride = output + pos + 3 + rank;
+        pos += 3 + 2 * rank;
+        v.second.second(rank, allocated, aligned, offset, sizes, stride);
+    }
 }
 
 int JIT::run(::mlir::ModuleOp & module, const std::string & fname, void * out)
@@ -134,70 +255,4 @@ void init()
     ::llvm::InitializeNativeTargetAsmPrinter();
     //::llvm::initializeLLVMPasses();
 }
-
-// mock function for POC testing
-// delayed execution will do something like the below:
-//  * create module
-//  * create a function and define its types (input and return types)
-//  * create the function body and return op
-//  * add function to module
-//  * compile & run the module
-void ttt()
-{
-    JIT jit;
-
-    ::mlir::OpBuilder builder(&jit._context);
-    auto loc = builder.getUnknownLoc();
-    auto module = builder.create<::mlir::ModuleOp>(loc);
-
-    // Create a func prototype
-    auto dtype = builder.getI64Type();
-    llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
-    auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
-    auto rrtype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), dtype), true);
-    auto funcType = builder.getFunctionType({}, rrtype);
-
-    std::string fname("tttt");
-    auto function = builder.create<::mlir::func::FuncOp>(loc, fname, funcType);
-    // request generation of c-wrapper function
-    function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
-
-    // Create an ::mlir function for the given prototype.
-    //::mlir::func::FuncOp function(fproto);
-    //assert(function);
-
-    // Let's start the body of the function now!
-    // In ::mlir the entry block of the function is special: it must have the same
-    // argument list as the function itself.
-    auto &entryBlock = *function.addEntryBlock();
-
-    // Set the insertion point in the builder to the beginning of the function
-    // body, it will be used throughout the codegen to create operations in this
-    // function.
-    builder.setInsertionPointToStart(&entryBlock);
-    
-    // create start, stop and step
-    auto c0 = createI64(loc, builder, 0);
-    auto c10 = createI64(loc, builder, 10);
-    auto c1 = createI64(loc, builder, 1);
-    auto c100 = createI64(loc, builder, 100);
-
-    // return np.sum(np.arange(1,10,1)+np.arange(1,100,10)) -> 495
-    auto rangea = builder.create<::imex::ptensor::ARangeOp>(loc, artype, c0, c10, c1, true);
-    auto rangeb = builder.create<::imex::ptensor::ARangeOp>(loc, artype, c0, c100, c10, true);
-    auto added = builder.create<::imex::ptensor::EWBinOp>(loc, artype, builder.getI32IntegerAttr(::imex::ptensor::ADD), rangea, rangeb);
-    auto reduced = builder.create<::imex::ptensor::ReductionOp>(loc, rrtype, builder.getI32IntegerAttr(::imex::ptensor::SUM), added);
-    auto ret = builder.create<::mlir::func::ReturnOp>(loc, reduced.getResult());
-    // add the function to the module
-    module.push_back(function);
-
-    JIT::MemRefDescriptor<int64_t, 1> result;
-    void * r_ptr = &result;
-    // finally compile and run the module
-    if(jit.run(module, fname, r_ptr)) throw std::runtime_error("failed running jit");
-
-    std::cout << "aptr=" << result.allocated << " dptr=" << result.aligned << " offset=" << result.offset << std::endl;
-    std::cout << ((int64_t*)result.aligned)[result.offset] << std::endl;
-}
-
 } // namespace jit

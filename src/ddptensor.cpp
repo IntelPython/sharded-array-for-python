@@ -137,8 +137,7 @@ PYBIND11_MODULE(_ddptensor, m) {
         .def("_get_slice", &GetItem::get_slice)
         .def("_get_local", &GetItem::get_local)
         .def("_gather", &GetItem::gather)
-        .def("to_numpy", &IO::to_numpy)
-        .def("ttt", &jit::ttt);
+        .def("to_numpy", &IO::to_numpy);
 
     py::class_<Creator>(m, "Creator")
         .def("create_from_shape", &Creator::create_from_shape)

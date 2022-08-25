@@ -116,10 +116,10 @@ struct DeferredReduceOp : public Deferred
 #endif
     }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         // FIXME reduction over individual dimensions is not supported
-        auto a = ivm[_a].first;
+        auto a = dm.getDependent(builder, _a);
         auto a_ptt = a.getType().dyn_cast<::imex::ptensor::PTensorType>();
         assert(a_ptt);
         
@@ -128,11 +128,11 @@ struct DeferredReduceOp : public Deferred
             ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), a_ptt.getRtensor().getElementType()),
             true
         );
-        auto rop = builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
+        dm.addVal(guid(),
+                  builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a),
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
-        };
-        ivm[_guid] = {rop, setter};
+        });
         return false;
     }
 

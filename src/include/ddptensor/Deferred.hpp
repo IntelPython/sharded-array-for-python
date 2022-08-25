@@ -17,7 +17,7 @@ struct Runable
     virtual void run() = 0;
     /// generate MLIR code for jit
     /// @return true if last operation in to-be-compiled region, false otherwise
-    virtual bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &)
+    virtual bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::DepManager &)
     {
         throw(std::runtime_error("No MLIR support for this operation."));
         return false;
@@ -145,7 +145,7 @@ struct DeferredLambda : public Runable
         _l();
     }
 
-    bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::IdValueMap &)
+    bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::DepManager &)
     {
         return _l();
     }

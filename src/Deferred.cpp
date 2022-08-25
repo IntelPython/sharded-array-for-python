@@ -60,25 +60,6 @@ void Runable::fini()
     _deferred.clear();
 }
 
-#if 0
-class DepManager
-{
-private:
-    IdValueMap _ivm;
-    std::unordered_set<id_type> _args;
-public:
-    ::mlir::Value getDependent(i::mlir::OpBuilder & builder, d_type guid)
-    {
-        if(auto d = _ivm.find(guid); d == _ivm.end()) {
-            _func.insertArg
-            _ivm[guid] = {val, {}}
-        } else {
-            return d->second.first;
-        }
-    }
-};
-#endif
-
 void process_promises()
 {
     bool done = false;
@@ -87,7 +68,6 @@ void process_promises()
     do {
         ::mlir::OpBuilder builder(&jit._context);
         auto loc = builder.getUnknownLoc();
-        jit::IdValueMap ivp;
     
         // Create a MLIR module
         auto module = builder.create<::mlir::ModuleOp>(loc);
@@ -104,11 +84,13 @@ void process_promises()
         // we need to keep runables/deferred/futures alive until we set their values below
         std::vector<Runable::ptr_type> runables;
 
+        jit::DepManager dm(function);
+
         while(true) {
             Runable::ptr_type d;
             _deferred.pop(d);
             if(d) {
-                if(d->generate_mlir(builder, loc, ivp)) {
+                if(d->generate_mlir(builder, loc, dm)) {
                     d.reset();
                     break;
                 };
@@ -123,39 +105,8 @@ void process_promises()
 
         if(runables.empty()) continue;
 
-        // Now we have to define the return type as a ValueRange of all arrays which we have created
-        // (runnables have put them into ivp when generating mlir)
-        // We also compute the total size of the struct llvm created for this return type
-        // llvm will basically return a struct with all the arrays as members, each of type JIT::MemRefDescriptor
-
-        // Need a container to put all return values, will be used to construct TypeRange
-        std::vector<::mlir::Type> ret_types;
-        ret_types.reserve(ivp.size());
-        std::vector<::mlir::Value> ret_values;
-        ret_types.reserve(ivp.size());
-        std::unordered_map<id_type, uint64_t> rank_map;
-        // here we store the total size of the llvm struct
-        uint64_t sz = 0;
-        for(auto & v : ivp) {
-            auto value = v.second.first;
-            // append the type and array/value
-            ret_types.push_back(value.getType());
-            ret_values.push_back(value);
-            auto ptt = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
-            assert(ptt);
-            auto rank = ptt.getRtensor().getShape().size();
-            rank_map[v.first] = rank;
-            // add sizeof(MemRefDescriptor<elementtype, rank>) to sz
-            sz += 3 + 2 * rank;
-        }
-        ::mlir::TypeRange ret_tr(ret_types);
-        ::mlir::ValueRange ret_vr(ret_values);
-
-        // add return statement
-        auto ret_value = builder.create<::mlir::func::ReturnOp>(loc, ret_vr);
-        // Define and assign correct function type
-        auto funcTypeAttr = ::mlir::TypeAttr::get(builder.getFunctionType({}, ret_tr));
-        function.setFunctionTypeAttr(funcTypeAttr);
+        // create return statement and adjust function type
+        uint64_t sz = dm.handleResult(builder);
         // also request generation of c-wrapper function
         function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
         // add the function to the module
@@ -165,22 +116,10 @@ void process_promises()
         // compile and run the module
         assert(sizeof(intptr_t) == sizeof(void*));
         intptr_t * output = new intptr_t[sz];
-        std::cout << ivp.size() << " sz: " << sz << std::endl;
         if(jit.run(module, fname, output)) throw std::runtime_error("failed running jit");
 
-        // push results to fulfill promises
-        size_t pos = 0;
-        for(auto & v : ivp) {
-            auto value = v.second.first;
-            auto rank = rank_map[v.first];
-            void * allocated = (void*)output[pos];
-            void * aligned = (void*)output[pos+1];
-            intptr_t offset = output[pos+2];
-            intptr_t * sizes = output + pos + 3;
-            intptr_t * stride = output + pos + 3 + rank;
-            pos += 3 + 2 * rank;
-            v.second.second(rank, allocated, aligned, offset, sizes, stride);
-        }
+        // push results to deliver promises
+        dm.deliver(output, sz);
     } while(!done);
 }
 

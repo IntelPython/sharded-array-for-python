@@ -8,25 +8,59 @@
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 
 #include <unordered_map>
 #include <functional>
 #include  <utility>
+#include <vector>
 
 namespace jit {
 
 // function type for building body for linalg::generic
 using SetResFunc = std::function<void(
     uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides)>;
-using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
 
 // initialize jit
 void init();
 
-void ttt();
-
 // create a constant integer with given value
 extern ::mlir::Value createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_t val);
+
+/// Manages iput/output (tensor) dependences
+class DepManager
+{
+private:
+    using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
+    using IdRankMap = std::unordered_map<id_type, int>;
+    ::mlir::func::FuncOp & _func; // MLIR function to which ops are added
+    IdValueMap _ivm;              // guid -> {mlir::Value, deliver-callback}
+    IdRankMap _irm;               // guid -> rank as computed in MLIR
+    std::vector<id_type> _args;   // input args to generated function
+
+public:
+    DepManager(::mlir::func::FuncOp & f)
+    : _func(f)
+    {}
+    /// @return the ::mlir::Value representing the tensor with guid guid
+    /// If the tensor is not created wtihin the current function, it will
+    /// be added as a function argument.
+    ::mlir::Value getDependent(::mlir::OpBuilder & builder, id_type guid);
+
+    /// for the tensor guid register the ::mlir::value and a callback to deliver the promise which generated the value
+    /// if the tensor is alive when the function returns it will be added to the list of results
+    void addVal(id_type guid, ::mlir::Value val, SetResFunc cb);
+
+    /// signals end of lifetime of given tensor: does not need to be returned
+    void drop(id_type guid);
+
+    /// create return statement and add results to function
+    /// @return size of output in number of intptr_t's 
+    uint64_t handleResult(::mlir::OpBuilder & builder);
+
+    /// devlier promise after execution
+    void deliver(intptr_t *, uint64_t);
+};
 
 // A class to manage the MLIR business (compilation and execution).
 // Just a stub for now, will need to be extended with paramters and maybe more.

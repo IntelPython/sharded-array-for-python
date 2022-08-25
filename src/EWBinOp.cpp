@@ -456,15 +456,16 @@ struct DeferredEWBinOp : public Deferred
 #endif
     }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         // FIXME the type of the result is based on a only
-        auto rtyp = ivm[_a].first.getType();
-        auto ewbo = builder.create<::imex::ptensor::EWBinOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), ivm[_a].first, ivm[_b].first);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
+        auto a = dm.getDependent(builder, _a);
+        auto b = dm.getDependent(builder, _b);
+        dm.addVal(guid(),
+                  builder.create<::imex::ptensor::EWBinOp>(loc, a.getType(), builder.getI32IntegerAttr(ddpt2mlir(_op)), a, b),
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
-        };
-        ivm[_guid] = {ewbo, setter};
+        });
         return false;
     }
 

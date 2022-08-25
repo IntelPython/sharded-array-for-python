@@ -159,7 +159,7 @@ struct DeferredArange : public Deferred
         // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end, _step)));
     };
     
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::IdValueMap & ivm) override
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         // create start, stop and step
         auto start = jit::createI64(loc, builder, _start);
@@ -170,13 +170,13 @@ struct DeferredArange : public Deferred
         assert(_dtype == INT64 || _dtype == UINT64); // FIXME
         llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
         auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
-        auto ar = builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true);
-        auto setter = [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
+        dm.addVal(guid(),
+                  builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true),
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             assert(rank == 1);
             assert(strides[0] == 1);
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
-        };
-        ivm[_guid] = {ar, setter};
+        });
         return false;
     }
 
