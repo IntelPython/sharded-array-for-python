@@ -108,11 +108,11 @@ static ::mlir::Type getPTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
     if(auto d = _ivm.find(guid); d == _ivm.end()) {
         // Not found -> this must be an input argument to the jit function
         auto idx = _args.size();
-        auto fut = Registry::get(d->first);
+        auto fut = Registry::get(guid);
         auto typ = getPTType(builder, fut.dtype(), fut.rank());
         _func.insertArgument(idx, typ, {}, loc);
         auto val = _func.getArgument(idx);
-        _args.push_back(guid);
+        _args.push_back({guid, fut.rank()});
         _ivm[guid] = {val, {}};
         return val;
     } else {
@@ -120,8 +120,36 @@ static ::mlir::Type getPTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
     }
 }
 
+// size of memreftype in number of intptr_t's
+static inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
+
+uint64_t DepManager::arg_size()
+{
+    uint64_t sz = 0;
+    for(auto a : _args) {
+        sz += memref_sz(a.second);
+    }
+    return sz;
+}
+
+std::vector<void*> DepManager::store_inputs()
+{
+    std::vector<void*> res(_args.size());
+    int i = 0;
+    for(auto a : _args) {
+        auto f = Registry::get(a.first);
+        intptr_t * buff = new intptr_t[memref_sz(a.second)];
+        auto sz = f.get().get()->store_memref(buff, a.second);
+        res[i] = buff;
+        _ivm.erase(a.first); // inputs need no delivery
+        ++i;
+    }
+    return res;
+}
+
 void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb)
 {
+    assert(_ivm.find(guid) == _ivm.end());
     _ivm[guid] = {val, cb};
 }
 
@@ -158,7 +186,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
         auto rank = ptt.getRtensor().getShape().size();
         _irm[v.first] = rank;
         // add sizeof(MemRefDescriptor<elementtype, rank>) to sz
-        sz += 3 + 2 * rank;
+        sz += memref_sz(rank);
         ++idx;
     }
 
@@ -179,16 +207,17 @@ void DepManager::deliver(intptr_t * output, uint64_t sz)
         intptr_t offset = output[pos+2];
         intptr_t * sizes = output + pos + 3;
         intptr_t * stride = output + pos + 3 + rank;
-        pos += 3 + 2 * rank;
+        pos += memref_sz(rank);
         v.second.second(rank, allocated, aligned, offset, sizes, stride);
     }
 }
 
-int JIT::run(::mlir::ModuleOp & module, const std::string & fname, void * out)
+int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<void*> & inp, intptr_t * out)
 {    
     if (::mlir::failed(_pm.run(module)))
         throw std::runtime_error("failed to run pass manager");
 
+    module.dump();
     // An optimization pipeline to use within the execution engine.
     auto optPipeline = ::mlir::makeOptimizingTransformer(/*optLevel=*/0,
                                                          /*sizeLevel=*/0,
@@ -202,12 +231,20 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, void * out)
     assert(maybeEngine && "failed to construct an execution engine");
     auto &engine = maybeEngine.get();
 
-
     const char * fn = getenv("DDPT_FN");
     if(!fn) fn = fname.c_str();
 
+    llvm::SmallVector<void *> args;
+    // first arg must be the result ptr
+    args.push_back(&out);
+    // we need a void*& for every input tensor
+    // we refer directly to the storage in inp
+    for(auto & arg : inp) {
+        args.push_back(&arg);
+    }
+
     // Invoke the JIT-compiled function.
-    if(engine->invoke(fn, ::mlir::ExecutionEngine::result(out))) {
+    if(engine->invokePacked(std::string("_mlir_ciface_") + fn, args)) {
         ::llvm::errs() << "JIT invocation failed\n";
         throw std::runtime_error("JIT invocation failed");
     }
@@ -243,6 +280,7 @@ JIT::JIT()
 
 void init()
 {
+    assert(sizeof(intptr_t) == sizeof(void*));
     ::mlir::registerAllPasses();
     ::imex::registerAllPasses();
 

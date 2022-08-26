@@ -69,6 +69,9 @@ public:
     virtual void bufferize(const NDSlice & slice, Buffer & buff) const = 0;
     // size of a single element (in bytes)
     virtual int item_size() const = 0;
+    // store tensor information in form of coreesponding jit::JIT::MemRefDescriptor
+    // @return stored size in number of intptr_t
+    virtual uint64_t store_memref(intptr_t * buff, int rank) = 0;
 };
 
 #if 0

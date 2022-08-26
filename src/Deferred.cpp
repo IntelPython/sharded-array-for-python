@@ -106,20 +106,24 @@ void process_promises()
         if(runables.empty()) continue;
 
         // create return statement and adjust function type
-        uint64_t sz = dm.handleResult(builder);
+        uint64_t osz = dm.handleResult(builder);
         // also request generation of c-wrapper function
         function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
         // add the function to the module
         module.push_back(function);
         module.dump();
 
+        // get input buffers (before rsults!)
+        auto input = std::move(dm.store_inputs());
+
         // compile and run the module
-        assert(sizeof(intptr_t) == sizeof(void*));
-        intptr_t * output = new intptr_t[sz];
-        if(jit.run(module, fname, output)) throw std::runtime_error("failed running jit");
+        intptr_t * output = new intptr_t[osz];
+        if(jit.run(module, fname, input, output)) throw std::runtime_error("failed running jit");
 
         // push results to deliver promises
-        dm.deliver(output, sz);
+        dm.deliver(output, osz);
+
+        delete [] output;
     } while(!done);
 }
 

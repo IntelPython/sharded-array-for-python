@@ -29,6 +29,8 @@ class DDPTensorImpl : public tensor_i
     PVSlice _slice;
     void * _allocated;
     void * _aligned;
+    intptr_t * _sizes;
+    intptr_t * _strides;
     uint64_t _offset;
     DTypeId _dtype;
 
@@ -42,13 +44,17 @@ public:
         : _owner(owner),
           _slice(shape_type(rank ? rank : 1, rank ? sizes[0] : 1), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
           _allocated(allocated),
-          _aligned(nullptr),
+          _aligned(aligned),
+          _sizes(new intptr_t[rank]),
+          _strides(new intptr_t[rank]),
           _offset(offset),
           _dtype(dtype)
     {
         assert(rank <= 1);
         assert(rank == 0 || strides[0] == 1);
-        dispatch(_dtype, aligned, [this](auto * ptr) { this->_aligned = ptr + this->_offset; });
+
+        memcpy(_sizes, sizes, rank*sizeof(intptr_t));
+        memcpy(_strides, strides, rank*sizeof(intptr_t));
     }
 
     DDPTensorImpl(DTypeId dtype, const shape_type & shp, rank_type owner=NOOWNER)
@@ -60,6 +66,14 @@ public:
           _dtype(dtype)
     {
         alloc();
+
+        intptr_t stride = 1;
+        auto rank = shp.size();
+        for(auto i=0; i<rank; ++i) {
+            _sizes[i] = shp[i];
+            _strides[rank-i-1] = stride;
+            stride *= shp[i];
+        }
     }
 
     void alloc()
@@ -67,16 +81,23 @@ public:
         auto esz = sizeof_dtype(_dtype);
         _allocated = new (std::align_val_t(esz)) char[esz*_slice.size()];
         _aligned = _allocated;
+        auto rank = _slice.ndims();
+        _sizes = new intptr_t[rank];
+        _strides = new intptr_t[rank];
         _offset = 0;
     }
 
     ~DDPTensorImpl()
     {
+        delete [] _sizes;
+        delete [] _strides;
     }
 
     void * data()
     {
-        return _aligned;
+        void * ret;
+        dispatch(_dtype, _aligned, [this, &ret](auto * ptr) { ret = ptr + this->_offset; });
+        return ret;
     }
 
     bool is_sliced() const
@@ -90,7 +111,8 @@ public:
         const auto sz = _slice.size();
         std::ostringstream oss;
 
-        dispatch(_dtype, _aligned, [sz, &oss](auto * ptr) {
+        dispatch(_dtype, _aligned, [this, sz, &oss](auto * ptr) {
+            ptr += this->_offset;
             for(auto i=0; i<sz; ++i) {
                 oss << ptr[i] << " ";
             }
@@ -127,7 +149,7 @@ public:
             throw(std::runtime_error("Cast to scalar bool: tensor is not replicated"));
         
         bool res;
-        dispatch(_dtype, _aligned, [&res](auto * ptr) { res = static_cast<bool>(*ptr); });
+        dispatch(_dtype, _aligned, [this, &res](auto * ptr) { res = static_cast<bool>(ptr[this->_offset]); });
         return res;
     }
 
@@ -137,7 +159,7 @@ public:
             throw(std::runtime_error("Cast to scalar float: tensor is not replicated"));
 
         double res;
-        dispatch(_dtype, _aligned, [&res](auto * ptr) { res = static_cast<double>(*ptr); });
+        dispatch(_dtype, _aligned, [this, &res](auto * ptr) { res = static_cast<double>(ptr[this->_offset]); });
         return res;
     }
 
@@ -147,7 +169,7 @@ public:
             throw(std::runtime_error("Cast to scalar int: tensor is not replicated"));
 
         float res;
-        dispatch(_dtype, _aligned, [&res](auto * ptr) { res = static_cast<float>(*ptr); });
+        dispatch(_dtype, _aligned, [this, &res](auto * ptr) { res = static_cast<float>(ptr[this->_offset]); });
         return res;
     }
 
@@ -198,7 +220,18 @@ public:
         auto sz = _slice.size()*item_size();
         buff.resize(pos + sz);
         void * out = buff.data() + pos;
-        memcpy(out, _aligned, sz);
+        dispatch(_dtype, _aligned, [this, sz, out](auto * ptr) { memcpy(out, ptr + this->_offset, sz); });
+    }
+
+    virtual uint64_t store_memref(intptr_t * buff, int rank)
+    {
+        assert(rank == _slice.ndims() || (_slice.ndims() == 1 && _slice.size() == 1));
+        buff[0] = reinterpret_cast<intptr_t>(_allocated);
+        buff[1] = reinterpret_cast<intptr_t>(_aligned);
+        buff[2] = static_cast<intptr_t>(_offset);
+        memcpy(buff+3, _sizes, rank*sizeof(intptr_t));
+        memcpy(buff+3+rank, _strides, rank*sizeof(intptr_t));
+        return 3 + 2*rank;
     }
 };
 

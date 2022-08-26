@@ -33,10 +33,12 @@ class DepManager
 private:
     using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
     using IdRankMap = std::unordered_map<id_type, int>;
+    using ArgList = std::vector<std::pair<id_type, int>>;
+
     ::mlir::func::FuncOp & _func; // MLIR function to which ops are added
     IdValueMap _ivm;              // guid -> {mlir::Value, deliver-callback}
     IdRankMap _irm;               // guid -> rank as computed in MLIR
-    std::vector<id_type> _args;   // input args to generated function
+    ArgList _args;                // input arguments of the generated function
 
 public:
     DepManager(::mlir::func::FuncOp & f)
@@ -55,11 +57,19 @@ public:
     void drop(id_type guid);
 
     /// create return statement and add results to function
+    /// this must be called after store_inputs
     /// @return size of output in number of intptr_t's 
     uint64_t handleResult(::mlir::OpBuilder & builder);
 
     /// devlier promise after execution
     void deliver(intptr_t *, uint64_t);
+
+    /// @return total size of all input arguments in number of intptr_t
+    uint64_t arg_size();
+
+    /// store all inputs into given buffer
+    /// This must be called before handleResults()
+    std::vector<void*> store_inputs();
 };
 
 // A class to manage the MLIR business (compilation and execution).
@@ -77,7 +87,7 @@ public:
 
     JIT();
     // run
-    int run(::mlir::ModuleOp &, const std::string &, void *);
+    int run(::mlir::ModuleOp &, const std::string &, std::vector<void*> &, intptr_t *);
 
     ::mlir::MLIRContext _context;
     ::mlir::PassManager _pm;
