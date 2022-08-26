@@ -7,17 +7,36 @@
 
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-
-#include "imex/Dialect/PTensor/IR/PTensorOps.h"
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Transforms/Passes.h"
+// #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/Twine.h"
+
 #include "mlir/Pass/PassRegistry.h"
+#include "mlir/Conversion/Passes.h"
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
+// #include "mlir/Dialect/Async/Passes.h"
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Func/Transforms/Passes.h"
+// #include "mlir/Dialect/GPU/Transforms/Passes.h"
+// #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
+#include "mlir/Dialect/Linalg/Passes.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
+// #include "mlir/Dialect/NVGPU/Passes.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
+// #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
+#include "mlir/Dialect/Shape/Transforms/Passes.h"
+// #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
+// #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
+#include "mlir/Dialect/Tensor/Transforms/Passes.h"
+// #include "mlir/Dialect/Tosa/Transforms/Passes.h"
+// #include "mlir/Dialect/Transform/Transforms/Passes.h"
+// #include "mlir/Dialect/Vector/Transforms/Passes.h"
+#include "mlir/Transforms/Passes.h"
+
 
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
@@ -26,8 +45,7 @@
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 
-#include <mlir/InitAllDialects.h>
-#include <mlir/InitAllPasses.h>
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/InitIMEXDialects.h>
 #include <imex/InitIMEXPasses.h>
 
@@ -213,11 +231,18 @@ void DepManager::deliver(intptr_t * output, uint64_t sz)
 }
 
 int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<void*> & inp, intptr_t * out)
-{    
+{
+    // lower to LLVM
     if (::mlir::failed(_pm.run(module)))
         throw std::runtime_error("failed to run pass manager");
 
-    module.dump();
+    const char * v_ = getenv("DDPT_VERBOSE");
+    if(v_) {
+        std::string v(v_);
+        if(v == "0" || v == "n" || v == "N" || v == "off" || v == "OFF") v_ = nullptr;
+    }
+    if(v_) module.dump();
+
     // An optimization pipeline to use within the execution engine.
     auto optPipeline = ::mlir::makeOptimizingTransformer(/*optLevel=*/0,
                                                          /*sizeLevel=*/0,
@@ -231,9 +256,6 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
     assert(maybeEngine && "failed to construct an execution engine");
     auto &engine = maybeEngine.get();
 
-    const char * fn = getenv("DDPT_FN");
-    if(!fn) fn = fname.c_str();
-
     llvm::SmallVector<void *> args;
     // first arg must be the result ptr
     args.push_back(&out);
@@ -244,7 +266,7 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
     }
 
     // Invoke the JIT-compiled function.
-    if(engine->invokePacked(std::string("_mlir_ciface_") + fn, args)) {
+    if(engine->invokePacked(std::string("_mlir_ciface_") + fname.c_str(), args)) {
         ::llvm::errs() << "JIT invocation failed\n";
         throw std::runtime_error("JIT invocation failed");
     }
@@ -281,7 +303,24 @@ JIT::JIT()
 void init()
 {
     assert(sizeof(intptr_t) == sizeof(void*));
-    ::mlir::registerAllPasses();
+    // ::mlir::registerAllPasses();
+    ::mlir::registerSCFPasses();
+    ::mlir::registerSCFToControlFlowPass();
+    ::mlir::registerShapePasses();
+    ::mlir::registerConvertShapeToStandardPass();
+    ::mlir::tensor::registerTensorPasses();
+    ::mlir::registerLinalgPasses();
+    ::mlir::func::registerFuncPasses();
+    ::mlir::registerConvertFuncToLLVMPass();
+    ::mlir::bufferization::registerBufferizationPasses();
+    ::mlir::arith::registerArithmeticPasses();
+    ::mlir::registerAffinePasses();
+    ::mlir::registerConvertMemRefToLLVMPass();
+    ::mlir::registerCanonicalizerPass();
+    ::mlir::registerConvertAffineToStandardPass();
+    ::mlir::memref::registerMemRefPasses();
+    ::mlir::registerReconcileUnrealizedCastsPass();
+
     ::imex::registerAllPasses();
 
     // ::mlir::DialectRegistry registry;

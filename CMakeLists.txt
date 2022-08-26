@@ -118,10 +118,35 @@ target_link_directories(_ddptensor PRIVATE
 message(${imex_all_libs})
 target_link_libraries(_ddptensor PRIVATE
     ${MPI_C_LIBRARIES}
-    ${MKL_LIBRARIES}
-    ${mlir_all_libs}
+    # ${MKL_LIBRARIES}
+    tbb
     ${imex_all_libs}
 	  MLIROptLib
+    MLIRExecutionEngine
+    MLIRIR
+    MLIRAffineDialect
+    MLIRAffineToStandard
+    MLIRAffineTransforms
+    MLIRFuncDialect
+    MLIRFuncToLLVM
+    MLIRFuncTransforms
+    MLIRLinalgDialect
+    MLIRLinalgToLLVM
+    MLIRLinalgTransforms
+    MLIRMathDialect
+    MLIRMathToLLVM
+    MLIRMathTransforms
+    MLIRMemRefDialect
+    MLIRMemRefToLLVM
+    MLIRMemRefTransforms
+    MLIRReconcileUnrealizedCasts
+    MLIRSCFDialect
+    MLIRSCFToControlFlow
+    MLIRSCFTransforms
+    MLIRShapeDialect
+    MLIRShapeOpsTransforms
+    MLIRShapeToStandard
+    MLIRTensorTransforms
 )
     # LLVM${LLVM_NATIVE_ARCH}CodeGen
     # LLVM${LLVM_NATIVE_ARCH}Desc
@@ -129,17 +154,11 @@ target_link_libraries(_ddptensor PRIVATE
     # MLIRAnalysis
     # MLIRCallInterfaces
     # MLIRCastInterfaces
-    # MLIRExecutionEngine
-    # MLIRFuncTransforms
     # MLIRGPUToGPURuntimeTransforms
     # MLIRGPUToSPIRV
-    # MLIRIR
     # MLIRLLVMCommonConversion
-    # MLIRLLVMIR
     # MLIRLLVMToLLVMIRTranslation
-    # MLIRLinalgToLLVM
     # MLIRLinalgTransforms
-    # MLIRMathToLLVM
     # MLIRMathToLibm
     # MLIRMemRef
     # MLIRParser
@@ -150,7 +169,4 @@ target_link_libraries(_ddptensor PRIVATE
     # MLIRSPIRVTransforms
     # MLIRSideEffectInterfaces
     # MLIRTargetLLVMIRExport
-    # MLIRTensorTransforms
     # MLIRTransforms
-    # MLIRAffineToStandard
-    # MLIRAffineTransforms)
