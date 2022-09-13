@@ -19,7 +19,7 @@ struct DeferredToNumpy : public DeferredT<promise_type, future_type>
     void run()
     {
         const auto a = std::move(Registry::get(_a).get());
-        set_value(GetItem::do_gather(a, is_cw() ? 0 : REPLICATED));
+        set_value(GetItem::do_gather(a, getTransceiver()->is_cw() ? 0 : REPLICATED));
     }
 
     FactoryId factory() const
@@ -36,7 +36,7 @@ struct DeferredToNumpy : public DeferredT<promise_type, future_type>
 
 py::object IO::to_numpy(const ddptensor & a)
 {
-    assert(!is_cw() || theTransceiver->rank() == 0);
+    assert(!getTransceiver()->is_cw() || getTransceiver()->rank() == 0);
     auto f = defer<DeferredToNumpy>(a.get());
     auto x = f.get();
     return x;

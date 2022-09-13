@@ -5,7 +5,7 @@
 using offsets_type = std::vector<uint64_t>;
 
 BasePVSlice::BasePVSlice(const shape_type & shape, int split)
-    : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+    : _offset(split == NOSPLIT ? 0 : (shape[split] + getTransceiver()->nranks() - 1) / getTransceiver()->nranks()),
       _shape(shape),
       _split_dim(split)
 {
@@ -13,7 +13,7 @@ BasePVSlice::BasePVSlice(const shape_type & shape, int split)
 }
 
 BasePVSlice::BasePVSlice(shape_type && shape, int split)
-    : _offset(split == NOSPLIT ? 0 : (shape[split] + theTransceiver->nranks() - 1) / theTransceiver->nranks()),
+    : _offset(split == NOSPLIT ? 0 : (shape[split] + getTransceiver()->nranks() - 1) / getTransceiver()->nranks()),
       _shape(std::move(shape)),
       _split_dim(split)
 {
@@ -23,7 +23,7 @@ BasePVSlice::BasePVSlice(shape_type && shape, int split)
 
 bool BasePVSlice::is_equally_tiled() const
 {
-    return _shape[_split_dim] == theTransceiver->nranks() * _offset;
+    return _shape[_split_dim] == getTransceiver()->nranks() * _offset;
 }
 
 uint64_t BasePVSlice::offset() const
@@ -72,7 +72,7 @@ const shape_type & BasePVSlice::shape() const
 
 rank_type BasePVSlice::owner(const NDSlice & slice) const
 {
-    return split_dim() == NOSPLIT ? theTransceiver->rank() : slice.dim(split_dim())._start / offset();
+    return split_dim() == NOSPLIT ? getTransceiver()->rank() : slice.dim(split_dim())._start / offset();
 }
 
 PVSlice::PVSlice(const shape_type & shp, int split)
@@ -191,7 +191,7 @@ shape_type PVSlice::tile_shape(rank_type rank) const
 NDSlice PVSlice::tile_slice(rank_type rank) const
 {
     if(_base->split_dim() == NOSPLIT) {
-        return rank == theTransceiver->rank() ? slice() : NDSlice();
+        return rank == getTransceiver()->rank() ? slice() : NDSlice();
     }
     return _slice.trim_shift(_base->split_dim(),
                              rank * _base->offset(),
@@ -202,7 +202,7 @@ NDSlice PVSlice::tile_slice(rank_type rank) const
 NDSlice PVSlice::local_slice(rank_type rank) const
 {
     if(_base->split_dim() == NOSPLIT) {
-        return rank == theTransceiver->rank() ? slice() : NDSlice();
+        return rank == getTransceiver()->rank() ? slice() : NDSlice();
     }
     return _slice.trim(_base->split_dim(), rank * _base->offset(), (rank+1) * _base->offset());
 }
@@ -246,7 +246,7 @@ std::array<std::vector<NDSlice>, 2> PVSlice::map_ranks(const PVSlice & o_slc) co
     if(d_sz <= 1 && o_sz > 1) throw std::runtime_error("Cannot map nd-tensor to scalar/0d-tensor.");
     if(o_sz <= 1) return {};
                                 
-    auto nr = theTransceiver->nranks();
+    auto nr = getTransceiver()->nranks();
     std::vector<NDSlice> sends(nr);
     std::vector<NDSlice> recvs(nr);
 

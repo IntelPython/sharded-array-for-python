@@ -17,10 +17,10 @@ namespace x {
         {
             if(a_ptr->is_replicated()) return a_ptr;
             if(a_ptr->has_owner() && a_ptr->slice().size() == 1) {
-                if(theTransceiver->rank() == a_ptr->owner()) {
+                if(getTransceiver()->rank() == a_ptr->owner()) {
                     a_ptr->_replica = *(xt::strided_view(a_ptr->xarray(), a_ptr->lslice()).begin());
                 }
-                theTransceiver->bcast(&a_ptr->_replica, sizeof(T), a_ptr->owner());
+                getTransceiver()->bcast(&a_ptr->_replica, sizeof(T), a_ptr->owner());
                 a_ptr->set_owner(REPLICATED);
             } else {
                 throw(std::runtime_error("Replication implemented for single element and single owner only."));
@@ -107,12 +107,13 @@ void Service::run()
     defer_lambda([](){ return true; });
 }
 
-extern bool inited;
+bool inited = false;
+bool finied = false;
 
 void Service::drop(const ddptensor & a)
 {
     if(inited) {
-        // if(is_spmd()) theTransceiver->barrier();
+        // if(getTransceiver()->is_spmd()) getTransceiver()->barrier();
         defer<DeferredService>(DeferredService::DROP, a.get());
     }
 }

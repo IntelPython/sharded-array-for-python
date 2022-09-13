@@ -25,7 +25,7 @@ namespace x {
             rank_type owner = NOOWNER;
             if(slice.need_reduce(dims)) {
                 auto len = VPROD(new_shape);
-                theTransceiver->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
+                getTransceiver()->reduce_all(a.data(), DTYPE<typename X::value_type>::value, len, rop);
                 if(len == 1) return operatorx<typename X::value_type>::mk_tx(a.data()[0], REPLICATED);
                 owner = REPLICATED;
             }

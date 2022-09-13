@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "UtilsAndTypes.hpp"
+#include "CppTypes.hpp"
 #include "DDPTensorImpl.hpp"
 
 struct CollComm
@@ -30,7 +30,7 @@ struct CollComm
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
 
         // Now we can send/recv directly to/from tensor buffers.
-        theTransceiver->alltoall(a_ptr->data(), // buffer_send
+        getTransceiver()->alltoall(a_ptr->data(), // buffer_send
                                  info[0].data(),
                                  info[1].data(),
                                  DTYPE<T>::value,
@@ -47,8 +47,8 @@ struct CollComm
     {
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
         
-        auto nr = theTransceiver->nranks();
-        auto r = theTransceiver->rank();
+        auto nr = getTransceiver()->nranks();
+        auto r = getTransceiver()->rank();
 
         // disable copy from local: first save local counts
         auto my_cnt_send = info[0][r];
@@ -73,7 +73,7 @@ struct CollComm
             sbuff = reinterpret_cast<U*>(svec.data());
         } else sbuff = a_ptr->data();
         // Now we can send/recv directly to/from tensor buffers.
-        theTransceiver->alltoall(sbuff, // buffer_send
+        getTransceiver()->alltoall(sbuff, // buffer_send
                                  info[0].data(),
                                  info[1].data(),
                                  DTYPE<U>::value,
@@ -90,8 +90,8 @@ struct CollComm
     {
         if(a_overlap[0].empty()) return {0, 0};
 
-        auto nr = theTransceiver->nranks();
-        auto rank = theTransceiver->rank();
+        auto nr = getTransceiver()->nranks();
+        auto rank = getTransceiver()->rank();
         int counts_send[nr] = {0};
         int disp_send[nr] = {0};
         int counts_recv[nr] = {0};
@@ -111,7 +111,7 @@ struct CollComm
         }
         rbuff.resize((disp_recv[nr-1] + counts_recv[nr-1]));
                 
-        theTransceiver->alltoall(sbuff.data(), // buffer_send
+        getTransceiver()->alltoall(sbuff.data(), // buffer_send
                                  &counts_send[0],
                                  &disp_send[0],
                                  DTYPE<A>::value,

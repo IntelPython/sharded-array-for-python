@@ -166,7 +166,7 @@ namespace x {
 
             // Step 1: Get the mapping of a and b to our resulting slice
 
-            rank_type rank = theTransceiver->rank();
+            rank_type rank = getTransceiver()->rank();
             // Slice for/of the result
             PVSlice r_slc(a_sptr->slice().size() >= b_sptr->slice().size() ? a_sptr->slice().shape() : b_sptr->slice().shape());
             // Size of local result tile

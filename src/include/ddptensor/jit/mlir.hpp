@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ddptensor/UtilsAndTypes.hpp"
+#include "ddptensor/CppTypes.hpp"
 
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>

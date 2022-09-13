@@ -48,7 +48,7 @@ namespace x {
         static ptr_type vecdot_1d(const T1 & a, const T2 & b, int axis)
         {
             auto d = xt::linalg::dot(a, b)();
-            theTransceiver->reduce_all(&d, DTYPE<decltype(d)>::value, 1, SUM);
+            getTransceiver()->reduce_all(&d, DTYPE<decltype(d)>::value, 1, SUM);
             return operatorx<decltype(d)>::mk_tx(d, REPLICATED);
         }
 
@@ -58,8 +58,8 @@ namespace x {
             if(a_ptr->slice().split_dim() != 0)
                 throw(std::runtime_error("vecdoc_2d supported for split_dim=0 only"));
 
-            auto nr = theTransceiver->nranks();
-            auto me = theTransceiver->rank();
+            auto nr = getTransceiver()->nranks();
+            auto me = getTransceiver()->rank();
             rank_type right = (me + 1) % nr;
             rank_type left = (nr + me - 1) % nr;
             auto tsz = b_ptr->slice().tile_size(0);
@@ -97,7 +97,7 @@ namespace x {
                 if(i > 1) {
                     // data exchange
                     // FIXME: optimize data transfer: last partition might contain unused data
-                    theTransceiver->send_recv(buff.data(),
+                    getTransceiver()->send_recv(buff.data(),
                                               tsz,
                                               DTYPE<A>::value,
                                               left,

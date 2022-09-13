@@ -96,7 +96,7 @@ namespace x
         {
         }
 
-        DPTensorX(const T & v, rank_type owner=theTransceiver->rank())
+        DPTensorX(const T & v, rank_type owner=getTransceiver()->rank())
             : _owner(owner),
               _slice(shape_type{1}, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
               // _lslice({xt::newaxis()}), //to_xt(_slice.slice())),
@@ -122,7 +122,7 @@ namespace x
 
         template<typename O>
         DPTensorX(O && org, PVSlice && slc)
-            : _owner(theTransceiver->rank()),
+            : _owner(getTransceiver()->rank()),
               _slice(std::forward<PVSlice>(slc)),
               _lslice(to_xt(_slice.tile_slice())),
               _xarray()

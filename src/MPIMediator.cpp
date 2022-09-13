@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <mutex>
 
-#include "ddptensor/UtilsAndTypes.hpp"
+#include "ddptensor/CppTypes.hpp"
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/NDSlice.hpp"
@@ -24,7 +24,7 @@ void send_to_workers(const Runable * dfrd, bool self, MPI_Comm comm);
 MPIMediator::MPIMediator()
     : _listener(nullptr)
 {
-    auto c = dynamic_cast<MPITransceiver*>(theTransceiver);
+    auto c = dynamic_cast<MPITransceiver*>(getTransceiver());
     if(c == nullptr) throw std::runtime_error("Expected Transceiver to be MPITransceiver.");
     _comm = c->comm();
     int sz;
@@ -40,9 +40,9 @@ MPIMediator::~MPIMediator()
     MPI_Comm_rank(_comm, &rank);
     MPI_Comm_size(_comm, &sz);
 
-    if(is_cw() && rank == 0) to_workers(nullptr);
+    if(getTransceiver()->is_cw() && rank == 0) to_workers(nullptr);
     MPI_Barrier(_comm);
-    if(!is_cw() || rank == 0) send_to_workers(nullptr, true, _comm);
+    if(!getTransceiver()->is_cw() || rank == 0) send_to_workers(nullptr, true, _comm);
     if(_listener) {
         _listener->join();
         delete _listener;

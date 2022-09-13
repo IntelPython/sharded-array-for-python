@@ -3,10 +3,11 @@
 #include <mpi.h>
 #include <limits>
 #include <sstream>
+#include <iostream>
 #include "ddptensor/MPITransceiver.hpp"
 
-MPITransceiver::MPITransceiver()
-    : _nranks(1), _rank(0), _comm(MPI_COMM_WORLD)
+MPITransceiver::MPITransceiver(bool is_cw)
+    : _nranks(1), _rank(0), _comm(MPI_COMM_WORLD), _is_cw(is_cw)
 {
     int flag;
     MPI_Initialized(&flag);

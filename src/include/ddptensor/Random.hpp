@@ -3,6 +3,7 @@
 #pragma once
 
 #include "ddptensor.hpp"
+#include "PyTypes.hpp"
 
 struct Random
 {

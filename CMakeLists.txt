@@ -82,14 +82,45 @@ add_custom_command(
 # ============
 # Target
 # ============
-FILE(GLOB MyCppSources ${PROJECT_SOURCE_DIR}/src/*.cpp ${PROJECT_SOURCE_DIR}/src/include/ddptensor/*.hpp)
-set(MyCppSources ${MyCppSources} ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp ${P2C_HPP})
 
-pybind11_add_module(_ddptensor MODULE ${MyCppSources})
+FILE(GLOB Hpps ${PROJECT_SOURCE_DIR}/src/include/ddptensor/*.hpp)
+set(Hpps ${Hpps} ${P2C_HPP})
 
-target_compile_definitions(_ddptensor PRIVATE USE_MKL=1 DDPT_2TYPES=1)
-target_compile_options(_ddptensor PRIVATE "-ftemplate-backtrace-limit=0")
-target_include_directories(_ddptensor PRIVATE
+set(DDPTSrcs
+    ${PROJECT_SOURCE_DIR}/src/ddptensor.cpp
+    ${PROJECT_SOURCE_DIR}/src/Creator.cpp
+    ${PROJECT_SOURCE_DIR}/src/EWBinOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/EWUnyOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/IEWBinOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/IO.cpp
+    ${PROJECT_SOURCE_DIR}/src/LinAlgOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/ManipOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/Random.cpp
+    ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/Service.cpp
+    ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
+)
+set(IDTRSrcs
+    ${PROJECT_SOURCE_DIR}/src/idtr.cpp
+    ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
+    ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
+    ${PROJECT_SOURCE_DIR}/src/Factory.cpp
+    ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
+    ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
+    ${PROJECT_SOURCE_DIR}/src/MPITransceiver.cpp
+    ${PROJECT_SOURCE_DIR}/src/PVSlice.cpp
+    ${PROJECT_SOURCE_DIR}/src/Registry.cpp
+    ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
+    ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
+)
+
+pybind11_add_module(_ddptensor MODULE ${DDPTSrcs} ${Hpps})
+add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
+set(AllTargets _ddptensor idtr)
+
+add_compile_definitions(USE_MKL=1)
+add_compile_options("-ftemplate-backtrace-limit=0")
+include_directories(
   ${PROJECT_SOURCE_DIR}/src/include
   ${PROJECT_SOURCE_DIR}/third_party/bitsery/include
   ${MPI_INCLUDE_PATH}
@@ -103,20 +134,22 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   target_link_options(_ddptensor PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
 endif()
 
-#target_compile_options(_ddptensor PRIVATE -fopenmp)
+#compile_options(_ddptensor PRIVATE -fopenmp)
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 get_property(mlir_all_libs GLOBAL PROPERTY MLIR_ALL_LIBS)
 get_property(imex_all_libs GLOBAL PROPERTY IMEX_ALL_LIBS)
 
 #llvm_update_compile_flags(_ddpttensor)
-target_link_directories(_ddptensor PRIVATE
-    ${CONDA_PREFIX}/lib
-    ${IMEX_INSTALL_PREFIX}/lib
-)
+target_link_directories(_ddptensor PRIVATE ${CONDA_PREFIX}/lib)
+target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib ${IMEX_INSTALL_PREFIX}/lib)
 
-message(${imex_all_libs})
 target_link_libraries(_ddptensor PRIVATE
+    # ${MKL_LIBRARIES}
+    # tbb
+    idtr
+)
+target_link_libraries(idtr PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb

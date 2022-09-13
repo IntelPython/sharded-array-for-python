@@ -8,8 +8,18 @@
 class MPITransceiver : public Transceiver
 {
 public:
-    MPITransceiver();
+    MPITransceiver(bool is_cw);
     ~MPITransceiver();
+
+    virtual bool is_cw()
+    {
+        return _is_cw && nranks() > 1;
+    }
+
+    virtual bool is_spmd()
+    {
+        return !_is_cw && nranks() > 1;
+    }
 
     rank_type nranks() const
     {
@@ -52,4 +62,5 @@ public:
 private:
     rank_type _nranks, _rank;
     MPI_Comm _comm;
+    bool _is_cw;
 };

@@ -2,12 +2,15 @@
 
 #pragma once
 
-#include "UtilsAndTypes.hpp"
+#include "CppTypes.hpp"
 
 class Transceiver
 {
 public:
     virtual ~Transceiver() {};
+
+    virtual bool is_cw() = 0;
+    virtual bool is_spmd() = 0;
 
     virtual rank_type nranks() const = 0;
     virtual rank_type rank() const = 0;
@@ -52,4 +55,6 @@ public:
                            int source) = 0;
 };
 
-extern Transceiver * theTransceiver;
+extern void init_transceiver(Transceiver *);
+extern void fini_transceiver();
+extern Transceiver * getTransceiver();

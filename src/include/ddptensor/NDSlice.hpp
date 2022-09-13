@@ -3,15 +3,13 @@
 #pragma once
 
 #include <vector>
-#include <pybind11/pybind11.h>
-namespace py = pybind11;
 
 #include <bitsery/bitsery.h>
 #include <bitsery/traits/vector.h>
 
 #include "Slice.hpp"
 #include "NDIndex.hpp"
-#include "UtilsAndTypes.hpp"
+#include "CppTypes.hpp"
 
 ///
 /// A slice of n-dimensional range with utility features to extract nd-indices.
@@ -404,14 +402,6 @@ public:
         return iterator();
     }
 };
-
-inline py::tuple _make_tuple(const NDSlice & v)
-{
-    using V = NDSlice;
-    return _make_tuple(v, [](const V & v){return v.ndims();}, [](const V & v, int i){return v.dim(i).pyslice();});
-}
-
-
 
 
 #if 0

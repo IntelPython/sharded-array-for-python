@@ -21,6 +21,8 @@
 namespace py = pybind11;
 using namespace pybind11::literals; // to bring _a
 
+#define DEF_PY11_ENUMS // used in p2c_types.hpp
+
 #include "ddptensor/MPITransceiver.hpp"
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/Deferred.hpp"
@@ -43,40 +45,25 @@ using namespace pybind11::literals; // to bring _a
 
 rank_type myrank()
 {
-    return theTransceiver->rank();
+    return getTransceiver()->rank();
 }
 
-Transceiver * theTransceiver = nullptr;
-Mediator * theMediator = nullptr;
 std::thread * pprocessor;
-bool _is_cw = false;
 
-bool is_cw()
-{
-    return _is_cw && theTransceiver->nranks() > 1;
-}
-
-bool is_spmd()
-{
-    return !_is_cw && theTransceiver->nranks() > 1;
-}
-
-bool inited = false;
-bool finied = false;
+extern bool inited;
+extern bool finied;
 
 // users currently need to call fini to make MPI terminate gracefully
 void fini()
 {
     if(finied) return;
-    delete theMediator;  // stop task is sent in here
-    theMediator = nullptr;
+    fini_mediator();  // stop task is sent in here
     if(pprocessor) {
-        if(theTransceiver->nranks() == 1) defer(nullptr);
+        if(getTransceiver()->nranks() == 1) defer(nullptr);
         pprocessor->join();
         delete pprocessor;
     }
-    delete theTransceiver;
-    theTransceiver = nullptr;
+    fini_transceiver();
     Deferred::fini();
     Registry::fini();
     inited = false;
@@ -86,13 +73,12 @@ void fini()
 void init(bool cw)
 {
     if(inited) return;
-    theTransceiver = new MPITransceiver();
-    theMediator = new MPIMediator();
+    init_transceiver(new MPITransceiver(cw));
+    init_mediator(new MPIMediator());
     int cpu = sched_getcpu();
-    std::cerr << "rank " << theTransceiver->rank() << " is running on core " << cpu << std::endl;
+    std::cerr << "rank " << getTransceiver()->rank() << " is running on core " << cpu << std::endl;
     if(cw) {
-        _is_cw = true;
-        if(theTransceiver->rank()) {
+        if(getTransceiver()->rank()) {
             process_promises();
             fini();
             exit(0);

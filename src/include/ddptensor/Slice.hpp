@@ -3,9 +3,10 @@
 #pragma once
 
 #include <vector>
+#if 0
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
-
+#endif
 #include <bitsery/bitsery.h>
 
 ///
@@ -43,6 +44,7 @@ struct Slice
     {
     }
 
+#ifdef PYBIND11_VERSION_MAJOR
     ///
     /// Construct a slice from a py::slice
     ///
@@ -51,6 +53,7 @@ struct Slice
         ssize_t slc_len;
         slc.compute(len, &_start, &_end, &_step, &slc_len);
     }
+#endif
 
     ///
     /// @return Subslice mapped into this' index space
@@ -60,6 +63,7 @@ struct Slice
         return {_start + slice._start * _step, _start + slice._end * _step, _step * slice._step};
     }
 
+#ifdef PYBIND11_VERSION_MAJORq
     ///
     /// @return py::slice representation
     ///
@@ -67,6 +71,7 @@ struct Slice
     {
         return py::slice(_start, _end, _step);
     }
+#endif
 
     Slice normalize() const
     {

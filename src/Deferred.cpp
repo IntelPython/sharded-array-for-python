@@ -22,8 +22,8 @@ void push_runable(Runable::ptr_type && r)
 
 void _dist(const Runable * p)
 {
-    if(is_cw() && theTransceiver->rank() == 0)
-        theMediator->to_workers(p);
+    if(getTransceiver()->is_cw() && getTransceiver()->rank() == 0)
+        getMediator()->to_workers(p);
 }
 
 Deferred::future_type Deferred::get_future()

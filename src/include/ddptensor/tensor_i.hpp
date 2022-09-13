@@ -8,7 +8,7 @@
 #include <memory>
 #include <future>
 
-#include "UtilsAndTypes.hpp"
+#include "CppTypes.hpp"
 
 class NDSlice;
 

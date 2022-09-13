@@ -1,3 +1,4 @@
+#include "ddptensor/UtilsAndTypes.hpp"
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
@@ -41,17 +42,17 @@ namespace x {
             PVSlice needed_val_view(val->slice(), val_slice);
 
             // we can now compute which ranks actually hold which piece of the data from val that we need locally
-            for(rank_type i=0; i<theTransceiver->nranks(); ++i ) {
+            for(rank_type i=0; i<getTransceiver()->nranks(); ++i ) {
                 // get local view into val
                 PVSlice val_local_view(val->slice(), i);
                 NDSlice curr_needed_val_slice = needed_val_view.local_slice(i);
                 NDSlice curr_local_val_slice = val_local_view.map_slice(curr_needed_val_slice);
                 NDSlice curr_needed_norm_slice = needed_val_view.map_slice(curr_needed_val_slice);
                 PVSlice my_curr_needed_view = PVSlice(dest_view, curr_needed_norm_slice);
-                NDSlice my_curr_local_slice = my_curr_needed_view.tile_slice(theTransceiver->rank());
+                NDSlice my_curr_local_slice = my_curr_needed_view.tile_slice(getTransceiver()->rank());
 
                 if(curr_needed_norm_slice.size()) {
-                    if(i == theTransceiver->rank()) {
+                    if(i == getTransceiver()->rank()) {
                         // copy locally
                         auto to_v   = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
                         auto from_v = xt::strided_view(val->xarray(), to_xt(curr_local_val_slice));
@@ -60,7 +61,7 @@ namespace x {
                         // pull slice directly into new array
                         xt::xarray<U> from_a = xt::empty<U>(curr_local_val_slice.shape());
                         from_a.fill(static_cast<U>(4711));
-                        theMediator->pull(i, val_guid, curr_local_val_slice, from_a.data());
+                        getMediator()->pull(i, val_guid, curr_local_val_slice, from_a.data());
                         auto to_v = xt::strided_view(dest/*.xarray()*/, to_xt(my_curr_local_slice));
                         to_v = from_a;
                     }
@@ -76,12 +77,12 @@ namespace x {
         {
             // Use given slice to create a global view into orig array
             PVSlice g_slc_view(a_ptr->slice(), slice);
-            PVSlice my_rel_slice(g_slc_view, theTransceiver->rank());
+            PVSlice my_rel_slice(g_slc_view, getTransceiver()->rank());
             NDSlice my_norm_slice = g_slc_view.map_slice(my_rel_slice.local_slice()); //slice());my_slice);
 
-            if(is_spmd()) theTransceiver->barrier();
+            if(getTransceiver()->is_spmd()) getTransceiver()->barrier();
             _set_slice<A>(a_ptr->xarray(), my_rel_slice, b_ptr, my_norm_slice, val_guid);
-            theTransceiver->barrier();
+            getTransceiver()->barrier();
             return a_ptr;
         }
     };
@@ -132,8 +133,8 @@ namespace x {
         template<typename T>
         static py::object op(rank_type root, const std::shared_ptr<DPTensorX<T>> & a_ptr)
         {
-            auto nranks = theTransceiver->nranks();
-            auto rank = theTransceiver->rank();
+            auto nranks = getTransceiver()->nranks();
+            auto rank = getTransceiver()->rank();
             bool sendonly = root != REPLICATED && root != rank;
             const auto & slc = a_ptr->slice();
             auto mysz = slc.local_slice().size();
@@ -169,7 +170,7 @@ namespace x {
                 }
                 off += szi;
             }
-            theTransceiver->gather(ptr, counts, displacements, DTYPE<T>::value, root);
+            getTransceiver()->gather(ptr, counts, displacements, DTYPE<T>::value, root);
             if(sendonly && mysz > 0 && a_ptr->is_sliced()) delete [] ptr;
             return res;
         }

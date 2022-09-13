@@ -10,19 +10,13 @@
 #include "tensor_i.hpp"
 #include "TypeDispatch.hpp"
 
-#include <pybind11/numpy.h>
-
 #include <cstring>
 #include <type_traits>
 #include <sstream>
 #include <memory>
 #include <algorithm>
 
-template<typename T>
-T to_native(const py::object & o)
-{
-    return o.cast<T>();
-}
+
 class DDPTensorImpl : public tensor_i
 {
     mutable rank_type _owner;
@@ -35,7 +29,7 @@ class DDPTensorImpl : public tensor_i
     DTypeId _dtype;
 
 public:
-    using typed_ptr_type = std::shared_ptr<DDPTensorImpl>;
+    using ptr_type = std::shared_ptr<DDPTensorImpl>;
 
     DDPTensorImpl(const DDPTensorImpl &) = delete;
     DDPTensorImpl(DDPTensorImpl &&) = default;
@@ -74,6 +68,17 @@ public:
             _strides[rank-i-1] = stride;
             stride *= shp[i];
         }
+    }
+
+    // incomplete, useful for computing meta information
+    DDPTensorImpl(const uint64_t * shape, uint64_t N, rank_type owner=NOOWNER)
+        : _owner(owner),
+          _slice(shape_type(shape, shape+N), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
+          _allocated(nullptr),
+          _aligned(nullptr),
+          _offset(0),
+          _dtype(DTYPE_LAST)
+    {
     }
 
     void alloc()

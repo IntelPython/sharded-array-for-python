@@ -3,6 +3,9 @@
 #pragma once
 
 #include <array>
+#include <memory>
+#include <vector>
+
 #include "NDSlice.hpp"
 #include "Transceiver.hpp"  // rank_type
 
@@ -25,8 +28,8 @@ public:
     BasePVSlice(shape_type && shape, int split=0);
     bool is_equally_tiled() const;
     uint64_t offset() const;
-    uint64_t tile_size(rank_type rank = theTransceiver->rank()) const;
-    shape_type tile_shape(rank_type rank = theTransceiver->rank()) const;
+    uint64_t tile_size(rank_type rank = getTransceiver()->rank()) const;
+    shape_type tile_shape(rank_type rank = getTransceiver()->rank()) const;
     int split_dim() const;
     const shape_type & shape() const;
     rank_type owner(const NDSlice & slice) const;
@@ -57,7 +60,7 @@ public:
     uint64_t ndims() const;
     int split_dim() const;
     bool is_sliced() const;
-    bool local_is_contiguous(rank_type rank = theTransceiver->rank()) const;
+    bool local_is_contiguous(rank_type rank = getTransceiver()->rank()) const;
     bool is_equally_tiled() const;
     rank_type owner(const NDSlice & slice) const;
     const shape_type & base_shape() const;
@@ -68,18 +71,17 @@ public:
     // global size
     uint64_t size() const;
     // size of rank's tile, e.g. the allocated memory
-    uint64_t tile_size(rank_type rank = theTransceiver->rank()) const;
+    uint64_t tile_size(rank_type rank = getTransceiver()->rank()) const;
     // shape of rank's tile, e.g. the allocated memory
-    shape_type tile_shape(rank_type rank = theTransceiver->rank()) const;
+    shape_type tile_shape(rank_type rank = getTransceiver()->rank()) const;
     // ranks's slice of local tile
-    NDSlice tile_slice(rank_type rank = theTransceiver->rank()) const;
+    NDSlice tile_slice(rank_type rank = getTransceiver()->rank()) const;
     // size of rank's slice
-    // size of rank's slice
-    uint64_t local_size(rank_type rank = theTransceiver->rank()) const;
+    uint64_t local_size(rank_type rank = getTransceiver()->rank()) const;
     // shape of rank's slice
-    shape_type local_shape(rank_type rank = theTransceiver->rank()) const;
-    // shape of rank's slice
-    NDSlice local_slice(rank_type rank = theTransceiver->rank()) const;
+    shape_type local_shape(rank_type rank = getTransceiver()->rank()) const;
+    // rank's slice
+    NDSlice local_slice(rank_type rank = getTransceiver()->rank()) const;
     NDSlice map_slice(const NDSlice & slc) const;
     // Compute overlapping slices for every (rank,rank) pair for mapping o_slc onto this.
     // Returns a 2 lists of size number-of-ranks:

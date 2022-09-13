@@ -12,9 +12,11 @@ print("""// Auto-generated file
 // #######################################################
 // SPDX-License-Identifier: BSD-3-Clause
 #pragma once
+#ifdef DEF_PY11_ENUMS
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11;
+#endif
 """)
 
 prev = 0
@@ -27,14 +29,16 @@ for cat, lst in api.api_categories.items():
     print(f"    {prev}")
     print("};\n")
 
-print("static void def_enums(py::module_ & m)\n{")
+print("""#ifdef DEF_PY11_ENUMS
+static void def_enums(py::module_ & m)
+{""")
 for cat, lst in api.api_categories.items():
     print(f'    py::enum_<{cat}Id>(m, "{cat}Id")')
     for x in lst:
         print(f'        .value("{x.upper()}", {x.upper()})')
     print("        .export_values();\n")
 
-print("}")
+print("}\n#endif\n")
 
 # Close the file
 sys.stdout.close()

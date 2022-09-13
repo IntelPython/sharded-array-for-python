@@ -17,4 +17,6 @@ public:
     virtual void to_workers(const Runable * dfrd) = 0;
 };
 
-extern Mediator * theMediator;
+extern void init_mediator(Mediator *);
+extern void fini_mediator();
+extern Mediator * getMediator();

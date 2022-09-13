@@ -15,7 +15,7 @@
 // This is not implemented: we need an extra mechanism to work with reshape-views or alike.
 std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice & o_slc)
 {
-    auto nr = theTransceiver->nranks();
+    auto nr = getTransceiver()->nranks();
     std::vector<int> counts_send(nr, 0);
     std::vector<int> disp_send(nr, 0);
     std::vector<int> counts_recv(nr, 0);
@@ -26,14 +26,14 @@ std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice
     // tilesize of my local partition of orig array
     auto o_tsz = o_slc.tile_size();
     // linearized local slice of orig array
-    auto o_llslc = Slice(o_ntsz * theTransceiver->rank(), o_ntsz * theTransceiver->rank() + o_tsz);
+    auto o_llslc = Slice(o_ntsz * getTransceiver()->rank(), o_ntsz * getTransceiver()->rank() + o_tsz);
             
     // norm tile-size of new (reshaped) array
     auto n_ntsz =  n_slc.tile_size(0);
     // tilesize of my local partition of new (reshaped) array
     auto n_tsz = n_slc.tile_size();
     // linearized/flattened/1d local slice of new (reshaped) array
-    auto n_llslc = Slice(n_ntsz * theTransceiver->rank(), n_ntsz * theTransceiver->rank() + n_tsz);
+    auto n_llslc = Slice(n_ntsz * getTransceiver()->rank(), n_ntsz * getTransceiver()->rank() + n_tsz);
 
     for(auto r=0; r<nr; ++r) {
         // determine what I receive from rank r
