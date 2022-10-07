@@ -8,6 +8,7 @@
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Shape/IR/Shape.h>
 
 #if 0
 namespace x {
@@ -119,17 +120,17 @@ struct DeferredReduceOp : public Deferred
     bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         // FIXME reduction over individual dimensions is not supported
-        auto a = dm.getDependent(builder, _a);
-        auto a_ptt = a.getType().dyn_cast<::imex::ptensor::PTensorType>();
-        assert(a_ptt);
-        
-        auto rtyp = ::imex::ptensor::PTensorType::get(
-            builder.getContext(), 
-            ::mlir::RankedTensorType::get(llvm::SmallVector<int64_t>(), a_ptt.getRtensor().getElementType()),
-            true
-        );
-        dm.addVal(guid(),
-                  builder.create<::imex::ptensor::ReductionOp>(loc, rtyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), a),
+        auto av = dm.getDependent(builder, _a);
+        auto aPtTyp = av.getType().dyn_cast<::imex::ptensor::PTensorType>();
+        assert(aPtTyp);
+        // return type 0d with same dtype as input
+        auto dtype = aPtTyp.getRtensor().getElementType();
+        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({}, dtype), false, true);
+        // reduction op
+        auto mop = ddpt2mlir(_op);
+        auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);
+        dm.addVal(this->guid(),
+                  builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         });

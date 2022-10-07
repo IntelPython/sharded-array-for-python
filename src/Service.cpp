@@ -104,7 +104,8 @@ ddptensor * Service::replicate(const ddptensor & a)
 
 void Service::run()
 {
-    defer_lambda([](){ return true; });
+    defer<DeferredService>(DeferredService::RUN);
+    // defer_lambda([](){ return true; });
 }
 
 bool inited = false;

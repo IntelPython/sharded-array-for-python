@@ -5,7 +5,13 @@
 #include "ddptensor/DDPTensorImpl.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/internal/PassUtils.h>
+
 #include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Arithmetic/IR/Arithmetic.h>
+#include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/Dialect/Tensor/IR/Tensor.h>
+#include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #if 0
 namespace x {
@@ -161,17 +167,15 @@ struct DeferredArange : public Deferred
     
     bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
-        // create start, stop and step
-        auto start = jit::createI64(loc, builder, _start);
-        auto end = jit::createI64(loc, builder, _end);
-        auto step = jit::createI64(loc, builder, _step);
-        // create arange
-        auto dtype = builder.getI64Type();
-        assert(_dtype == INT64 || _dtype == UINT64); // FIXME
-        llvm::SmallVector<int64_t> shape(1, -1); //::mlir::ShapedType::kDynamicSize);
-        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, dtype), true);
-        dm.addVal(guid(),
-                  builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, end, step, true),
+        auto start = ::imex::createInt(loc, builder, _start);
+        auto stop = ::imex::createInt(loc, builder, _end);
+        auto step = ::imex::createInt(loc, builder, _step);
+        auto dtype = builder.getI64Type(); // FIXME
+        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({-1}, dtype), false, true);
+        auto dmy = ::imex::createInt<1>(loc, builder, 0);
+        auto team = ::imex::createInt(loc, builder, 1);
+        dm.addVal(this->guid(),
+                  builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, stop, step, dmy, team),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             assert(rank == 1);
             assert(strides[0] == 1);

@@ -8,6 +8,7 @@
 #include <oneapi/tbb/concurrent_queue.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/Dist/IR/DistOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 
 #include <iostream>
@@ -71,10 +72,11 @@ void process_promises()
     
         // Create a MLIR module
         auto module = builder.create<::mlir::ModuleOp>(loc);
-        // Create a func
-        auto dtype = builder.getI64Type();
+        auto protos = builder.create<::imex::dist::RuntimePrototypesOp>(loc);
+        module.push_back(protos);
+        // Create the jit func
         // create dummy type, we'll replace it with the actual type later
-        auto dummyFuncType = builder.getFunctionType({}, dtype);
+        auto dummyFuncType = builder.getFunctionType({}, {});
         std::string fname("ddpt_jit");
         auto function = builder.create<::mlir::func::FuncOp>(loc, fname, dummyFuncType);
         // create function entry block
@@ -109,11 +111,12 @@ void process_promises()
         uint64_t osz = dm.handleResult(builder);
         // also request generation of c-wrapper function
         function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
+        function.getFunctionType().dump();
         // add the function to the module
         module.push_back(function);
         module.dump();
 
-        // get input buffers (before rsults!)
+        // get input buffers (before results!)
         auto input = std::move(dm.store_inputs());
 
         // compile and run the module

@@ -8,6 +8,8 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
@@ -76,12 +78,6 @@ static ::mlir::Type makeSignlessType(::mlir::Type type)
     return type;
 }
 
-::mlir::Value createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_t val)
-{
-    auto attr = builder.getI64IntegerAttr(val);
-    return builder.create<::mlir::arith::ConstantOp>(loc, attr).getResult();
-}
-
 static ::mlir::Type getPTType(::mlir::OpBuilder & builder, DTypeId dtype, int rank)
 {
     ::mlir::Type etyp;
@@ -117,7 +113,7 @@ static ::mlir::Type getPTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
     };
 
     llvm::SmallVector<int64_t> shape(rank, -1); //::mlir::ShapedType::kDynamicSize);
-    return ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, etyp), true);
+    return ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get(shape, etyp), false, true);
 }
 
 ::mlir::Value DepManager::getDependent(::mlir::OpBuilder & builder, id_type guid)
@@ -189,7 +185,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
     std::vector<::mlir::Value> ret_values(_ivm.size());
 
     // remove default result
-    _func.eraseResult(0);
+    //_func.eraseResult(0);
 
     // here we store the total size of the llvm struct
     uint64_t sz = 0;
@@ -197,11 +193,13 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
     for(auto & v : _ivm) {
         auto value = v.second.first;
         // append the type and array/value
-        ret_values[idx] = value;
-        _func.insertResult(idx, value.getType(), {});
-        auto ptt = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
-        assert(ptt);
-        auto rank = ptt.getRtensor().getShape().size();
+        auto retPtTyp = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
+        assert(retPtTyp);
+        auto retValue = builder.create<::imex::ptensor::ExtractRTensorOp>(builder.getUnknownLoc(), retPtTyp.getRtensor(), value);
+        ret_values[idx] = retValue;
+        _func.insertResult(idx, retValue.getType(), {});
+        _func.getFunctionType().dump(); std::cerr << std::endl;
+        auto rank = retPtTyp.getRtensor().getShape().size();
         _irm[v.first] = rank;
         // add sizeof(MemRefDescriptor<elementtype, rank>) to sz
         sz += memref_sz(rank);
@@ -252,6 +250,9 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
     // the module.
     ::mlir::ExecutionEngineOptions engineOptions;
     engineOptions.transformer = optPipeline;
+    const char * idtr = getenv("DDPT_IDTR_SO");
+    ::llvm::ArrayRef<::llvm::StringRef> shlibs({idtr ? idtr : "libidtr.so"});
+    engineOptions.sharedLibPaths = shlibs;
     auto maybeEngine = ::mlir::ExecutionEngine::create(module, engineOptions);
     assert(maybeEngine && "failed to construct an execution engine");
     auto &engine = maybeEngine.get();
@@ -277,7 +278,7 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
 static const char * pass_pipeline =
    getenv("DDPT_PASSES")
    ? getenv("DDPT_PASSES")
-   : "convert-ptensor-to-linalg,dist-elim,convert-shape-to-std,arith-bufferize,func.func(linalg-init-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-subview-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,convert-shape-to-std,arith-expand,arith-bufferize,func.func(linalg-init-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-alias-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
    
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),
@@ -289,6 +290,8 @@ JIT::JIT()
     // load the dialects we use
     _context.getOrLoadDialect<::mlir::arith::ArithmeticDialect>();
     _context.getOrLoadDialect<::mlir::func::FuncDialect>();
+    _context.getOrLoadDialect<::mlir::shape::ShapeDialect>();
+    _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
     _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
     _context.getOrLoadDialect<::imex::dist::DistDialect>();
     // create the pass pipeline from string
@@ -296,8 +299,8 @@ JIT::JIT()
        throw std::runtime_error("failed to parse pass pipeline");
     // some verbosity
     // _pm.enableStatistics();
-    // _pm.enableIRPrinting();
-    _pm.dump();
+    //_pm.enableIRPrinting();
+    //_pm.dump();
 }
 
 void init()
@@ -321,7 +324,9 @@ void init()
     ::mlir::memref::registerMemRefPasses();
     ::mlir::registerReconcileUnrealizedCastsPass();
 
-    ::imex::registerAllPasses();
+    ::imex::registerPTensorPasses();
+    ::imex::registerConvertDistToStandard();
+    ::imex::registerConvertPTensorToLinalg();
 
     // ::mlir::DialectRegistry registry;
     // ::mlir::registerAllDialects(registry);

@@ -8,11 +8,18 @@
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Arithmetic/IR/Arithmetic.h>
+#include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/Linalg/IR/Linalg.h>
+#include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/Dialect/Bufferization/IR/Bufferization.h>
+#include <mlir/Conversion/LLVMCommon/MemRefBuilder.h>
 
 #include <unordered_map>
 #include <functional>
-#include  <utility>
+#include <utility>
 #include <vector>
 
 namespace jit {
@@ -24,8 +31,17 @@ using SetResFunc = std::function<void(
 // initialize jit
 void init();
 
-// create a constant integer with given value
-extern ::mlir::Value createI64(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, int64_t val);
+template<int W=64, typename T=int64_t>
+::mlir::Value createInt(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, T val)
+{
+    auto attr = builder.getIntegerAttr(builder.getIntegerType(W), val);
+    return builder.create<::mlir::arith::ConstantOp>(loc, attr);
+}
+inline ::mlir::Value createIndex(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, uint64_t val)
+{
+    auto attr = builder.getIndexAttr(val);
+    return builder.create<::mlir::arith::ConstantOp>(loc, attr);
+}
 
 /// Manages iput/output (tensor) dependences
 class DepManager

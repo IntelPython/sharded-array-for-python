@@ -21,12 +21,12 @@ class DDPTensorImpl : public tensor_i
 {
     mutable rank_type _owner;
     PVSlice _slice;
-    void * _allocated;
-    void * _aligned;
-    intptr_t * _sizes;
-    intptr_t * _strides;
-    uint64_t _offset;
-    DTypeId _dtype;
+    void * _allocated = nullptr;
+    void * _aligned = nullptr;
+    intptr_t * _sizes = nullptr;
+    intptr_t * _strides = nullptr;
+    uint64_t _offset = 0;
+    DTypeId _dtype = DTYPE_LAST;
 
 public:
     using ptr_type = std::shared_ptr<DDPTensorImpl>;
@@ -54,9 +54,6 @@ public:
     DDPTensorImpl(DTypeId dtype, const shape_type & shp, rank_type owner=NOOWNER)
         : _owner(owner),
           _slice(shp, static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
-          _allocated(nullptr),
-          _aligned(nullptr),
-          _offset(0),
           _dtype(dtype)
     {
         alloc();
@@ -73,11 +70,14 @@ public:
     // incomplete, useful for computing meta information
     DDPTensorImpl(const uint64_t * shape, uint64_t N, rank_type owner=NOOWNER)
         : _owner(owner),
-          _slice(shape_type(shape, shape+N), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
-          _allocated(nullptr),
-          _aligned(nullptr),
-          _offset(0),
-          _dtype(DTYPE_LAST)
+          _slice(shape_type(shape, shape+N), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0))
+    {
+    }
+
+    // incomplete, useful for computing meta information
+    DDPTensorImpl()
+        : _owner(REPLICATED),
+          _slice(shape_type(), static_cast<int>(NOSPLIT))
     {
     }
 

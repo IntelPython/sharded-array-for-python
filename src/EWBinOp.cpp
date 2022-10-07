@@ -13,6 +13,7 @@
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Shape/IR/Shape.h>
 
 // #######################################################################################
 // The 2 operators/tensors can have shifted partitions, e.g. local data might not be the
@@ -32,7 +33,7 @@
 //   2. local data which does not need communication
 //   3. Trailing remote data
 //
-// We attempt to minize copies by treating each region explicitly, e.g. data
+// We attempt to minimize copies by treating each region explicitly, e.g. data
 // which is already local will not be copied or communicated.
 //
 // Additionally, to reduce generated code size we convert buffers to the result
@@ -459,10 +460,10 @@ struct DeferredEWBinOp : public Deferred
     bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
     {
         // FIXME the type of the result is based on a only
-        auto a = dm.getDependent(builder, _a);
-        auto b = dm.getDependent(builder, _b);
-        dm.addVal(guid(),
-                  builder.create<::imex::ptensor::EWBinOp>(loc, a.getType(), builder.getI32IntegerAttr(ddpt2mlir(_op)), a, b),
+        auto av = dm.getDependent(builder, _a);
+        auto bv = dm.getDependent(builder, _b);
+        dm.addVal(this->guid(),
+                  builder.create<::imex::ptensor::EWBinOp>(loc, av.getType(), builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
             this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
         });

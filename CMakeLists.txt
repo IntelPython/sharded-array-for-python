@@ -84,7 +84,8 @@ add_custom_command(
 # ============
 
 FILE(GLOB Hpps ${PROJECT_SOURCE_DIR}/src/include/ddptensor/*.hpp)
-set(Hpps ${Hpps} ${P2C_HPP})
+FILE(GLOB JitHpps ${PROJECT_SOURCE_DIR}/src/include/ddptensor/jit/*.hpp)
+set(Hpps ${Hpps} ${JitHpps} ${P2C_HPP})
 
 set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/ddptensor.cpp
@@ -153,7 +154,11 @@ target_link_libraries(idtr PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb
-    ${imex_all_libs}
+    IMEXPTensorDialect
+    IMEXPTensorTransforms
+    IMEXPTensorToLinalg
+    IMEXDistDialect
+    IMEXDistToStandard
 	  MLIROptLib
     MLIRExecutionEngine
     MLIRIR
