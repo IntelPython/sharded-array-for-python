@@ -8,6 +8,12 @@ extern "C" {
 
     constexpr id_t UNKNOWN_GUID = -1;
 
+    // Return number of ranks/processes in given team/communicator
+    uint64_t idtr_nprocs(int64_t team);
+
+    // Return rank in given team/communicator
+    uint64_t idtr_prank(int64_t team);
+
     // Register a global tensor of given shape.
     // Accepts a guid which might have been reserved before. Returns guid (reserved or new).
     // The runtime does not own or manage any memory.

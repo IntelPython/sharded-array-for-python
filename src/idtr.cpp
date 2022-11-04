@@ -29,6 +29,20 @@ T * mr_to_ptr(void * ptr, intptr_t offset)
 
 extern "C" {
 
+// Return number of ranks/processes in given team/communicator
+uint64_t idtr_nprocs(int64_t team)
+{
+    return getTransceiver()->nranks();
+}
+#pragma weak _idtr_nprocs = idtr_nprocs
+
+// Return rank in given team/communicator
+uint64_t idtr_prank(int64_t team)
+{
+    return getTransceiver()->rank();
+}
+#pragma weak _idtr_prank = idtr_prank
+
 // Register a global tensor of given shape.
 // Returns guid.
 // The runtime does not own or manage any memory.

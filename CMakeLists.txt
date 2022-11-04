@@ -104,6 +104,7 @@ set(DDPTSrcs
 set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/idtr.cpp
     ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
+    ${PROJECT_SOURCE_DIR}/src/DDPTensorImpl.cpp
     ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
     ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp

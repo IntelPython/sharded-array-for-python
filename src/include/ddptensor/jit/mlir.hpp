@@ -2,13 +2,13 @@
 
 #pragma once
 
-#include "ddptensor/CppTypes.hpp"
+#include <ddptensor/CppTypes.hpp>
 
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
 #include <mlir/IR/Builders.h>
-#include <mlir/Dialect/Arithmetic/IR/Arithmetic.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
@@ -26,7 +26,8 @@ namespace jit {
 
 // function type for building body for linalg::generic
 using SetResFunc = std::function<void(
-    uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides)>;
+    uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+    uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned)>;
 
 // initialize jit
 void init();
@@ -107,6 +108,11 @@ public:
 
     ::mlir::MLIRContext _context;
     ::mlir::PassManager _pm;
+    bool _verbose;
 };
+
+// size of memreftype in number of intptr_t's
+inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
+inline uint64_t dtensor_sz(int rank) { return 2 * memref_sz(1) + memref_sz(rank) + 1; };
 
 } // namespace jit

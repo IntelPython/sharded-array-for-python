@@ -464,8 +464,10 @@ struct DeferredEWBinOp : public Deferred
         auto bv = dm.getDependent(builder, _b);
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::EWBinOp>(loc, av.getType(), builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
         });
         return false;
     }

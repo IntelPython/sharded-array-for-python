@@ -8,7 +8,7 @@
 #include <imex/internal/PassUtils.h>
 
 #include <mlir/IR/Builders.h>
-#include <mlir/Dialect/Arithmetic/IR/Arithmetic.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
@@ -171,15 +171,17 @@ struct DeferredArange : public Deferred
         auto stop = ::imex::createInt(loc, builder, _end);
         auto step = ::imex::createInt(loc, builder, _step);
         auto dtype = builder.getI64Type(); // FIXME
-        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({-1}, dtype), false, true);
+        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({-1}, dtype), false);
         auto dmy = ::imex::createInt<1>(loc, builder, 0);
-        auto team = ::imex::createInt(loc, builder, 1);
+        auto team = ::imex::createInt(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, stop, step, dmy, team),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
             assert(rank == 1);
             assert(strides[0] == 1);
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
         });
         return false;
     }

@@ -148,3 +148,7 @@ enum FactoryId : int {
     F_TONUMPY,
     FACTORY_LAST
 };
+
+// size of memreftype in number of intptr_t's
+inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
+inline uint64_t dtensor_sz(int rank) { return 2 * memref_sz(1) + memref_sz(rank) + 1; };

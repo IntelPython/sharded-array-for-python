@@ -7,6 +7,7 @@
 #include "ddptensor/Factory.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/Dist/IR/DistOps.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 
@@ -121,18 +122,25 @@ struct DeferredReduceOp : public Deferred
     {
         // FIXME reduction over individual dimensions is not supported
         auto av = dm.getDependent(builder, _a);
-        auto aPtTyp = av.getType().dyn_cast<::imex::ptensor::PTensorType>();
-        assert(aPtTyp);
+        auto aDtTyp = av.getType().dyn_cast<::imex::dist::DistTensorType>();
+        ::mlir::Type dtype;
+        if(aDtTyp) {
+            dtype = aDtTyp.getPTensorType().getRtensor().getElementType();
+        } else {
+            auto aPtTyp = av.getType().dyn_cast<::imex::ptensor::PTensorType>();
+            dtype = aPtTyp.getRtensor().getElementType();
+        }
         // return type 0d with same dtype as input
-        auto dtype = aPtTyp.getRtensor().getElementType();
-        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({}, dtype), false, true);
+        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({}, dtype), false);
         // reduction op
         auto mop = ddpt2mlir(_op);
         auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides) {
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides)));
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
         });
         return false;
     }
