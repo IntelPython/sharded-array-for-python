@@ -18,7 +18,6 @@
 class DDPTensorImpl : public tensor_i
 {
     mutable rank_type _owner;
-    PVSlice _slice;
     void * _allocated = nullptr;
     void * _aligned = nullptr;
     intptr_t * _sizes = nullptr;
@@ -47,17 +46,17 @@ public:
     // incomplete, useful for computing meta information
     DDPTensorImpl(const uint64_t * shape, uint64_t N, rank_type owner=NOOWNER)
         : _owner(owner),
-          _slice(shape_type(shape, shape+N), static_cast<int>(owner==REPLICATED ? NOSPLIT : 0)),
           _ndims(N)
     {
     }
 
     // incomplete, useful for computing meta information
     DDPTensorImpl()
-        : _owner(REPLICATED),
-          _slice(shape_type(), static_cast<int>(NOSPLIT))
+        : _owner(REPLICATED)
     {
     }
+
+    DDPTensorImpl::ptr_type clone(bool copy = true);
 
     void alloc();
 
@@ -71,7 +70,8 @@ public:
 
     bool is_sliced() const
     {
-        return _slice.is_sliced();
+        assert(false);
+        return false;
     }
 
     virtual std::string __repr__() const;
@@ -83,17 +83,20 @@ public:
 
     virtual const shape_type & shape() const
     {
-        return _slice.shape();
+        assert(false);
+        static shape_type dmy;
+        return dmy;
     }
 
-    virtual int ndim() const
+    virtual int ndims() const
     {
-        return _slice.ndims();
+        return _ndims;
     }
 
     virtual uint64_t size() const
     {
-        return _slice.size();
+        assert(ndims() == 1);
+        return *_sizes;
     }
 
     friend struct Service;
@@ -104,12 +107,7 @@ public:
 
     virtual uint64_t __len__() const
     {
-        return _slice.slice().dim(0).size();
-    }
-
-    const PVSlice & slice() const
-    {
-        return _slice;
+        return ndims() ? *_sizes : 0;
     }
 
     bool has_owner() const

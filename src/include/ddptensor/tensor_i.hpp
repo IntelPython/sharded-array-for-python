@@ -25,12 +25,13 @@ public:
 
     class TFuture : public std::shared_future<tensor_i::ptr_type>
     {
-        id_type _id;
-        DTypeId _dtype;
-        int     _rank;
+        id_type _id = -1;
+        DTypeId _dtype = DTYPE_LAST;
+        int     _rank = -1;
         
     public:
-        using std::shared_future<tensor_i::ptr_type>::shared_future;
+        TFuture() = default;
+        TFuture(const TFuture & f) = default;
         TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id, DTypeId dt, int rank)
             : std::shared_future<tensor_i::ptr_type>(std::move(f)),
             _id(id),
@@ -39,8 +40,7 @@ public:
         {}
 
         ~TFuture()
-        {
-        }
+        {}
         
         /// @return globally unique id
         id_type id() const { return _id; }
@@ -58,7 +58,7 @@ public:
     virtual std::string __repr__() const = 0;
     virtual DTypeId dtype() const = 0;
     virtual const shape_type & shape() const = 0;
-    virtual int ndim() const = 0;
+    virtual int ndims() const = 0;
     virtual uint64_t size() const = 0;
     virtual bool __bool__() const = 0;
     virtual double __float__() const = 0;

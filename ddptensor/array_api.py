@@ -190,6 +190,11 @@ api_categories = OrderedDict({
         "tensordot",  # (x1, x2, /, *, axes=2)
         "vecdot",  # (x1, x2, /, *, axis=-1)
     ],
+
+    "SortOp" : [
+        "argsort",  # (x, /, *, axis=-1, descending=False, stable=True)
+        "sort",     #(x, /, *, axis=-1, descending=False, stable=True)
+    ],
 })
 
 misc_methods = [

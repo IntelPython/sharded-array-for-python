@@ -49,7 +49,7 @@ uint64_t idtr_prank(int64_t team)
 id_t idtr_init_dtensor(const uint64_t * shape, uint64_t nD)
 {
     auto guid = get_guid();
-    gtensors[guid] = std::unique_ptr<DDPTensorImpl>(nD ? new DDPTensorImpl(shape, nD) : new DDPTensorImpl);
+    // gtensors[guid] = std::unique_ptr<DDPTensorImpl>(nD ? new DDPTensorImpl(shape, nD) : new DDPTensorImpl);
     return guid;
 }
 
@@ -62,6 +62,7 @@ id_t _idtr_init_dtensor(void * alloced, void * aligned, intptr_t offset, intptr_
 // Result is stored in provided array.
 void idtr_local_offsets(id_t guid, uint64_t * offsets, uint64_t nD)
 {
+#if 0
     const auto & tnsr = gtensors.at(guid);
     auto slcs = tnsr->slice().local_slice().slices();
     assert(nD == slcs.size());
@@ -69,6 +70,7 @@ void idtr_local_offsets(id_t guid, uint64_t * offsets, uint64_t nD)
     for(auto s : slcs) {
         offsets[++i] = s._start;
     }
+#endif
 }
 
 void _idtr_local_offsets(id_t guid, void * alloced, void * aligned, intptr_t offset, intptr_t size, intptr_t stride, uint64_t nD)
@@ -80,9 +82,11 @@ void _idtr_local_offsets(id_t guid, void * alloced, void * aligned, intptr_t off
 // Result is stored in provided array.
 void idtr_local_shape(id_t guid, uint64_t * lshape, uint64_t N)
 {
+#if 0
     const auto & tnsr = gtensors.at(guid);
     auto shp = tnsr->slice().local_slice().shape();
     std::copy(shp.begin(), shp.end(), lshape);
+#endif
 }
 
 void _idtr_local_shape(id_t guid, void * alloced, void * aligned, intptr_t offset, intptr_t size, intptr_t stride, uint64_t nD)

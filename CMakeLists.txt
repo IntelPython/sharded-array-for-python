@@ -100,6 +100,7 @@ set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
     ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
+    ${PROJECT_SOURCE_DIR}/src/Sorting.cpp
 )
 set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/idtr.cpp

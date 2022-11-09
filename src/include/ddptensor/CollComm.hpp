@@ -26,6 +26,7 @@ struct CollComm
     template<typename T, typename U>
     static tensor_i::ptr_type coll_copy(std::shared_ptr<DDPTensorImpl> b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr)
     {
+#if 0
         assert(! a_ptr->is_sliced() && ! b_ptr->is_sliced());
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
 
@@ -38,6 +39,7 @@ struct CollComm
                                  info[2].data(),
                                  info[3].data(),
                                  DTYPE<T>::value);
+#endif
             
         return b_ptr;
     }
@@ -45,6 +47,7 @@ struct CollComm
     template<typename T, typename U>
     static std::array<int, 4> coll_map(const std::shared_ptr<DDPTensorImpl> & b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr, std::vector<U> & rbuff)
     {
+#if 0
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
         
         auto nr = getTransceiver()->nranks();
@@ -83,11 +86,14 @@ struct CollComm
                                  DTYPE<U>::value);
             
         return {my_cnt_send, info[1][r], my_cnt_recv, info[3][r]};
+#endif
+        return {-1,-1,-1,-1};
     }
 
     template<typename A, typename B>
     static std::array<uint64_t, 2> coll_copy(const std::shared_ptr<DDPTensorImpl> & a_ptr, const std::array<std::vector<NDSlice>, 2> & a_overlap, std::vector<B> & rbuff)
     {
+#if 0
         if(a_overlap[0].empty()) return {0, 0};
 
         auto nr = getTransceiver()->nranks();
@@ -120,5 +126,7 @@ struct CollComm
                                  &disp_recv[0],
                                  DTYPE<B>::value);
         return {(uint64_t)disp_send[rank], (uint64_t)disp_recv[rank]};
+#endif
+        return {-1,-1};
     }
 };

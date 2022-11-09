@@ -23,22 +23,23 @@ using namespace pybind11::literals; // to bring _a
 
 #define DEF_PY11_ENUMS // used in p2c_types.hpp
 
-#include "ddptensor/MPITransceiver.hpp"
-#include "ddptensor/MPIMediator.hpp"
-#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Creator.hpp"
-#include "ddptensor/IEWBinOp.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/EWBinOp.hpp"
 #include "ddptensor/EWUnyOp.hpp"
-#include "ddptensor/ReduceOp.hpp"
-#include "ddptensor/ManipOp.hpp"
-#include "ddptensor/SetGetItem.hpp"
-#include "ddptensor/Random.hpp"
-#include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/Service.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/IO.hpp"
 #include "ddptensor/jit/mlir.hpp"
+#include "ddptensor/LinAlgOp.hpp"
+#include "ddptensor/ManipOp.hpp"
+#include "ddptensor/MPIMediator.hpp"
+#include "ddptensor/MPITransceiver.hpp"
+#include "ddptensor/Random.hpp"
+#include "ddptensor/ReduceOp.hpp"
+#include "ddptensor/Service.hpp"
+#include "ddptensor/SetGetItem.hpp"
+#include "ddptensor/Sorting.hpp"
 
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
@@ -92,20 +93,21 @@ void init(bool cw)
 // #########################################################################
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
-    Factory::init<F_ARANGE>();
-    Factory::init<F_FULL>();
-    Factory::init<F_FROMSHAPE>();
     // Factory::init<F_UNYOP>();
-    Factory::init<F_EWUNYOP>();
-    Factory::init<F_IEWBINOP>();
+    Factory::init<F_ARANGE>();
     Factory::init<F_EWBINOP>();
-    Factory::init<F_REDUCEOP>();
-    Factory::init<F_MANIPOP>();
-    Factory::init<F_LINALGOP>();
+    Factory::init<F_EWUNYOP>();
+    Factory::init<F_FROMSHAPE>();
+    Factory::init<F_FULL>();
     Factory::init<F_GETITEM>();
-    Factory::init<F_SETITEM>();
+    Factory::init<F_IEWBINOP>();
+    Factory::init<F_LINALGOP>();
+    Factory::init<F_MANIPOP>();
     Factory::init<F_RANDOM>();
+    Factory::init<F_REDUCEOP>();
     Factory::init<F_SERVICE>();
+    Factory::init<F_SETITEM>();
+    Factory::init<F_SORTOP>();
     Factory::init<F_TONUMPY>();
 
     jit::init();
@@ -147,6 +149,9 @@ PYBIND11_MODULE(_ddptensor, m) {
 
     py::class_<LinAlgOp>(m, "LinAlgOp")
         .def("vecdot", &LinAlgOp::vecdot);
+
+    py::class_<SortOp>(m, "SortOp")
+        .def("sort", &SortOp::sort);
 
 /// trigger compile&run and return given attribute _x
 #define SYNC_RETURN(_f, _a) Service::run(); return (_f).get().get()->_a()

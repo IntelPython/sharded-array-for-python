@@ -132,20 +132,21 @@ using id_type = uint64_t;
 
 enum FactoryId : int {
     F_ARANGE,
+    F_EWBINOP,
+    F_EWUNYOP,
     F_FROMSHAPE,
     F_FULL,
-    F_UNYOP,
-    F_EWUNYOP,
-    F_IEWBINOP,
-    F_EWBINOP,
-    F_REDUCEOP,
-    F_MANIPOP,
-    F_LINALGOP,
     F_GETITEM,
-    F_SETITEM,
+    F_IEWBINOP,
+    F_LINALGOP,
+    F_MANIPOP,
     F_RANDOM,
+    F_REDUCEOP,
     F_SERVICE,
+    F_SETITEM,
+    F_SORTOP,
     F_TONUMPY,
+    F_UNYOP,
     FACTORY_LAST
 };
 

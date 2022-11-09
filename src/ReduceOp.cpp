@@ -122,14 +122,9 @@ struct DeferredReduceOp : public Deferred
     {
         // FIXME reduction over individual dimensions is not supported
         auto av = dm.getDependent(builder, _a);
-        auto aDtTyp = av.getType().dyn_cast<::imex::dist::DistTensorType>();
-        ::mlir::Type dtype;
-        if(aDtTyp) {
-            dtype = aDtTyp.getPTensorType().getRtensor().getElementType();
-        } else {
-            auto aPtTyp = av.getType().dyn_cast<::imex::ptensor::PTensorType>();
-            dtype = aPtTyp.getRtensor().getElementType();
-        }
+        auto aPtTyp = ::imex::dist::getPTensorType(av);
+        assert(aPtTyp);
+        ::mlir::Type dtype = aPtTyp.getRtensor().getElementType();
         // return type 0d with same dtype as input
         auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({}, dtype), false);
         // reduction op
