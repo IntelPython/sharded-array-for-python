@@ -7,7 +7,6 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #include "mlir/Pass/Pass.h"
@@ -29,7 +28,7 @@
 // #include "mlir/Dialect/NVGPU/Passes.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
 // #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
-#include "mlir/Dialect/Shape/Transforms/Passes.h"
+// #include "mlir/Dialect/Shape/Transforms/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
@@ -37,6 +36,7 @@
 // #include "mlir/Dialect/Transform/Transforms/Passes.h"
 // #include "mlir/Dialect/Vector/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
+// #include <mlir/InitAllPasses.h>
 
 
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
@@ -111,14 +111,9 @@ static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
         throw std::runtime_error("unknown dtype");
     };
 
-    llvm::SmallVector<int64_t> shape(rank, -1); //::mlir::ShapedType::kDynamicSize);
     return ::imex::dist::DistTensorType::get(
         builder.getContext(),
-        ::imex::ptensor::PTensorType::get(
-            builder.getContext(),
-            ::mlir::RankedTensorType::get(shape, etyp),
-            false
-        )
+        ::imex::ptensor::PTensorType::get(builder.getContext(), rank, etyp, false)
     );
 }
 
@@ -202,7 +197,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
         }
         ret_values[idx] = value;
         _func.insertResult(idx, value.getType(), {});
-        auto rank = retDtTyp.getPTensorType().getRtensor().getShape().size();
+        auto rank = retDtTyp.getPTensorType().getRank();
         _irm[v.first] = rank;
         // add sizes of dtensor (3 tensors and rank) to sz
         sz += dtensor_sz(rank);
@@ -270,9 +265,12 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
     // the module.
     ::mlir::ExecutionEngineOptions engineOptions;
     engineOptions.transformer = optPipeline;
+    // const char * crunner = getenv("DDPT_CRUNNER_SO");
+    // crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
     const char * idtr = getenv("DDPT_IDTR_SO");
-    ::llvm::ArrayRef<::llvm::StringRef> shlibs({idtr ? idtr : "libidtr.so"});
-    engineOptions.sharedLibPaths = shlibs;
+    idtr = idtr ? idtr : "libidtr.so";
+    // ::llvm::ArrayRef<::llvm::StringRef> shlibs = {crunner, idtr};
+    engineOptions.sharedLibPaths = {idtr};
     auto maybeEngine = ::mlir::ExecutionEngine::create(module, engineOptions);
     assert(maybeEngine && "failed to construct an execution engine");
     auto &engine = maybeEngine.get();
@@ -298,7 +296,7 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
 static const char * pass_pipeline =
    getenv("DDPT_PASSES")
    ? getenv("DDPT_PASSES")
-   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,convert-shape-to-std,arith-expand,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,shape-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-alias-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-alias-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,convert-scf-to-cf,reconcile-unrealized-casts";
    
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),
@@ -311,7 +309,6 @@ JIT::JIT()
     // load the dialects we use
     _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
     _context.getOrLoadDialect<::mlir::func::FuncDialect>();
-    _context.getOrLoadDialect<::mlir::shape::ShapeDialect>();
     _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
     _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
     _context.getOrLoadDialect<::imex::dist::DistDialect>();
@@ -339,8 +336,8 @@ void init()
     // ::mlir::registerAllPasses();
     ::mlir::registerSCFPasses();
     ::mlir::registerSCFToControlFlowPass();
-    ::mlir::registerShapePasses();
-    ::mlir::registerConvertShapeToStandardPass();
+    // ::mlir::registerShapePasses();
+    // ::mlir::registerConvertShapeToStandardPass();
     ::mlir::tensor::registerTensorPasses();
     ::mlir::registerLinalgPasses();
     ::mlir::func::registerFuncPasses();

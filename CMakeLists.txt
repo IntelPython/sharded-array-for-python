@@ -111,7 +111,6 @@ set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPITransceiver.cpp
-    ${PROJECT_SOURCE_DIR}/src/PVSlice.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
     ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
     ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
@@ -173,6 +172,7 @@ target_link_libraries(idtr PRIVATE
     MLIRLinalgDialect
     MLIRLinalgToLLVM
     MLIRLinalgTransforms
+    MLIRLLVMDialect
     MLIRMathDialect
     MLIRMathToLLVM
     MLIRMathTransforms

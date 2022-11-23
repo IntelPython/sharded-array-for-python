@@ -72,7 +72,7 @@ for func in api.api_categories["Creator"]:
         )
     elif func == "arange":
         exec(
-            f"{func} = lambda start, end, step, dtype: dtensor(_cdt.Creator.arange(start, end, step, dtype))"
+            f"{func} = lambda start, end, step, dtype, team=0: dtensor(_cdt.Creator.arange(start, end, step, dtype, team))"
         )
 
 for func in api.api_categories["ReduceOp"]:

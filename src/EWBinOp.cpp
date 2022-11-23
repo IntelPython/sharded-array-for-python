@@ -8,7 +8,6 @@
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/TypePromotion.hpp"
 #include "ddptensor/CollComm.hpp"
-#include "ddptensor/Chunker.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>

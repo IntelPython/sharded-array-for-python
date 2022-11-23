@@ -13,7 +13,7 @@ class Mediator
 public:
     enum : uint64_t {LOCAL_ONLY = 0};
     virtual ~Mediator() {}
-    virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer) = 0;
+    // virtual void pull(rank_type from, id_type guid, const NDSlice & slice, void * buffer) = 0;
     virtual void to_workers(const Runable * dfrd) = 0;
 };
 

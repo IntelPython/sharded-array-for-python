@@ -48,12 +48,14 @@ public:
         : _owner(owner),
           _ndims(N)
     {
+        assert(_ndims <= 1);
     }
 
     // incomplete, useful for computing meta information
     DDPTensorImpl()
         : _owner(REPLICATED)
     {
+        assert(_ndims <= 1);
     }
 
     DDPTensorImpl::ptr_type clone(bool copy = true);

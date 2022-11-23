@@ -7,29 +7,53 @@
 #include <bitsery/bitsery.h>
 #include <bitsery/traits/vector.h>
 
-#include "Slice.hpp"
-#include "NDIndex.hpp"
-#include "CppTypes.hpp"
-
 ///
 /// A slice of n-dimensional range with utility features to extract nd-indices.
 /// Represented as a vector of triplets [start, end, step[.
 ///
 class NDSlice {
-    // type of elements, n-dimensional
-    typedef std::vector<Slice::value_type> value_type;
-    // the nd-slice, e.g. once slice per dimension
-    typedef std::vector<Slice> ndslice_t;
-
-
-    // vector with one Slice per dimension, e.g. our nd-slice
-    ndslice_t _slice_vec;
-    // helper, holding sizes of each dimensions's slice
-    mutable std::vector<uint64_t> _sizes;
+public:
+    using vec_t = std::vector<uint64_t>;
+private:
+    // vector with offsets per dimension
+    vec_t _offsets;
+    // vector with sizes per dimension
+    vec_t _sizes;
+    // vector with strides per dimension
+    vec_t _strides;
 
 public:
     NDSlice() = default;
     NDSlice(NDSlice &&) = default;
+    NDSlice(const NDSlice &) = default;
+    // assumes a function exists to extract values per slice (compute_slice(T, ...))
+    template<typename T>
+    NDSlice(const std::vector<T> & v)
+        : _offsets(v.size()), _sizes(v.size()), _strides(v.size())
+    {
+        auto nd = v.size();
+        auto i = 0;
+        for(auto s : v) {
+            compute_slice(s, _offsets[i], _sizes[i], _strides[i]);
+            ++i;
+        };
+    }
+
+    const vec_t & offsets() const { return _offsets; };
+    const vec_t & sizes()   const { return _sizes; };
+    const vec_t & strides() const { return _strides; };
+
+    template<typename S>
+    void serialize(S & ser)
+    {
+        ser.container8b(_offsets, 8);
+        ser.container8b(_sizes, 8);
+        ser.container8b(_strides, 8);
+    }
+};
+
+
+#if 0
     NDSlice(const Slice & slc) : _slice_vec(1, slc), _sizes() {}
     NDSlice(const NDSlice & o) : _slice_vec(o._slice_vec), _sizes() {}
     NDSlice(const std::initializer_list<Slice> & slc) : _slice_vec(slc), _sizes() {}
@@ -402,7 +426,7 @@ public:
         return iterator();
     }
 };
-
+#endif // if 0
 
 #if 0
     // ###########################################################################

@@ -32,18 +32,6 @@ using SetResFunc = std::function<void(
 // initialize jit
 void init();
 
-template<int W=64, typename T=int64_t>
-::mlir::Value createInt(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, T val)
-{
-    auto attr = builder.getIntegerAttr(builder.getIntegerType(W), val);
-    return builder.create<::mlir::arith::ConstantOp>(loc, attr);
-}
-inline ::mlir::Value createIndex(const ::mlir::Location & loc, ::mlir::OpBuilder & builder, uint64_t val)
-{
-    auto attr = builder.getIndexAttr(val);
-    return builder.create<::mlir::arith::ConstantOp>(loc, attr);
-}
-
 /// Manages iput/output (tensor) dependences
 class DepManager
 {

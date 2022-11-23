@@ -9,7 +9,6 @@
 #include "ddptensor/CppTypes.hpp"
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/MPITransceiver.hpp"
-#include "ddptensor/NDSlice.hpp"
 #include "ddptensor/Factory.hpp"
 
 constexpr static int REQ_TAG = 14711;
@@ -50,6 +49,7 @@ MPIMediator::~MPIMediator()
     }
 }
 
+#if 0
 void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void * rbuff)
 {
     MPI_Request request[2];
@@ -81,6 +81,7 @@ void MPIMediator::pull(rank_type from, id_type guid, const NDSlice & slice, void
     MPI_Get_count(&status[1], MPI_CHAR, &cnt);
     if(cnt != sz) throw(std::runtime_error("Received unexpected message size."));
 }
+#endif
 
 void send_to_workers(const Runable * dfrd, bool self, MPI_Comm comm)
 {
@@ -162,6 +163,7 @@ void MPIMediator::listen()
             uptr.get()->defer(std::move(uptr)); // grmpf
             break;
         }
+#if 0
         case PULL_TAG: {
             uint64_t id;
             ser.value8b(id);
@@ -182,6 +184,7 @@ void MPIMediator::listen()
             MPI_Isend(rbuff.data(), rbuff.size(), MPI_CHAR, requester, PUSH_TAG, _comm, &request_out);
             break;
         }
+#endif
         case EXIT_TAG:
             defer(nullptr);
             return;

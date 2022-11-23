@@ -15,6 +15,7 @@
 // This is not implemented: we need an extra mechanism to work with reshape-views or alike.
 std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice & o_slc)
 {
+#if 0
     auto nr = getTransceiver()->nranks();
     std::vector<int> counts_send(nr, 0);
     std::vector<int> disp_send(nr, 0);
@@ -63,4 +64,6 @@ std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice
         disp_send[r] = soverlap._start - o_llslc._start;
     }
     return {counts_send, disp_send, counts_recv, disp_recv};
+#endif // if 0
+    return {};
 }

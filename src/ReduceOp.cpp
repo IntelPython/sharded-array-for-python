@@ -124,9 +124,9 @@ struct DeferredReduceOp : public Deferred
         auto av = dm.getDependent(builder, _a);
         auto aPtTyp = ::imex::dist::getPTensorType(av);
         assert(aPtTyp);
-        ::mlir::Type dtype = aPtTyp.getRtensor().getElementType();
+        ::mlir::Type dtype = aPtTyp.getElementType();
         // return type 0d with same dtype as input
-        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({}, dtype), false);
+        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), 0, dtype, false);
         // reduction op
         auto mop = ddpt2mlir(_op);
         auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);

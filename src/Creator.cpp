@@ -152,12 +152,12 @@ ddptensor * Creator::full(const shape_type & shape, const py::object & val, DTyp
 
 struct DeferredArange : public Deferred
 {
-    uint64_t _start, _end, _step;
+    uint64_t _start, _end, _step, _team;
 
     DeferredArange() = default;
-    DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype)
+    DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype, uint64_t team = 0)
         : Deferred(dtype, 1),
-          _start(start), _end(end), _step(step)
+          _start(start), _end(end), _step(step), _team(team)
     {}
 
     void run() override
@@ -171,9 +171,10 @@ struct DeferredArange : public Deferred
         auto stop = ::imex::createInt(loc, builder, _end);
         auto step = ::imex::createInt(loc, builder, _step);
         auto dtype = builder.getI64Type(); // FIXME
-        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), ::mlir::RankedTensorType::get({-1}, dtype), false);
+        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), 1, dtype, false);
         auto dmy = ::imex::createInt<1>(loc, builder, 0);
-        auto team = ::imex::createInt(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
+        // ::mlir::Value 
+        auto team = ::imex::createIndex(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, stop, step, dmy, team),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
@@ -201,9 +202,9 @@ struct DeferredArange : public Deferred
     }
 };
 
-ddptensor * Creator::arange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype)
+ddptensor * Creator::arange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype, uint64_t team)
 {
-    return new ddptensor(defer<DeferredArange>(start, end, step, dtype));
+    return new ddptensor(defer<DeferredArange>(start, end, step, dtype, team));
 }
 
 ddptensor * Creator::mk_future(const py::object & b)

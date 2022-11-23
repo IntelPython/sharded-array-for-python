@@ -5,6 +5,11 @@
 #include "ddptensor/Mediator.hpp"
 #include "ddptensor/Factory.hpp"
 
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/internal/PassUtils.h>
+#include <mlir/IR/Builders.h>
+
 #if 0
 namespace x {
 
@@ -223,13 +228,47 @@ struct DeferredGetItem : public Deferred
 
     DeferredGetItem() = default;
     DeferredGetItem(const tensor_i::future_type & a, const std::vector<py::slice> & v)
-        : _a(a.id()), _slc(v)
+        : Deferred(a.dtype(), a.rank()), _a(a.id()), _slc(v)
     {}
 
     void run()
     {
         //const auto a = std::move(Registry::get(_a).get());
         //set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
+    }
+    
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
+    {
+        // get params and extract offsets/sizes/strides
+        const auto dtype = this->dtype();
+        auto av = dm.getDependent(builder, _a);
+        auto & offs = _slc.offsets();
+        auto & sizes = _slc.sizes();
+        auto & strides = _slc.strides();
+        auto nd = offs.size();
+        // convert C++ slices into vectors of MLIR Values
+        std::vector<::mlir::Value> offsV(nd);
+        std::vector<::mlir::Value> sizesV(nd);
+        std::vector<::mlir::Value> stridesV(nd);
+        for(auto i = 0; i<nd; ++i) {
+            offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
+            sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+            stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
+        }
+        // now we can create the PTensor op using the above Values
+        dm.addVal(this->guid(),
+                  builder.create<::imex::ptensor::ExtractSliceOp>(loc,
+                      ::imex::dist::getPTensorType(av),
+                      av,
+                      offsV,
+                      sizesV,
+                      stridesV),
+                  [this, dtype](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+            this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+        });
+        return false;
     }
 
     FactoryId factory() const
