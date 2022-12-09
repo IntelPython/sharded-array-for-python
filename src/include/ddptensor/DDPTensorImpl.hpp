@@ -13,6 +13,7 @@
 #include <cstring>
 #include <type_traits>
 #include <memory>
+#include <sstream>
 
 
 class DDPTensorImpl : public tensor_i
@@ -97,8 +98,11 @@ public:
 
     virtual uint64_t size() const
     {
-        assert(ndims() == 1);
-        return *_sizes;
+        switch(ndims()) {
+            case 0 : return 1;
+            case 1 : return *_sizes;
+            default: return std::accumulate(_sizes, _sizes+ndims(), 1, std::multiplies<intptr_t>());
+        }
     }
 
     friend struct Service;
@@ -140,6 +144,30 @@ public:
     virtual void bufferize(const NDSlice & slc, Buffer & buff) const;
 
     virtual void add_to_args(std::vector<void*> & args, int ndims);
+
+    template<typename T>
+    void printit(std::ostringstream & oss, uint64_t d, T * cptr) const
+    {
+        auto stride = _strides[d];
+        auto sz = _sizes[d];
+        if(d==ndims()-1) {
+            oss << "[";
+            for(auto i=0; i<sz; ++i) {
+                oss << cptr[i*stride];
+                if(i<sz-1) oss << " ";
+            }
+            oss << "]";
+        } else {
+            oss << "[";
+            for(auto i=0; i<sz; ++i) {
+                if(i) for(auto x=0; x<=d; ++x) oss << " ";
+                printit(oss, d+1, cptr);
+                if(i<sz-1) oss << "\n";
+                cptr += stride;
+            }
+            oss << "]";
+        }
+    }
 };
 
 template<typename ...Ts>

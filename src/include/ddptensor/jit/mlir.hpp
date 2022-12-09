@@ -4,6 +4,7 @@
 
 #include <ddptensor/CppTypes.hpp>
 
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
@@ -23,6 +24,19 @@
 #include <vector>
 
 namespace jit {
+
+template<typename T> struct PT_DTYPE {};
+template<> struct PT_DTYPE<double>   { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::F64; };
+template<> struct PT_DTYPE<float>    { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::F32; };
+template<> struct PT_DTYPE<int64_t>  { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I64; };
+template<> struct PT_DTYPE<int32_t>  { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I32; };
+template<> struct PT_DTYPE<int16_t>  { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I16; };
+template<> struct PT_DTYPE<int8_t>   { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I8; };
+template<> struct PT_DTYPE<uint64_t> { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U64; };
+template<> struct PT_DTYPE<uint32_t> { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U32; };
+template<> struct PT_DTYPE<uint16_t> { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U16; };
+template<> struct PT_DTYPE<uint8_t>  { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U8; };
+template<> struct PT_DTYPE<bool>     { constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I1; };
 
 // function type for building body for linalg::generic
 using SetResFunc = std::function<void(

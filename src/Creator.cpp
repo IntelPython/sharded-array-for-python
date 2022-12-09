@@ -128,7 +128,44 @@ struct DeferredFull : public Deferred
         // set_value(std::move(TypeDispatch<x::Creator>(_dtype, op, _shape, _val)));
     }
 
-    // FIXME mlir
+    template<typename T>
+    struct ValAndDType
+    {
+        static ::mlir::Value op(::mlir::OpBuilder & builder, ::mlir::Location loc, const PyScalar & val, ::imex::ptensor::DType & dtyp)
+        {
+            dtyp = jit::PT_DTYPE<T>::value;
+
+            if constexpr (std::is_floating_point_v<T>) return ::imex::createFloat<sizeof(T)*8>(loc, builder, val._float);
+            else if constexpr (std::is_same_v<bool, T>) return ::imex::createInt<1>(loc, builder, val._int);
+            else if constexpr (std::is_integral_v<T>) return ::imex::createInt<sizeof(T)*8>(loc, builder, val._int);
+            assert("Unsupported dtype in dispatch");
+            return {};
+        };
+    };
+
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
+    {
+        ::mlir::SmallVector<::mlir::Value> shp(_shape.size());
+        for(auto i=0; i<_shape.size(); ++i) {
+            shp[i] = ::imex::createIndex(loc, builder, _shape[i]);
+        }
+
+        ::imex::ptensor::DType dtyp;
+        ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
+
+        auto dmy = ::imex::createInt<1>(loc, builder, 0);
+        auto team = ::imex::createIndex(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
+
+        dm.addVal(this->guid(),
+                  builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, dmy, team),
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+            assert(rank == this->_shape.size());
+            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+        });
+        return false;
+    }
 
     FactoryId factory() const
     {

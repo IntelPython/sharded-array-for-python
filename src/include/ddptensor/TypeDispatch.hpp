@@ -4,63 +4,19 @@
 
 #include "CppTypes.hpp"
 
-template<typename DispatchFunc>
-void dispatch(DTypeId dt, void * ptr, DispatchFunc func)
-{
-    switch(dt) {
-    case FLOAT64:
-        func(reinterpret_cast<double*>(ptr));
-        break;
-    case FLOAT32:
-        func(reinterpret_cast<float*>(ptr));
-        break;
-    case INT64:
-        func(reinterpret_cast<int64_t*>(ptr));
-        break;
-    case INT32:
-        func(reinterpret_cast<int32_t*>(ptr));
-        break;
-    case INT16:
-        func(reinterpret_cast<int16_t*>(ptr));
-        break;
-    case INT8:
-        func(reinterpret_cast<int8_t*>(ptr));
-        break;
-    case UINT64:
-        func(reinterpret_cast<uint64_t*>(ptr));
-        break;
-    case UINT32:
-        func(reinterpret_cast<uint32_t*>(ptr));
-        break;
-    case UINT16:
-        func(reinterpret_cast<uint16_t*>(ptr));
-        break;
-    case UINT8:
-        func(reinterpret_cast<uint8_t*>(ptr));
-        break;
-    case BOOL:
-        func(reinterpret_cast<bool*>(ptr));
-        break;
-    default:
-        throw std::runtime_error("unknown dtype");
-    }
-}
-
-#if 0
 // Dependent on dt, dispatch arguments to a operation class.
 // The operation must
 //    * be a template class accepting the element type as argument
 //    * implement one or more "op" methods matching the given arguments (args)
 // All arguments other than dt are opaquely passed to the operation.
 template<template<typename OD> class OpDispatch, typename... Ts>
-auto TypeDispatch(DTypeId dt, Ts&&... args)
+auto dispatch(DTypeId dt, Ts&&... args)
 {
     switch(dt) {
     case FLOAT64:
         return OpDispatch<double>::op(std::forward<Ts>(args)...);
     case INT64:
         return OpDispatch<int64_t>::op(std::forward<Ts>(args)...);
-#if ! defined(DDPT_2TYPES)
     case FLOAT32:
         return OpDispatch<float>::op(std::forward<Ts>(args)...);
     case INT32:
@@ -77,16 +33,33 @@ auto TypeDispatch(DTypeId dt, Ts&&... args)
         return OpDispatch<uint16_t>::op(std::forward<Ts>(args)...);
     case UINT8:
         return OpDispatch<uint8_t>::op(std::forward<Ts>(args)...);
-        /* FIXME
     case BOOL:
         return OpDispatch<bool>::op(std::forward<Ts>(args)...);
-        */
-#endif
     default:
         throw std::runtime_error("unknown dtype");
     }
 }
 
+// dispatch template for simple functions
+// for example for lambdas accepting the pointer as auto
+template<typename T>
+struct funcDispatcher
+{
+    template<typename DispatchFunc>
+    static void op(void * ptr, DispatchFunc func)
+    {
+        func(reinterpret_cast<T*>(ptr));
+    }
+};
+
+// shortcut for simple function/lambda dispatch
+template<typename DispatchFunc>
+void dispatch(DTypeId dt, void * ptr, DispatchFunc func)
+{
+    dispatch<funcDispatcher>(dt, ptr, func);
+}
+
+#if 0
 template<typename A>
 auto /*typename x::DPTensorX<A>::typed_ptr_type*/_downcast(const tensor_i::ptr_type & a_ptr)
 {
@@ -143,4 +116,4 @@ auto TypeDispatch(Ts&&... args)
 {
     return OpDispatch::op(std::forward<Ts>(args)...);
 }
-#endif
+#endif // #if 0
