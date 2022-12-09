@@ -95,13 +95,13 @@ std::string DDPTensorImpl::__repr__() const
     const auto nd = ndims();
     std::ostringstream oss;
     oss << "ddptensor{gs=(";
-    for(auto i=0; i<nd; ++i) oss << _gs_aligned[i] << ", ";
+    for(auto i=0; i<nd; ++i) oss << _gs_aligned[i] << (i==nd-1 ? "" : ", ");
     oss << "), loff=(";
-    for(auto i=0; i<nd; ++i) oss << _lo_aligned[i] << ", ";
+    for(auto i=0; i<nd; ++i) oss << _lo_aligned[i] << (i==nd-1 ? "" : ", ");
     oss << "), lsz=(";
-    for(auto i=0; i<nd; ++i) oss << _sizes[i] << ", ";
+    for(auto i=0; i<nd; ++i) oss << _sizes[i] << (i==nd-1 ? "" : ", ");
     oss << "), str=(";
-    for(auto i=0; i<nd; ++i) oss << _strides[i] << ", ";
+    for(auto i=0; i<nd; ++i) oss << _strides[i] << (i==nd-1 ? "" : ", ");
     oss << "), p=" << _allocated << ", poff=" << _offset << "}\n";
 
     dispatch(_dtype, _aligned, [this, nd, &oss](auto * ptr) {

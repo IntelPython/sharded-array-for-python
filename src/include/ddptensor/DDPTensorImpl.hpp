@@ -153,14 +153,13 @@ public:
         if(d==ndims()-1) {
             oss << "[";
             for(auto i=0; i<sz; ++i) {
-                oss << cptr[i*stride];
-                if(i<sz-1) oss << " ";
+                oss << cptr[i*stride] << (i<sz-1 ? " " : "");
             }
             oss << "]";
         } else {
             oss << "[";
             for(auto i=0; i<sz; ++i) {
-                if(i) for(auto x=0; x<=d; ++x) oss << " ";
+                if(i) oss << std::string(d+1, ' ');
                 printit(oss, d+1, cptr);
                 if(i<sz-1) oss << "\n";
                 cptr += stride;
