@@ -5,7 +5,7 @@
 #include "ddptensor/DDPTensorImpl.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
-#include <imex/internal/PassUtils.h>
+#include <imex/Utils/PassUtils.h>
 
 #include <mlir/IR/Builders.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>

@@ -296,7 +296,7 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
 static const char * pass_pipeline =
    getenv("DDPT_PASSES")
    ? getenv("DDPT_PASSES")
-   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,func.func(lower-affine),fold-memref-alias-ops,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,convert-scf-to-cf,reconcile-unrealized-casts";
+   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
    
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),

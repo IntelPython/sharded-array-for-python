@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <ddptensor/idtr.hpp>
+#include <ddptensor/jit/mlir.hpp>
 #include <ddptensor/DDPTensorImpl.hpp>
 #include <ddptensor/MPITransceiver.hpp>
 
@@ -120,14 +121,15 @@ static ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop)
 // Elementwise inplace allreduce
 void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, int op)
 {
-
     getTransceiver()->reduce_all(inout, dtype, N, mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
 // FIXME hard-coded 0d tensor
-void _idtr_reduce_all(uint64_t * allocated, uint64_t * aligned, uint64_t offset, DTypeId dtype, int op)
+void _idtr_reduce_all(uint64_t rank, uint64_t * mrd, DTypeId dtype, int op)
 {
-    idtr_reduce_all(aligned + offset, dtype, 1, op);
+    assert(rank==0);
+    auto descr = reinterpret_cast<jit::JIT::MemRefDescriptor<uint64_t, 0>*>(mrd);
+    idtr_reduce_all(descr->aligned + descr->offset, dtype, 1, op);
 }
 
 } // extern "C"

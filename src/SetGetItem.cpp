@@ -7,7 +7,7 @@
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/internal/PassUtils.h>
+#include <imex/Utils/PassUtils.h>
 #include <mlir/IR/Builders.h>
 
 #if 0
@@ -202,6 +202,38 @@ struct DeferredSetItem : public Deferred
         //set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
     }
 
+    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
+    {
+        // get params and extract offsets/sizes/strides
+        const auto dtype = this->dtype();
+        auto av = dm.getDependent(builder, _a);
+        auto bv = dm.getDependent(builder, _b);
+        auto & offs = _slc.offsets();
+        auto & sizes = _slc.sizes();
+        auto & strides = _slc.strides();
+        auto nd = offs.size();
+        // convert C++ slices into vectors of MLIR Values
+        std::vector<::mlir::Value> offsV(nd);
+        std::vector<::mlir::Value> sizesV(nd);
+        std::vector<::mlir::Value> stridesV(nd);
+        for(auto i = 0; i<nd; ++i) {
+            offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
+            sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+            stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
+        }
+        // insertsliceop has no return value, so we just craete the op...
+        builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV, sizesV, stridesV);
+        // ... and use av as to later create the ptensor
+        dm.addVal(this->guid(), av,
+                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+            this->set_value(Registry::get(this->_a).get());
+            // this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
+            //                                   gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+        });
+        return false;
+    }
+
     FactoryId factory() const
     {
         return F_SETITEM;
@@ -264,7 +296,7 @@ struct DeferredGetItem : public Deferred
                       sizesV,
                       stridesV),
                   [this, dtype](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
             this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
                                               gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
         });
