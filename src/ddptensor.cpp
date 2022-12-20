@@ -49,7 +49,7 @@ rank_type myrank()
     return getTransceiver()->rank();
 }
 
-std::thread * pprocessor;
+std::thread * pprocessor = nullptr;
 
 extern bool inited;
 extern bool finied;
@@ -63,6 +63,7 @@ void fini()
         if(getTransceiver()->nranks() == 1) defer(nullptr);
         pprocessor->join();
         delete pprocessor;
+        pprocessor = nullptr;
     }
     fini_transceiver();
     Deferred::fini();

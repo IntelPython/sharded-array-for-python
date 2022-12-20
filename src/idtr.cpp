@@ -124,12 +124,11 @@ void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, int op)
     getTransceiver()->reduce_all(inout, dtype, N, mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
-// FIXME hard-coded 0d tensor
-void _idtr_reduce_all(uint64_t rank, uint64_t * mrd, DTypeId dtype, int op)
+// FIXME hard-coded for contiguous layout
+void _idtr_reduce_all(uint64_t rank, void * data, int64_t * sizes, int64_t * strides, DTypeId dtype, int op)
 {
-    assert(rank==0);
-    auto descr = reinterpret_cast<jit::JIT::MemRefDescriptor<uint64_t, 0>*>(mrd);
-    idtr_reduce_all(descr->aligned + descr->offset, dtype, 1, op);
+    assert(rank == 0 || strides[rank-1] == 1);
+    idtr_reduce_all(data, dtype, rank ? rank : 1, op);
 }
 
 } // extern "C"

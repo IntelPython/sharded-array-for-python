@@ -128,10 +128,10 @@ static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
         _func.insertArgument(idx, typ, {}, loc);
         auto val = _func.getArgument(idx);
         _args.push_back({guid, fut.rank()});
-        _ivm[guid] = {val, {}};
+        _ivm[guid] = val;
         return val;
     } else {
-        return d->second.first;
+        return d->second;
     }
 }
 
@@ -151,6 +151,7 @@ std::vector<void*> DepManager::store_inputs()
         auto f = Registry::get(a.first);
         f.get().get()->add_to_args(res, a.second);
         _ivm.erase(a.first); // inputs need no delivery
+        _icm.erase(a.first);
     }
     return res;
 }
@@ -158,15 +159,15 @@ std::vector<void*> DepManager::store_inputs()
 void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb)
 {
     assert(_ivm.find(guid) == _ivm.end());
-    _ivm[guid] = {val, cb};
+    _ivm[guid] = val;
+    _icm[guid] = cb;
 }
 
 void DepManager::drop(id_type guid)
 {
-    if(auto e = _ivm.find(guid); e != _ivm.end()) {
-        _ivm.erase(e);
-        // FIXME create delete op
-    }
+    _ivm.erase(guid);
+    _icm.erase(guid);
+    // FIXME create delete op
 }
 
 // Now we have to define the return type as a ValueRange of all arrays which we have created
@@ -186,7 +187,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
     uint64_t sz = 0;
     unsigned idx = 0;
     for(auto & v : _ivm) {
-        ::mlir::Value value = v.second.first;
+        ::mlir::Value value = v.second;
         // append the type and array/value
         auto retDtTyp = value.getType().dyn_cast<::imex::dist::DistTensorType>();
         if(!retDtTyp) {
@@ -207,44 +208,49 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
     // add return statement
     auto ret_value = builder.create<::mlir::func::ReturnOp>(builder.getUnknownLoc(), ret_values);
 
+    // clear any reference to MLIR values
+    _ivm.clear();
     return sz;
 }
 
 void DepManager::deliver(intptr_t * output, uint64_t sz)
 {
     size_t pos = 0;
-    for(auto & v : _ivm) {
-        auto value = v.second.first;
+    for(auto & v : _icm) {
         auto rank = _irm[v.first];
-        // first extract global shape
-        uint64_t * gs_allocated = reinterpret_cast<uint64_t*>(output[pos]);
-        uint64_t * gs_aligned = reinterpret_cast<uint64_t*>(output[pos+1]);
-        intptr_t gs_offset = output[pos+2];
-        // no sizes/stride needed
-        pos += memref_sz(1);
-        // second extract tensor
+        // first extract tensor
         void * t_allocated = reinterpret_cast<void*>(output[pos]);
         void * t_aligned = reinterpret_cast<void*>(output[pos+1]);
         intptr_t t_offset = output[pos+2];
         intptr_t * t_sizes = output + pos + 3;
         intptr_t * t_stride = output + pos + 3 + rank;
         pos += memref_sz(rank);
-        // third extract local offsets
-        uint64_t * lo_allocated = reinterpret_cast<uint64_t*>(output[pos]);
-        uint64_t * lo_aligned = reinterpret_cast<uint64_t*>(output[pos+1]);
-        intptr_t lo_offset = output[pos+2];
-        // no sizes/stride needed
-        pos += memref_sz(1);
-        // last is the team
+        // second is the team
         // auto team = output[pos];
         pos += 1;
-        // call finalization
-        v.second.second(
-            rank,
-            t_allocated, t_aligned, t_offset, t_sizes, t_stride, // tensor
-            gs_allocated, gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
-            lo_allocated, lo_aligned + lo_offset  // local offset is 1d tensor of uint64_t
-        );
+        if(rank > 0) {
+            // third extract global shape
+            uint64_t * gs_allocated = reinterpret_cast<uint64_t*>(output[pos]);
+            uint64_t * gs_aligned = reinterpret_cast<uint64_t*>(output[pos+1]);
+            intptr_t gs_offset = output[pos+2];
+            // no sizes/stride needed
+            pos += memref_sz(1);
+            // lastly extract local offsets
+            uint64_t * lo_allocated = reinterpret_cast<uint64_t*>(output[pos]);
+            uint64_t * lo_aligned = reinterpret_cast<uint64_t*>(output[pos+1]);
+            intptr_t lo_offset = output[pos+2];
+            // no sizes/stride needed
+            pos += memref_sz(1);
+            // call finalization
+            v.second(rank,
+                     t_allocated, t_aligned, t_offset, t_sizes, t_stride, // tensor
+                     gs_allocated, gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
+                     lo_allocated, lo_aligned + lo_offset  // local offset is 1d tensor of uint64_t
+            );
+        } else { // 0d tensor
+            v.second(rank, t_allocated, t_aligned, t_offset, t_sizes, t_stride,
+                     nullptr, nullptr, nullptr, nullptr);
+        }
     }
 }
 
@@ -296,8 +302,9 @@ int JIT::run(::mlir::ModuleOp & module, const std::string & fname, std::vector<v
 static const char * pass_pipeline =
    getenv("DDPT_PASSES")
    ? getenv("DDPT_PASSES")
-   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
-   
+//    : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+//    : "builtin.module(func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts)";
+   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),
       _pm(&_context),

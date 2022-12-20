@@ -106,7 +106,8 @@ std::string DDPTensorImpl::__repr__() const
 
     dispatch(_dtype, _aligned, [this, nd, &oss](auto * ptr) {
         auto cptr = ptr + this->_offset;
-        printit(oss, 0, cptr);
+        if(nd>0) printit(oss, 0, cptr);
+        else oss << *cptr;
     });
     return oss.str();
 }
@@ -158,9 +159,20 @@ void DDPTensorImpl::bufferize(const NDSlice & slc, Buffer & buff) const
 
 void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
 {
-    assert(ndims == this->ndims() || (ndims == 0 && this->ndims() == 1));
-    // global shape first
-    intptr_t * buff = new intptr_t[dtensor_sz(1)];
+    assert(ndims == this->ndims());
+    // local tensor first
+    intptr_t * buff = new intptr_t[dtensor_sz(ndims)];
+    buff[0] = reinterpret_cast<intptr_t>(_allocated);
+    buff[1] = reinterpret_cast<intptr_t>(_aligned);
+    buff[2] = static_cast<intptr_t>(_offset);
+    memcpy(buff+3, _sizes, ndims*sizeof(intptr_t));
+    memcpy(buff+3+ndims, _strides, ndims*sizeof(intptr_t));
+    args.push_back(buff);
+    // second the team
+    args.push_back(reinterpret_cast<void*>(1));
+    if(ndims > 0)
+    // global shape third
+    buff = new intptr_t[dtensor_sz(1)];
     buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
     buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
     buff[2] = 0;
@@ -168,15 +180,7 @@ void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
     buff[4] = 1;
     args.push_back(buff);
     assert(5 == memref_sz(1));
-    // local tensor
-    buff = new intptr_t[dtensor_sz(ndims)];
-    buff[0] = reinterpret_cast<intptr_t>(_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_aligned);
-    buff[2] = static_cast<intptr_t>(_offset);
-    memcpy(buff+3, _sizes, ndims*sizeof(intptr_t));
-    memcpy(buff+3+ndims, _strides, ndims*sizeof(intptr_t));
-    args.push_back(buff);
-    // local offsets
+    // local offsets last
     buff = new intptr_t[dtensor_sz(1)];
     buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
     buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
@@ -184,6 +188,4 @@ void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
     buff[3] = ndims;
     buff[4] = 1;
     args.push_back(buff);
-    // finally the team
-    args.push_back(reinterpret_cast<void*>(1));
 }

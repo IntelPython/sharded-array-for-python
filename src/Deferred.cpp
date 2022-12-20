@@ -65,7 +65,6 @@ void process_promises()
 {
     bool done = false;
     jit::JIT jit;
-
     do {
         ::mlir::OpBuilder builder(&jit._context);
         auto loc = builder.getUnknownLoc();

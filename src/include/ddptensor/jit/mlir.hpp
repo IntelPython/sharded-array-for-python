@@ -50,12 +50,14 @@ void init();
 class DepManager
 {
 private:
-    using IdValueMap = std::unordered_map<id_type, std::pair<::mlir::Value, SetResFunc>>;
+    using IdValueMap = std::unordered_map<id_type, ::mlir::Value>;
+    using IdCallbackMap = std::unordered_map<id_type, SetResFunc>;
     using IdRankMap = std::unordered_map<id_type, int>;
     using ArgList = std::vector<std::pair<id_type, int>>;
 
     ::mlir::func::FuncOp & _func; // MLIR function to which ops are added
-    IdValueMap _ivm;              // guid -> {mlir::Value, deliver-callback}
+    IdValueMap _ivm;              // guid -> mlir::Value
+    IdCallbackMap _icm;           // guid -> deliver-callback
     IdRankMap _irm;               // guid -> rank as computed in MLIR
     ArgList _args;                // input arguments of the generated function
 
