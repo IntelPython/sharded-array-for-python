@@ -10,12 +10,6 @@ namespace py = pybind11;
 
 template<typename T> py::object get_impl_dtype() { return get_impl_dtype(DTYPE<T>::value); };
 
-union PyScalar
-{
-    int64_t _int;
-    double _float;
-};
-
 inline PyScalar mk_scalar(const py::object & b, DTypeId dtype)
 {
     PyScalar s;

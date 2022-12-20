@@ -1,14 +1,18 @@
 import ddptensor as dt
 import numpy as np
 
+mpi_dtypes = [dt.float64, dt.float32, dt.int64, dt.uint64, dt.int32, dt.uint32, dt.int8, dt.uint8]
+
 class TestEWB:
     def test_add1(self):
-        a = dt.ones([16,16], dtype=dt.float64)
-        b = dt.ones([16,16], dtype=dt.float64)
-        c = a + b
-        r1 = dt.sum(c, [0,1])
-        v = 16*16*2
-        assert float(r1) == v
+        for dtyp in mpi_dtypes:
+            print(dtyp)
+            a = dt.ones([6,6], dtype=dtyp)
+            b = dt.ones([6,6], dtype=dtyp)
+            c = a + b
+            r1 = dt.sum(c, [0,1])
+            v = 6*6*2
+            assert float(r1) == v
 
     def test_add2(self):
         a = dt.ones([16,16], dtype=dt.float64)

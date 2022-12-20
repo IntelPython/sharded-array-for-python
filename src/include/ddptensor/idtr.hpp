@@ -28,6 +28,6 @@ extern "C" {
     void idtr_local_shape(id_t guid, uint64_t * lshape, uint64_t N);
 
     // Elementwise inplace allreduce
-    void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, int op);
+    void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, ReduceOpId op);
     
 } // extern "C"

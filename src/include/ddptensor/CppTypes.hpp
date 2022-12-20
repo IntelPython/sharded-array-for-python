@@ -22,6 +22,12 @@ using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
 using Serializer = bitsery::Serializer<OutputAdapter>;
 using Deserializer = bitsery::Deserializer<InputAdapter>;
 
+union PyScalar
+{
+    int64_t _int;
+    double _float;
+};
+
 enum _RANKS: rank_type {
     NOOWNER    = std::numeric_limits<rank_type>::max(),
     REPLICATED = std::numeric_limits<rank_type>::max() - 1,
@@ -42,17 +48,17 @@ template<> struct DTYPE<uint8_t>  { constexpr static DTypeId value = UINT8; };
 template<> struct DTYPE<bool>     { constexpr static DTypeId value = BOOL; };
 
 template<DTypeId DT> struct TYPE {};
-template<> struct TYPE<FLOAT64> { using dtype = double; };
-template<> struct TYPE<FLOAT32> { using dtype = float; };
-template<> struct TYPE<INT64>   { using dtype = int64_t; };
-template<> struct TYPE<INT32>   { using dtype = int32_t; };
-template<> struct TYPE<INT16>   { using dtype = int16_t; };
-template<> struct TYPE<INT8>    { using dtype = int8_t; };
-template<> struct TYPE<UINT64>  { using dtype = uint64_t; };
-template<> struct TYPE<UINT32>  { using dtype = uint32_t; };
-template<> struct TYPE<UINT16>  { using dtype = uint16_t; };
-template<> struct TYPE<UINT8>   { using dtype = uint8_t; };
-template<> struct TYPE<BOOL>    { using dtype = bool; };
+template<> struct TYPE<FLOAT64> { using dtype = double; static constexpr bool is_integral = false; static constexpr bool is_float = true; };
+template<> struct TYPE<FLOAT32> { using dtype = float; static constexpr bool is_integral = false; static constexpr bool is_float = true; };
+template<> struct TYPE<INT64>   { using dtype = int64_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<INT32>   { using dtype = int32_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<INT16>   { using dtype = int16_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<INT8>    { using dtype = int8_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<UINT64>  { using dtype = uint64_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<UINT32>  { using dtype = uint32_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<UINT16>  { using dtype = uint16_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<UINT8>   { using dtype = uint8_t; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
+template<> struct TYPE<BOOL>    { using dtype = bool; static constexpr bool is_integral = true; static constexpr bool is_float = false; };
 
 static size_t sizeof_dtype(const DTypeId dt) {
     switch(dt) {

@@ -16,8 +16,6 @@ DDPTensorImpl::DDPTensorImpl(DTypeId dtype, uint64_t ndims,
     : _owner(owner),
       _allocated(allocated),
       _aligned(aligned),
-      _sizes(new intptr_t[ndims]),
-      _strides(new intptr_t[ndims]),
       _gs_allocated(gs_allocated),
       _gs_aligned(gs_aligned),
       _lo_allocated(lo_allocated),
@@ -26,8 +24,15 @@ DDPTensorImpl::DDPTensorImpl(DTypeId dtype, uint64_t ndims,
       _ndims(ndims),
       _dtype(dtype)
 {
-    memcpy(_sizes, sizes, ndims*sizeof(*_sizes));
-    memcpy(_strides, strides, ndims*sizeof(*_strides));
+    if(ndims > 0) {
+        _sizes = new intptr_t[ndims];
+        _strides = new intptr_t[ndims];
+        memcpy(_sizes, sizes, ndims*sizeof(*_sizes));
+        memcpy(_strides, strides, ndims*sizeof(*_strides));
+    } else {
+        _owner = REPLICATED;
+        assert(_aligned);
+    }
 }
 
 DDPTensorImpl::DDPTensorImpl(DTypeId dtype, const shape_type & shp, rank_type owner)
@@ -72,15 +77,17 @@ DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy)
                                            gs_allocated, gs_aligned, lo_allocated, lo_aligned, owner());
 }
 
-void DDPTensorImpl::alloc()
+void DDPTensorImpl::alloc(bool all)
 {
     auto esz = sizeof_dtype(_dtype);
-    _allocated = new (std::align_val_t(esz)) char[esz*size()];
+    _allocated = new (std::align_val_t(esz)) char[esz*local_size()];
     _aligned = _allocated;
-    auto nds = ndims();
-    _sizes = new intptr_t[nds];
-    _strides = new intptr_t[nds];
     _offset = 0;
+    if(all) {
+        auto nds = ndims();
+        _sizes = new intptr_t[nds];
+        _strides = new intptr_t[nds];
+    }
 }
 
 void * DDPTensorImpl::data()
@@ -106,8 +113,11 @@ std::string DDPTensorImpl::__repr__() const
 
     dispatch(_dtype, _aligned, [this, nd, &oss](auto * ptr) {
         auto cptr = ptr + this->_offset;
-        if(nd>0) printit(oss, 0, cptr);
-        else oss << *cptr;
+        if(nd>0) {
+            printit(oss, 0, cptr);
+        } else {
+            oss << *cptr;
+        }
     });
     return oss.str();
 }
@@ -188,4 +198,27 @@ void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
     buff[3] = ndims;
     buff[4] = 1;
     args.push_back(buff);
+}
+
+void DDPTensorImpl::replicate()
+{
+    if(is_replicated()) return;
+    auto gsz = size();
+    auto lsz = local_size();
+    if(gsz > 1) throw(std::runtime_error("Replication implemented for single-element tensors only."));
+    if(lsz != gsz) {
+        assert(lsz == 0);
+        auto nd = ndims();
+        for(auto i=0; i<nd; ++i) {
+            _sizes[i] = _strides[i] = 1;
+        }
+        _sizes[nd-1] = gsz;
+    }
+    dispatch(_dtype, _aligned, [this, lsz, gsz](auto * ptr) {
+        auto tmp = ptr[this->_offset];
+        if(lsz != gsz) ptr[this->_offset] = 0;
+        getTransceiver()->reduce_all(&ptr[this->_offset], this->_dtype, 1, SUM);
+        assert(lsz != gsz || tmp == ptr[this->_offset]);
+    });
+    set_owner(REPLICATED);
 }

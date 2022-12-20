@@ -61,7 +61,7 @@ public:
 
     DDPTensorImpl::ptr_type clone(bool copy = true);
 
-    void alloc();
+    void alloc(bool all = true);
 
     ~DDPTensorImpl()
     {
@@ -100,9 +100,14 @@ public:
     {
         switch(ndims()) {
             case 0 : return 1;
-            case 1 : return *_sizes;
-            default: return std::accumulate(_sizes, _sizes+ndims(), 1, std::multiplies<intptr_t>());
+            case 1 : return *_gs_aligned;
+            default: return std::accumulate(_gs_aligned, _gs_aligned+ndims(), 1, std::multiplies<intptr_t>());
         }
+    }
+
+    uint64_t local_size() const
+    {
+        return ndims() == 0 ? 0 : std::accumulate(_sizes, _sizes+ndims(), 1, std::multiplies<intptr_t>());
     }
 
     friend struct Service;
@@ -113,7 +118,7 @@ public:
 
     virtual uint64_t __len__() const
     {
-        return ndims() ? *_sizes : 0;
+        return ndims() ? *_gs_aligned : 1;
     }
 
     bool has_owner() const
@@ -167,6 +172,8 @@ public:
             oss << "]";
         }
     }
+
+    void replicate();
 };
 
 template<typename ...Ts>

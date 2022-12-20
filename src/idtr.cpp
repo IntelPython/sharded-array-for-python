@@ -94,6 +94,7 @@ void _idtr_local_shape(id_t guid, void * alloced, void * aligned, intptr_t offse
 {
     idtr_local_shape(guid, mr_to_ptr<uint64_t>(aligned, offset), nD);
 }
+} // extern "C"
 
 // convert id of our reduction op to id of imex::ptensor reduction op
 static ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop)
@@ -118,17 +119,61 @@ static ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop)
     }
 }
 
-// Elementwise inplace allreduce
-void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, int op)
+static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt)
 {
-    getTransceiver()->reduce_all(inout, dtype, N, mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
+    switch(dt) {
+    case ::imex::ptensor::DType::F64:
+        return FLOAT64;
+        break;
+    case ::imex::ptensor::DType::I64:
+        return INT64;
+        break;
+    case ::imex::ptensor::DType::U64:
+        return UINT64;
+        break;
+    case ::imex::ptensor::DType::F32:
+        return FLOAT32;
+        break;
+    case ::imex::ptensor::DType::I32:
+        return INT32;
+        break;
+    case ::imex::ptensor::DType::U32:
+        return UINT32;
+        break;
+    case ::imex::ptensor::DType::I16:
+        return INT16;
+        break;
+    case ::imex::ptensor::DType::U16:
+        return UINT16;
+        break;
+    case ::imex::ptensor::DType::I8:
+        return INT8;
+        break;
+    case ::imex::ptensor::DType::U8:
+        return UINT8;
+        break;
+    case ::imex::ptensor::DType::I1:
+        return BOOL;
+        break;
+    default:
+        throw std::runtime_error("unknown dtype");
+    };
+}
+
+extern "C" {
+// Elementwise inplace allreduce
+void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, ReduceOpId op)
+{
+    getTransceiver()->reduce_all(inout, dtype, N, op);
 }
 
 // FIXME hard-coded for contiguous layout
-void _idtr_reduce_all(uint64_t rank, void * data, int64_t * sizes, int64_t * strides, DTypeId dtype, int op)
+void _idtr_reduce_all(uint64_t rank, void * data, int64_t * sizes, int64_t * strides, int dtype, int op)
 {
     assert(rank == 0 || strides[rank-1] == 1);
-    idtr_reduce_all(data, dtype, rank ? rank : 1, op);
+    idtr_reduce_all(data,
+                    mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype)),
+                    rank ? rank : 1,
+                    mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
-
 } // extern "C"

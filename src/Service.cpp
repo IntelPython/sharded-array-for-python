@@ -52,20 +52,20 @@ struct DeferredService : public Deferred
 
     void run()
     {
-#if 0
         switch(_op) {
         case REPLICATE: {
             const auto a = std::move(Registry::get(_a).get());
-            set_value(std::move(TypeDispatch<x::Service>(a)));
+            auto ddpt = dynamic_cast<DDPTensorImpl*>(a.get());
+            assert(ddpt);
+            ddpt->replicate();
+            set_value(a);
             break;
         }
-        case DROP:
-            Registry::del(_a);
+        case RUN:
             break;
         default:
-                throw(std::runtime_error("Unkown Service operation requested."));
+           throw(std::runtime_error("Unkown Service operation requested."));
         }
-#endif
     }
 
     bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
@@ -76,6 +76,7 @@ struct DeferredService : public Deferred
             // FIXME create delete op and return it
             break;
         case RUN:
+        case REPLICATE:
             return true;
         default:
             throw(std::runtime_error("Unkown Service operation requested."));

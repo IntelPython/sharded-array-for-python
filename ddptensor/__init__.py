@@ -62,13 +62,21 @@ for op in api.api_categories["EWUnyOp"]:
 
 for func in api.api_categories["Creator"]:
     FUNC = func.upper()
-    if func in ["empty", "ones", "zeros",]:
-        exec(
-            f"{func} = lambda shape, dtype: dtensor(_cdt.Creator.create_from_shape(_cdt.{FUNC}, shape, dtype))"
-        )
-    elif func == "full":
+    if func == "full":
         exec(
             f"{func} = lambda shape, val, dtype: dtensor(_cdt.Creator.full(shape, val, dtype))"
+        )
+    elif func == "empty":
+        exec(
+            f"{func} = lambda shape, dtype: dtensor(_cdt.Creator.full(shape, None, dtype))"
+        )
+    elif func == "ones":
+        exec(
+            f"{func} = lambda shape, dtype: dtensor(_cdt.Creator.full(shape, 1, dtype))"
+        )
+    elif func == "zeros":
+        exec(
+            f"{func} = lambda shape, dtype: dtensor(_cdt.Creator.full(shape, 0, dtype))"
         )
     elif func == "arange":
         exec(
