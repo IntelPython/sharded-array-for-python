@@ -249,9 +249,9 @@ ddptensor * Creator::mk_future(const py::object & b)
     if(py::isinstance<ddptensor>(b)) {
         return b.cast<ddptensor*>();
     } else if(py::isinstance<py::float_>(b)) {
-        return Creator::full({1}, b, FLOAT64);
+        return Creator::full({}, b, FLOAT64);
     } else if(py::isinstance<py::int_>(b)) {
-        return Creator::full({1}, b, INT64);
+        return Creator::full({}, b, INT64);
     }
     throw std::runtime_error("Invalid right operand to elementwise binary operation");
 };

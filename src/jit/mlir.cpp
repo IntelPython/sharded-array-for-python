@@ -28,7 +28,7 @@
 // #include "mlir/Dialect/NVGPU/Passes.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
 // #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
-// #include "mlir/Dialect/Shape/Transforms/Passes.h"
+#include "mlir/Dialect/Shape/Transforms/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
@@ -304,7 +304,7 @@ static const char * pass_pipeline =
    ? getenv("DDPT_PASSES")
 //    : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
 //    : "builtin.module(func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts)";
-   : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+      : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,convert-shape-to-std,arith-expand,canonicalize,arith-bufferize,func-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),
       _pm(&_context),
@@ -343,8 +343,8 @@ void init()
     // ::mlir::registerAllPasses();
     ::mlir::registerSCFPasses();
     ::mlir::registerSCFToControlFlowPass();
-    // ::mlir::registerShapePasses();
-    // ::mlir::registerConvertShapeToStandardPass();
+    ::mlir::registerShapePasses();
+    ::mlir::registerConvertShapeToStandardPass();
     ::mlir::tensor::registerTensorPasses();
     ::mlir::registerLinalgPasses();
     ::mlir::func::registerFuncPasses();
