@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "PVSlice.hpp"
 #include "p2c_ids.hpp"
 #include "tensor_i.hpp"
 #include "TypeDispatch.hpp"
@@ -145,8 +144,6 @@ public:
     {
         return sizeof_dtype(_dtype);
     }
-
-    virtual void bufferize(const NDSlice & slc, Buffer & buff) const;
 
     virtual void add_to_args(std::vector<void*> & args, int ndims);
 

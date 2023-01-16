@@ -65,8 +65,6 @@ public:
     virtual int64_t __int__() const = 0;
     virtual uint64_t __len__() const = 0;
 
-    // store all elements for given slice contiguously into provided Buffer
-    virtual void bufferize(const NDSlice & slice, Buffer & buff) const = 0;
     // size of a single element (in bytes)
     virtual int item_size() const = 0;
     // store tensor information in form of corresponding jit::JIT::DistMemRefDescriptor

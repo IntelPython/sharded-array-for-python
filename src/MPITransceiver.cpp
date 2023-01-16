@@ -168,21 +168,34 @@ void MPITransceiver::reduce_all(void * inout, DTypeId T, size_t N, RedOpType op)
 void MPITransceiver::alltoall(const void* buffer_send,
                               const int* counts_send,
                               const int* displacements_send,
-                              DTypeId datatype_send,
+                              DTypeId datatype,
                               void* buffer_recv,
                               const int* counts_recv,
-                              const int* displacements_recv,
-                              DTypeId datatype_recv)
+                              const int* displacements_recv)
 {
     MPI_Alltoallv(buffer_send,
                   counts_send,
                   displacements_send,
-                  to_mpi(datatype_send),
+                  to_mpi(datatype),
                   buffer_recv,
                   counts_recv,
                   displacements_recv,
-                  to_mpi(datatype_recv),
+                  to_mpi(datatype),
                   _comm);
+}
+
+void MPITransceiver::alltoall(const void* buffer_send,
+                              const int counts,
+                              DTypeId datatype,
+                              void* buffer_recv)
+{
+    MPI_Alltoall(buffer_send,
+                 counts,
+                 to_mpi(datatype),
+                 buffer_recv,
+                 counts,
+                 to_mpi(datatype),
+                 _comm);
 }
 
 void MPITransceiver::gather(void* buffer,

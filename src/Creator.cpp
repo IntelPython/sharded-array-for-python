@@ -3,6 +3,7 @@
 #include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Transceiver.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
@@ -153,11 +154,10 @@ struct DeferredFull : public Deferred
         ::imex::ptensor::DType dtyp;
         ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
 
-        auto dmy = ::imex::createInt<1>(loc, builder, 0);
         auto team = ::imex::createIndex(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
 
         dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, dmy, team),
+                  builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, nullptr, team),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
                          uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
             assert(rank == this->_shape.size());
@@ -207,13 +207,10 @@ struct DeferredArange : public Deferred
         auto start = ::imex::createInt(loc, builder, _start);
         auto stop = ::imex::createInt(loc, builder, _end);
         auto step = ::imex::createInt(loc, builder, _step);
-        auto dtype = builder.getI64Type(); // FIXME
-        auto artype = ::imex::ptensor::PTensorType::get(builder.getContext(), 1, dtype, false);
-        auto dmy = ::imex::createInt<1>(loc, builder, 0);
         // ::mlir::Value 
         auto team = ::imex::createIndex(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
         dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::ARangeOp>(loc, artype, start, stop, step, dmy, team),
+                  builder.create<::imex::ptensor::ARangeOp>(loc, start, stop, step, nullptr, team),
                   [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
                          uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
             assert(rank == 1);

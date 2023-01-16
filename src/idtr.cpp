@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <ddptensor/idtr.hpp>
-#include <ddptensor/jit/mlir.hpp>
+// #include <ddptensor/jit/mlir.hpp>
 #include <ddptensor/DDPTensorImpl.hpp>
 #include <ddptensor/MPITransceiver.hpp>
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/PTensor/IR/PTensorDefs.h>
 
 #include <cassert>
 #include <memory>
+#include <iostream>
 
 using container_type = std::unordered_map<id_type, std::unique_ptr<DDPTensorImpl>>;
 
@@ -160,6 +161,51 @@ static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt)
     };
 }
 
+
+template<typename T, typename OP>
+void forall(uint64_t d, const T * cptr, const int64_t * sizes, const int64_t * strides, uint64_t nd, OP op)
+{
+    auto stride = strides[d];
+    auto sz = sizes[d];
+    if(d==nd-1) {
+        for(auto i=0; i<sz; ++i) {
+            op(&cptr[i*stride]);
+        }
+    } else {
+        for(auto i=0; i<sz; ++i) {
+            forall(d+1, cptr, sizes, strides, nd, op);
+        }
+    }
+}
+
+bool is_contiguous(const int64_t * sizes, const int64_t * strides, uint64_t nd)
+{
+    if(nd == 0) return true;
+    if(strides[nd-1] != 1) return false;
+    auto sz = 1;
+    for(auto i=nd-1; i>0; --i) {
+        sz *= sizes[i];
+        if(strides[i-1] != sz) return false;
+    }
+    return true;
+}
+
+void * bufferize(void * cptr, DTypeId dtype, const int64_t * sizes, const int64_t * strides, uint64_t nd, void * out)
+{
+    if(is_contiguous(sizes, strides, nd)) {
+        return cptr;
+    } else {
+        dispatch(dtype, cptr, [sizes, strides, nd, out](auto * ptr) {
+            auto buff = static_cast<decltype(ptr)>(out);
+            forall(0, ptr, sizes, strides, nd, [&buff](const auto * in) {
+                *buff = *in;
+                ++buff;
+            });
+        });
+        return out;
+    }
+}
+
 extern "C" {
 // Elementwise inplace allreduce
 void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, ReduceOpId op)
@@ -168,12 +214,59 @@ void idtr_reduce_all(void * inout, DTypeId dtype, uint64_t N, ReduceOpId op)
 }
 
 // FIXME hard-coded for contiguous layout
-void _idtr_reduce_all(uint64_t rank, void * data, int64_t * sizes, int64_t * strides, int dtype, int op)
+void _idtr_reduce_all(uint64_t rank, void * data, const int64_t * sizes, const int64_t * strides, int dtype, int op)
 {
     assert(rank == 0 || strides[rank-1] == 1);
     idtr_reduce_all(data,
                     mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype)),
                     rank ? rank : 1,
                     mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
+}
+
+void _idtr_rebalance(uint64_t rank, const int64_t * gShape, const int64_t * lOffs,
+                     void * data, const int64_t * sizes, const int64_t * strides, int dtype,
+                     uint64_t outRank, void * out, const int64_t * outSizes, const int64_t * outStrides)
+{
+    assert(rank);
+    is_contiguous(outSizes, outStrides, outRank);
+    auto N = (int64_t)getTransceiver()->nranks();
+    auto myOff = lOffs[0];
+    auto mySz = sizes[0];
+    auto myEnd = myOff + mySz;
+    auto tSz = gShape[0];
+    auto sz = (tSz + N - 1) / N;
+    auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
+    auto nSz = std::accumulate(&sizes[1], &sizes[rank], 1, std::multiplies<int64_t>());
+    std::vector<int> soffs(N);
+    std::vector<int> sszs(N, 0);
+    for(auto i=0; i<N; ++i) {
+        auto tOff = i * sz;
+        auto tEnd = std::min(tSz, tOff + sz);
+        if(tEnd > myOff && tOff < myEnd) {
+            // We have a target partition which is inside my local data
+            // we now compute what data goes to this target partition
+            auto start = std::max(myOff, tOff);
+            auto end = std::min(myEnd, tEnd);
+            soffs[i] = (int)(start - myOff) * nSz;
+            sszs[i] = (int)(end - start) * nSz;
+        } else {
+            soffs[i] = i ? soffs[i-1] + sszs[i-1] : 0;
+        }
+    }
+    // we now send our send sizes to others and receiver theirs
+    std::vector<int> rszs(N);
+    getTransceiver()->alltoall(sszs.data(), 1, INT32, rszs.data());
+    // For the actual alltoall we need the receive-displacements
+    std::vector<int> roffs(N);
+    roffs[0] = 0;
+    for(auto i=1; i<N; ++i) {
+        // compute for all i > 0
+        roffs[i] = roffs[i-1] + rszs[i-1];
+    }
+    // create send buffer (might be strided!)
+    Buffer buff(nSz * mySz * sizeof_dtype(ddpttype));
+    auto ptr = bufferize(data, ddpttype, sizes, strides, rank, buff.data());
+    // Finally communicate elements
+    getTransceiver()->alltoall(ptr, sszs.data(), soffs.data(), ddpttype, out, rszs.data(), roffs.data());
 }
 } // extern "C"

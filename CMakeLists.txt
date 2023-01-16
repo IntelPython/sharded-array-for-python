@@ -102,23 +102,26 @@ set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
     ${PROJECT_SOURCE_DIR}/src/Sorting.cpp
 )
-set(IDTRSrcs
-    ${PROJECT_SOURCE_DIR}/src/idtr.cpp
+set(RTSrcs
     ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
     ${PROJECT_SOURCE_DIR}/src/DDPTensorImpl.cpp
     ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
     ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
-    ${PROJECT_SOURCE_DIR}/src/MPITransceiver.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
-    ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
     ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
+)
+set(IDTRSrcs
+    ${PROJECT_SOURCE_DIR}/src/idtr.cpp
+    ${PROJECT_SOURCE_DIR}/src/MPITransceiver.cpp
+    ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
 )
 
 pybind11_add_module(_ddptensor MODULE ${DDPTSrcs} ${Hpps})
+add_library(_ddpt_rt SHARED ${RTSrcs} ${Hpps})
 add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
-set(AllTargets _ddptensor idtr)
+set(AllTargets _ddptensor _ddpt_rt idtr)
 
 add_compile_definitions(USE_MKL=1)
 add_compile_options("-ftemplate-backtrace-limit=0")
@@ -144,14 +147,21 @@ get_property(imex_all_libs GLOBAL PROPERTY IMEX_ALL_LIBS)
 
 #llvm_update_compile_flags(_ddpttensor)
 target_link_directories(_ddptensor PRIVATE ${CONDA_PREFIX}/lib)
-target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib ${IMEX_INSTALL_PREFIX}/lib)
+target_link_directories(_ddpt_rt PRIVATE ${CONDA_PREFIX}/lib) # ${IMEX_INSTALL_PREFIX}/lib)
+target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
 
 target_link_libraries(_ddptensor PRIVATE
     # ${MKL_LIBRARIES}
     # tbb
+    _ddpt_rt
     idtr
 )
 target_link_libraries(idtr PRIVATE
+    ${MPI_C_LIBRARIES}
+    # ${MKL_LIBRARIES}
+    tbb
+)
+target_link_libraries(_ddpt_rt PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb

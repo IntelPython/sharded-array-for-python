@@ -5,6 +5,7 @@
 
 #include <ddptensor/DDPTensorImpl.hpp>
 #include <ddptensor/CppTypes.hpp>
+#include <ddptensor/Transceiver.hpp>
 
 #include <algorithm>
 
@@ -152,21 +153,6 @@ int64_t DDPTensorImpl::__int__() const
     return res;
 }
 
-void DDPTensorImpl::bufferize(const NDSlice & slc, Buffer & buff) const
-{
-    // FIXME slices/strides
-#if 0
-    if(slc.size() <= 0) return;
-    NDSlice lslice = NDSlice(slice().tile_shape()).slice(slc);
-#endif
-    assert(_strides[0] == 1);
-    auto pos = buff.size();
-    auto sz = size()*item_size();
-    buff.resize(pos + sz);
-    void * out = buff.data() + pos;
-    dispatch(_dtype, _aligned, [this, sz, out](auto * ptr) { memcpy(out, ptr + this->_offset, sz); });
-}
-
 void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
 {
     assert(ndims == this->ndims());
@@ -180,24 +166,25 @@ void DDPTensorImpl::add_to_args(std::vector<void*> & args, int ndims)
     args.push_back(buff);
     // second the team
     args.push_back(reinterpret_cast<void*>(1));
-    if(ndims > 0)
-    // global shape third
-    buff = new intptr_t[dtensor_sz(1)];
-    buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
-    buff[2] = 0;
-    buff[3] = ndims;
-    buff[4] = 1;
-    args.push_back(buff);
-    assert(5 == memref_sz(1));
-    // local offsets last
-    buff = new intptr_t[dtensor_sz(1)];
-    buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
-    buff[2] = 0;
-    buff[3] = ndims;
-    buff[4] = 1;
-    args.push_back(buff);
+    if(ndims > 0) {
+        // global shape third
+        buff = new intptr_t[dtensor_sz(1)];
+        buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
+        buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
+        buff[2] = 0;
+        buff[3] = ndims;
+        buff[4] = 1;
+        args.push_back(buff);
+        assert(5 == memref_sz(1));
+        // local offsets last
+        buff = new intptr_t[dtensor_sz(1)];
+        buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
+        buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
+        buff[2] = 0;
+        buff[3] = ndims;
+        buff[4] = 1;
+        args.push_back(buff);
+    }
 }
 
 void DDPTensorImpl::replicate()

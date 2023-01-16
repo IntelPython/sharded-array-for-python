@@ -39,8 +39,11 @@ public:
                           DTypeId datatype_send,
                           void* buffer_recv,
                           const int* counts_recv,
-                          const int* displacements_recv,
-                          DTypeId datatype_recv) = 0;
+                          const int* displacements_recv) = 0;
+    virtual void alltoall(const void* buffer_send,
+                          const int counts,
+                          DTypeId datatype,
+                          void* buffer_recv) = 0;
 
     virtual void gather(void* buffer,
                         const int* counts,

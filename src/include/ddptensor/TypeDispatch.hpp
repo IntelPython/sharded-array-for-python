@@ -50,11 +50,21 @@ struct funcDispatcher
     {
         func(reinterpret_cast<T*>(ptr));
     }
+    template<typename DispatchFunc>
+    static void op(const void * ptr, DispatchFunc func)
+    {
+        func(reinterpret_cast<const T*>(ptr));
+    }
 };
 
 // shortcut for simple function/lambda dispatch
 template<typename DispatchFunc>
 void dispatch(DTypeId dt, void * ptr, DispatchFunc func)
+{
+    dispatch<funcDispatcher>(dt, ptr, func);
+}
+template<typename DispatchFunc>
+void dispatch(DTypeId dt, const void * ptr, DispatchFunc func)
 {
     dispatch<funcDispatcher>(dt, ptr, func);
 }

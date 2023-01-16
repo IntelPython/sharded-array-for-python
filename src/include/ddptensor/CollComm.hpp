@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CppTypes.hpp"
+#include "PVSlice.hpp"
 #include "DDPTensorImpl.hpp"
 
 struct CollComm

@@ -4,6 +4,7 @@
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Mediator.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/NDSlice.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Dialect/Dist/IR/DistOps.h>
