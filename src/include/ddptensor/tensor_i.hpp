@@ -28,15 +28,17 @@ public:
         id_type _id = -1;
         DTypeId _dtype = DTYPE_LAST;
         int     _rank = -1;
+        bool    _balanced = true;
         
     public:
         TFuture() = default;
         TFuture(const TFuture & f) = default;
-        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id, DTypeId dt, int rank)
+        TFuture(std::shared_future<tensor_i::ptr_type> && f, id_type id, DTypeId dt, int rank, bool balanced)
             : std::shared_future<tensor_i::ptr_type>(std::move(f)),
             _id(id),
             _dtype(dt),
-            _rank(rank)
+            _rank(rank),
+            _balanced(balanced)
         {}
 
         ~TFuture()
@@ -50,6 +52,9 @@ public:
 
         /// @return rank (number of dims) of future tensor
         int rank() const { return _rank; }
+
+        /// @return rank (number of dims) of future tensor
+        int balanced() const { return _balanced; }
     };
 
     typedef TFuture future_type;

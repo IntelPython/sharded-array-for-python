@@ -77,7 +77,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type)
     return type;
 }
 
-static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int rank)
+static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int rank, bool balanced)
 {
     ::mlir::Type etyp;
 
@@ -124,7 +124,7 @@ static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
         // Not found -> this must be an input argument to the jit function
         auto idx = _args.size();
         auto fut = Registry::get(guid);
-        auto typ = getDTType(builder, fut.dtype(), fut.rank());
+        auto typ = getDTType(builder, fut.dtype(), fut.rank(), fut.balanced());
         _func.insertArgument(idx, typ, {}, loc);
         auto val = _func.getArgument(idx);
         _args.push_back({guid, fut.rank()});
@@ -193,14 +193,14 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
         if(!retDtTyp) {
             auto valPtTyp = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
             assert(valPtTyp);
-            retDtTyp = ::imex::dist::DistTensorType::get(builder.getContext(), valPtTyp);
+            retDtTyp = ::imex::dist::DistTensorType::get(builder.getContext(), valPtTyp); // FIXME balanced needs to be reported back
             value = builder.create<::mlir::UnrealizedConversionCastOp>(loc, retDtTyp, value).getResult(0);
         }
         ret_values[idx] = value;
         _func.insertResult(idx, value.getType(), {});
         auto rank = retDtTyp.getPTensorType().getRank();
         _irm[v.first] = rank;
-        // add sizes of dtensor (3 tensors and rank) to sz
+        // add sizes of dtensor (3 memrefs + team + balanced) to sz
         sz += dtensor_sz(rank);
         ++idx;
     }
@@ -210,7 +210,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder & builder)
 
     // clear any reference to MLIR values
     _ivm.clear();
-    return sz;
+    return 2*sz;
 }
 
 void DepManager::deliver(intptr_t * output, uint64_t sz)
@@ -226,7 +226,10 @@ void DepManager::deliver(intptr_t * output, uint64_t sz)
         intptr_t * t_stride = output + pos + 3 + rank;
         pos += memref_sz(rank);
         // second is the team
-        // auto team = output[pos];
+        auto team = output[pos];
+        pos += 1;
+        // third is balanced
+        auto balanced = output[pos];
         pos += 1;
         if(rank > 0) {
             // third extract global shape
@@ -242,14 +245,15 @@ void DepManager::deliver(intptr_t * output, uint64_t sz)
             // no sizes/stride needed
             pos += memref_sz(1);
             // call finalization
-            v.second(rank,
+            v.second(reinterpret_cast<Transceiver*>(team), rank,
                      t_allocated, t_aligned, t_offset, t_sizes, t_stride, // tensor
                      gs_allocated, gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
-                     lo_allocated, lo_aligned + lo_offset  // local offset is 1d tensor of uint64_t
+                     lo_allocated, lo_aligned + lo_offset, // local offset is 1d tensor of uint64_t
+                     balanced
             );
         } else { // 0d tensor
-            v.second(rank, t_allocated, t_aligned, t_offset, t_sizes, t_stride,
-                     nullptr, nullptr, nullptr, nullptr);
+            v.second(reinterpret_cast<Transceiver*>(team), rank, t_allocated, t_aligned, t_offset, t_sizes, t_stride,
+                     nullptr, nullptr, nullptr, nullptr, 1);
         }
     }
 }
@@ -304,7 +308,7 @@ static const char * pass_pipeline =
    ? getenv("DDPT_PASSES")
 //    : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
 //    : "builtin.module(func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts)";
-      : "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,convert-shape-to-std,arith-expand,canonicalize,arith-bufferize,func-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
+      : "func.func(ptensor-dist,dist-coalesce),convert-dist-to-standard,convert-ptensor-to-linalg,canonicalize,convert-shape-to-std,arith-expand,canonicalize,arith-bufferize,func-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED),
       _pm(&_context),
@@ -359,6 +363,7 @@ void init()
     ::mlir::registerReconcileUnrealizedCastsPass();
 
     ::imex::registerPTensorPasses();
+    ::imex::registerDistPasses();
     ::imex::registerConvertDistToStandard();
     ::imex::registerConvertPTensorToLinalg();
 

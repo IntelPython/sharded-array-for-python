@@ -29,7 +29,7 @@ void _dist(const Runable * p)
 
 Deferred::future_type Deferred::get_future()
 {
-    return {std::move(promise_type::get_future().share()), _guid, _dtype, _rank};
+    return {std::move(promise_type::get_future().share()), _guid, _dtype, _rank, _balanced};
 }
 
 Deferred::future_type defer_tensor(Runable::ptr_type && _d, bool is_global)

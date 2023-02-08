@@ -81,7 +81,7 @@ struct DeferredFromShape : public Deferred
 
     DeferredFromShape() = default;
     DeferredFromShape(CreatorId op, const shape_type & shape, DTypeId dtype)
-        : Deferred(dtype, shape.size()),
+        : Deferred(dtype, shape.size(), true),
           _shape(shape), _dtype(dtype), _op(op)
     {}
 
@@ -119,7 +119,7 @@ struct DeferredFull : public Deferred
 
     DeferredFull() = default;
     DeferredFull(const shape_type & shape, PyScalar val, DTypeId dtype)
-        : Deferred(dtype, shape.size()),
+        : Deferred(dtype, shape.size(), true),
           _shape(shape), _val(val), _dtype(dtype)
     {}
 
@@ -158,11 +158,11 @@ struct DeferredFull : public Deferred
 
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, nullptr, team),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
             assert(rank == this->_shape.size());
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
         });
         return false;
     }
@@ -193,7 +193,7 @@ struct DeferredArange : public Deferred
 
     DeferredArange() = default;
     DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype, uint64_t team = 0)
-        : Deferred(dtype, 1),
+        : Deferred(dtype, 1, true),
           _start(start), _end(end), _step(step), _team(team)
     {}
 
@@ -211,12 +211,12 @@ struct DeferredArange : public Deferred
         auto team = ::imex::createIndex(loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::ARangeOp>(loc, start, stop, step, nullptr, team),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
             assert(rank == 1);
             assert(strides[0] == 1);
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
         });
         return false;
     }

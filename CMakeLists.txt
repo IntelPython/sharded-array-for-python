@@ -169,6 +169,7 @@ target_link_libraries(_ddpt_rt PRIVATE
     IMEXPTensorTransforms
     IMEXPTensorToLinalg
     IMEXDistDialect
+    IMEXDistTransforms
     IMEXDistToStandard
 	  MLIROptLib
     MLIRExecutionEngine

@@ -47,27 +47,31 @@ class Deferred : public DeferredT<tensor_i::promise_type, tensor_i::future_type>
 public:
     using ptr_type = std::unique_ptr<Deferred>;
     
-    Deferred(DTypeId dt, int rank)
+    Deferred(DTypeId dt, int rank, bool balanced)
     : _guid(Registry::NOGUID), // might be set later
       _dtype(dt),
-      _rank(rank)
+      _rank(rank),
+      _balanced(balanced)
     {}
-    Deferred(id_type guid, DTypeId dt, int rank)
+    Deferred(id_type guid, DTypeId dt, int rank, bool balanced)
     : _guid(guid),
       _dtype(dt),
-      _rank(rank)
+      _rank(rank),
+      _balanced(balanced)
     {}
     // FIXME we should not allow default values for dtype and rank
     // we should need this only while we are gradually moving to mlir
     Deferred()
     : _guid(Registry::NOGUID),
       _dtype(DTYPE_LAST),
-      _rank(-1)
+      _rank(-1),
+      _balanced(true)
     {}
 
     id_type guid() const { return _guid; }
     DTypeId dtype() const { return _dtype; }
     int rank() const { return _rank; }
+    int balanced() const { return _balanced; }
 
     void set_guid(id_type guid) {
         _guid = guid;
@@ -81,6 +85,7 @@ protected:
     id_type _guid;
     DTypeId _dtype;
     int     _rank;
+    bool    _balanced;
 };
 
 extern void _dist(const Runable * p);

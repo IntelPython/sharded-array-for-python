@@ -106,7 +106,7 @@ struct DeferredReduceOp : public Deferred
 
     DeferredReduceOp() = default;
     DeferredReduceOp(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
-        : Deferred(a.dtype(), 0), // FIXME rank
+        : Deferred(a.dtype(), 0, true), // FIXME rank
           _a(a.id()), _dim(dim), _op(op)
     {}
 
@@ -132,10 +132,10 @@ struct DeferredReduceOp : public Deferred
         auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
+            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
         });
         return false;
     }

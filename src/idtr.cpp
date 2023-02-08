@@ -269,4 +269,104 @@ void _idtr_rebalance(uint64_t rank, const int64_t * gShape, const int64_t * lOff
     // Finally communicate elements
     getTransceiver()->alltoall(ptr, sszs.data(), soffs.data(), ddpttype, out, rszs.data(), roffs.data());
 }
+
+
+/// @brief repartition tensor
+/// We assume tensor is partitioned along the first dimension (only) and partitions are ordered by ranks
+/// @param rank 
+/// @param gShapePtr 
+/// @param dtype 
+/// @param lDataPtr 
+/// @param lOffsPtr 
+/// @param lShapePtr 
+/// @param lStridesPtr 
+/// @param offsPtr 
+/// @param szsPtr 
+/// @param outPtr 
+/// @param tc  
+void _idtr_repartition(int64_t rank, int64_t * gShapePtr, int dtype,
+                       void * lDataPtr, int64_t * lOffsPtr, int64_t * lShapePtr, int64_t * lStridesPtr,
+                       int64_t * offsPtr, int64_t * szsPtr, void * outPtr, Transceiver * tc)
+{
+    assert(is_contiguous(lShapePtr, lStridesPtr, rank));
+
+    auto N = tc->nranks();
+    auto me = tc->rank();
+    auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
+    auto nSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1, std::multiplies<int64_t>());
+
+    // First we allgather the requested target partitioning
+
+    auto myBOff = 2 * rank * me;
+    ::std::vector<int64_t> buff(2*rank*N);
+    for(int64_t i=0; i<rank; ++i) {
+        buff[myBOff+i] = offsPtr[i];
+        buff[myBOff+i+rank] = szsPtr[i];
+    }
+    ::std::vector<int> counts(N, rank*2);
+    ::std::vector<int> dspl(N);
+    for(auto i=0; i<N; ++i) {
+        dspl[i] = 2*rank*i;
+    }
+    tc->gather(buff.data(), counts.data(), dspl.data(), ddpttype, REPLICATED);
+
+    // compute overlap of my local data with each requested part
+
+    auto myOff = lOffsPtr[0];
+    auto mySz = lShapePtr[0];
+    auto myEnd = myOff + mySz;
+
+    std::vector<int> soffs(N);
+    std::vector<int> sszs(N, 0);
+
+    for(auto i=0; i<N; ++i) {
+        auto tOff = buff[2*rank*i];
+        auto tSz = buff[2*rank*i+rank];
+        auto tEnd = tOff + tSz;
+        if(tEnd > myOff && tOff < myEnd) {
+            // We have a target partition which is inside my local data
+            // we now compute what data goes to this target partition
+            auto start = std::max(myOff, tOff);
+            auto end = std::min(myEnd, tEnd);
+            soffs[i] = (int)(start - myOff) * nSz;
+            sszs[i] = (int)(end - start) * nSz;
+        } else {
+            soffs[i] = i ? soffs[i-1] + sszs[i-1] : 0;
+        }
+    }
+    
+    // send our send sizes to others and receive theirs
+    std::vector<int> rszs(N);
+    getTransceiver()->alltoall(sszs.data(), 1, INT32, rszs.data());
+
+    // compute receive-displacements
+    std::vector<int> roffs(N);
+    roffs[0] = 0;
+    for(auto i=1; i<N; ++i) {
+        // compute for all i > 0
+        roffs[i] = roffs[i-1] + rszs[i-1];
+    }
+
+    // Finally communicate elements
+    getTransceiver()->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr, rszs.data(), roffs.data());
+}
+
+void _idtr_extractslice(int64_t * slcOffs,
+                            int64_t * slcSizes,
+                            int64_t * slcStrides,
+                            int64_t * tOffs,
+                            int64_t * tSizes,
+                            int64_t * lSlcOffsets,
+                            int64_t * lSlcSizes,
+                            int64_t * gSlcOffsets)
+{
+    std::cerr << "slcOffs: " << slcOffs[0] << " " << slcOffs[1] << std::endl;
+    std::cerr << "slcSizes: " << slcSizes[0] << " " << slcSizes[1] << std::endl;
+    std::cerr << "slcStrides: " << slcStrides[0] << " " << slcStrides[1] << std::endl;
+    std::cerr << "tOffs: " << tOffs[0] << " " << tOffs[1] << std::endl;
+    std::cerr << "tSizes: " << tSizes[0] << " " << tSizes[1] << std::endl;
+    std::cerr << "lSlcOffsets: " << lSlcOffsets[0] << " " << lSlcOffsets[1] << std::endl;
+    std::cerr << "lSlcSizes: " << lSlcSizes[0] << " " << lSlcSizes[1] << std::endl;
+    std::cerr << "gSlcOffsets: " << gSlcOffsets[0] << " " << gSlcOffsets[1] << std::endl;
+}
 } // extern "C"

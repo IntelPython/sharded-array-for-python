@@ -226,8 +226,8 @@ struct DeferredSetItem : public Deferred
         builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV, sizesV, stridesV);
         // ... and use av as to later create the ptensor
         dm.addVal(this->guid(), av,
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
+                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
             this->set_value(Registry::get(this->_a).get());
             // this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
             //                                   gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
@@ -261,7 +261,7 @@ struct DeferredGetItem : public Deferred
 
     DeferredGetItem() = default;
     DeferredGetItem(const tensor_i::future_type & a, const std::vector<py::slice> & v)
-        : Deferred(a.dtype(), a.rank()), _a(a.id()), _slc(v)
+        : Deferred(a.dtype(), a.rank(), false), _a(a.id()), _slc(v)
     {}
 
     void run()
@@ -296,10 +296,10 @@ struct DeferredGetItem : public Deferred
                       offsV,
                       sizesV,
                       stridesV),
-                  [this, dtype](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
-            this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+                  [this, dtype](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
+            this->set_value(std::move(mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
         });
         return false;
     }

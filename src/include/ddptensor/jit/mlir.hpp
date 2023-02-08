@@ -23,6 +23,8 @@
 #include <utility>
 #include <vector>
 
+class Transceiver;
+
 namespace jit {
 
 template<typename T> struct PT_DTYPE {};
@@ -40,8 +42,8 @@ template<> struct PT_DTYPE<bool>     { constexpr static ::imex::ptensor::DType v
 
 // function type for building body for linalg::generic
 using SetResFunc = std::function<void(
-    uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-    uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned)>;
+    Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+    uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced)>;
 
 // initialize jit
 void init();

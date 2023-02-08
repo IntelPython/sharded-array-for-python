@@ -14,10 +14,12 @@
 #include <memory>
 #include <sstream>
 
+class Transceiver;
 
 class DDPTensorImpl : public tensor_i
 {
     mutable rank_type _owner;
+    Transceiver * _transceiver;
     void * _allocated = nullptr;
     void * _aligned = nullptr;
     intptr_t * _sizes = nullptr;
@@ -28,6 +30,7 @@ class DDPTensorImpl : public tensor_i
     uint64_t * _lo_aligned = nullptr;
     uint64_t _offset = 0;
     uint64_t _ndims = 0;
+    uint64_t _balanced = 1;
     DTypeId _dtype = DTYPE_LAST;
 
 public:
@@ -36,10 +39,10 @@ public:
     DDPTensorImpl(const DDPTensorImpl &) = delete;
     DDPTensorImpl(DDPTensorImpl &&) = default;
 
-    DDPTensorImpl(DTypeId dtype, uint64_t ndims,
+    DDPTensorImpl(Transceiver * transceiver, DTypeId dtype, uint64_t ndims, 
                   void * allocated, void * aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
                   uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned,
-                  rank_type owner=NOOWNER);
+                  uint64_t balanced, rank_type owner=NOOWNER);
 
     DDPTensorImpl(DTypeId dtype, const shape_type & shp, rank_type owner=NOOWNER);
 
@@ -133,6 +136,16 @@ public:
     rank_type owner() const
     {
         return _owner;
+    }
+
+    Transceiver * transceiver() const
+    {
+        return _transceiver;
+    }
+
+    uint64_t balanced() const
+    {
+        return _balanced;
     }
 
     bool is_replicated() const

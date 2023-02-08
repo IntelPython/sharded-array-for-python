@@ -204,18 +204,19 @@ void MPITransceiver::gather(void* buffer,
                             DTypeId datatype,
                             rank_type root)
 {
+    auto dtype = to_mpi(datatype);
     if(root == REPLICATED) {
-        MPI_Allgatherv(MPI_IN_PLACE, 0, to_mpi(datatype),
-                       buffer, counts, displacements, to_mpi(datatype),
+        MPI_Allgatherv(MPI_IN_PLACE, 0, dtype,
+                       buffer, counts, displacements, dtype,
                        _comm);
     } else {
         if(root == _rank) {
-            MPI_Gatherv(MPI_IN_PLACE, 0, to_mpi(datatype),
-                        buffer, counts, displacements, to_mpi(datatype),
+            MPI_Gatherv(MPI_IN_PLACE, 0, dtype,
+                        buffer, counts, displacements, dtype,
                         root, _comm);
         } else {
-            MPI_Gatherv(buffer, counts[_rank], to_mpi(datatype),
-                        nullptr, nullptr, nullptr, to_mpi(datatype),
+            MPI_Gatherv(buffer, counts[_rank], dtype,
+                        nullptr, nullptr, nullptr, dtype,
                         root, _comm);
         }
     }

@@ -444,7 +444,7 @@ struct DeferredEWBinOp : public Deferred
 
     DeferredEWBinOp() = default;
     DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : Deferred(a.dtype(), a.rank()),
+        : Deferred(a.dtype(), a.rank(), true),
           _a(a.id()), _b(b.id()), _op(op)
     {}
 
@@ -468,10 +468,10 @@ struct DeferredEWBinOp : public Deferred
 
         dm.addVal(this->guid(),
                   builder.create<::imex::ptensor::EWBinOp>(loc, aPtTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
-                  [this](uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned) {
-            this->set_value(std::move(mk_tnsr(_dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
+                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
+                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
+            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
+                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
         });
         return false;
     }
