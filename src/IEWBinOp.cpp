@@ -112,7 +112,9 @@ struct DeferredIEWBinOp : public Deferred
 ddptensor * IEWBinOp::op(IEWBinOpId op, ddptensor & a, const py::object & b)
 {
     auto bb = Creator::mk_future(b);
-    return new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb->get()));
+    auto res = new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
+    if(bb.second) delete bb.first;
+    return res;
 }
 
 FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);

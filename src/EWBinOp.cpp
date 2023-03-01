@@ -444,7 +444,7 @@ struct DeferredEWBinOp : public Deferred
 
     DeferredEWBinOp() = default;
     DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : Deferred(a.dtype(), a.rank(), true),
+        : Deferred(a.dtype(), std::max(a.rank(), b.rank()), true),
           _a(a.id()), _b(b.id()), _op(op)
     {}
 
@@ -462,12 +462,13 @@ struct DeferredEWBinOp : public Deferred
         // FIXME the type of the result is based on a only
         auto av = dm.getDependent(builder, _a);
         auto bv = dm.getDependent(builder, _b);
-
-        auto aPtTyp = ::imex::dist::getPTensorType(av);
-        assert(aPtTyp);
+        
+        auto aTyp = ::imex::dist::getPTensorType(av);
+        ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
+        auto outTyp = ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
 
         dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::EWBinOp>(loc, aPtTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
+                  builder.create<::imex::ptensor::EWBinOp>(loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
                   [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
                          uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
             this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
@@ -490,13 +491,17 @@ struct DeferredEWBinOp : public Deferred
     }
 };
 
-ddptensor * EWBinOp::op(EWBinOpId op, const ddptensor & a, const py::object & b)
+ddptensor * EWBinOp::op(EWBinOpId op, const py::object & a, const py::object & b)
 {
     auto bb = Creator::mk_future(b);
+    auto aa = Creator::mk_future(a);
     if(op == __MATMUL__) {
-        return LinAlgOp::vecdot(a, *bb, 0);
+        return LinAlgOp::vecdot(*aa.first, *bb.first, 0);
     }
-    return new ddptensor(defer<DeferredEWBinOp>(op, a.get(), bb->get()));
+    auto res = new ddptensor(defer<DeferredEWBinOp>(op, aa.first->get(), bb.first->get()));
+    if(aa.second) delete aa.first;
+    if(bb.second) delete bb.first;
+    return res;    
 }
 
 FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);

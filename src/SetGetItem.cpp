@@ -280,22 +280,28 @@ struct DeferredGetItem : public Deferred
         auto & strides = _slc.strides();
         auto nd = offs.size();
         // convert C++ slices into vectors of MLIR Values
-        std::vector<::mlir::Value> offsV(nd);
-        std::vector<::mlir::Value> sizesV(nd);
-        std::vector<::mlir::Value> stridesV(nd);
+        std::vector<::mlir::OpFoldResult> offsV(nd);
+        std::vector<::mlir::OpFoldResult> sizesV(nd);
+        std::vector<::mlir::OpFoldResult> stridesV(nd);
+        ::mlir::SmallVector<int64_t> shape(nd, ::mlir::ShapedType::kDynamic);
         for(auto i = 0; i<nd; ++i) {
             offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-            sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
             stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
+            if(sizes[i] == 1) {
+                sizesV[i] = builder.getIndexAttr(sizes[i]);
+                shape[i] = sizes[i];
+            } else {
+                sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+            }
         }
+
+        auto oTyp = ::imex::dist::getPTensorType(av);
+        // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
+        auto outTyp = ::imex::ptensor::PTensorType::get(shape, oTyp.getElementType());
         // now we can create the PTensor op using the above Values
+        auto res = builder.create<::imex::ptensor::SubviewOp>(loc, outTyp, av, offsV, sizesV, stridesV);
         dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::ExtractSliceOp>(loc,
-                      ::imex::dist::getPTensorType(av),
-                      av,
-                      offsV,
-                      sizesV,
-                      stridesV),
+                  res,
                   [this, dtype](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
                                 uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
             this->set_value(std::move(mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset, sizes, strides,

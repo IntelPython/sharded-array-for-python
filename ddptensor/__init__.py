@@ -50,7 +50,7 @@ for op in api.api_categories["EWBinOp"]:
     if not op.startswith("__"):
         OP = op.upper()
         exec(
-            f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t, other._t if isinstance(other, ddptensor) else other))"
+            f"{op} = lambda this, other: dtensor(_cdt.EWBinOp.op(_cdt.{OP}, this._t if isinstance(this, ddptensor) else this, other._t if isinstance(other, ddptensor) else other))"
         )
 
 for op in api.api_categories["EWUnyOp"]:

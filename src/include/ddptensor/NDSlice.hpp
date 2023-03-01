@@ -42,6 +42,7 @@ public:
     const vec_t & offsets() const { return _offsets; };
     const vec_t & sizes()   const { return _sizes; };
     const vec_t & strides() const { return _strides; };
+    const uint64_t size() const { return VPROD(_sizes); };
 
     template<typename S>
     void serialize(S & ser)

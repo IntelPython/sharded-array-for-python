@@ -241,14 +241,14 @@ ddptensor * Creator::arange(uint64_t start, uint64_t end, uint64_t step, DTypeId
     return new ddptensor(defer<DeferredArange>(start, end, step, dtype, team));
 }
 
-ddptensor * Creator::mk_future(const py::object & b)
+std::pair<ddptensor *, bool> Creator::mk_future(const py::object & b)
 {
     if(py::isinstance<ddptensor>(b)) {
-        return b.cast<ddptensor*>();
+        return {b.cast<ddptensor*>(), false};
     } else if(py::isinstance<py::float_>(b)) {
-        return Creator::full({}, b, FLOAT64);
+        return {Creator::full({}, b, FLOAT64), true};
     } else if(py::isinstance<py::int_>(b)) {
-        return Creator::full({}, b, INT64);
+        return {Creator::full({}, b, INT64), true};
     }
     throw std::runtime_error("Invalid right operand to elementwise binary operation");
 };

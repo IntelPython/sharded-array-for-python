@@ -126,7 +126,7 @@ struct DeferredReduceOp : public Deferred
         assert(aPtTyp);
         ::mlir::Type dtype = aPtTyp.getElementType();
         // return type 0d with same dtype as input
-        auto retPtTyp = ::imex::ptensor::PTensorType::get(builder.getContext(), 0, dtype, false);
+        auto retPtTyp = ::imex::ptensor::PTensorType::get({::mlir::ShapedType::kDynamic}, dtype);
         // reduction op
         auto mop = ddpt2mlir(_op);
         auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);

@@ -107,7 +107,7 @@ void process_promises()
             // create return statement and adjust function type
             uint64_t osz = dm.handleResult(builder);
             // also request generation of c-wrapper function
-            function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), ::mlir::UnitAttr::get(&jit._context));
+            function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(), builder.getUnitAttr());
             function.getFunctionType().dump(); std::cout << std::endl;
             // add the function to the module
             module.push_back(function);

@@ -111,9 +111,10 @@ static ::mlir::Type getDTType(::mlir::OpBuilder & builder, DTypeId dtype, int ra
         throw std::runtime_error("unknown dtype");
     };
 
+    ::mlir::SmallVector<int64_t> shape(rank, ::mlir::ShapedType::kDynamic); 
     return ::imex::dist::DistTensorType::get(
         builder.getContext(),
-        ::imex::ptensor::PTensorType::get(builder.getContext(), rank, etyp, false)
+        ::imex::ptensor::PTensorType::get(shape, etyp)
     );
 }
 

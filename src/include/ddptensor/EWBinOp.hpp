@@ -8,5 +8,5 @@
 
 struct EWBinOp
 {
-    static ddptensor * op(EWBinOpId op, const ddptensor & a, const py::object & b);
+    static ddptensor * op(EWBinOpId op, const py::object & a, const py::object & b);
 };

@@ -31,17 +31,33 @@ T * mr_to_ptr(void * ptr, intptr_t offset)
 
 extern "C" {
 
+#define NO_TRANSCEIVER
+#ifdef NO_TRANSCEIVER
+static void initMPIRuntime() {
+    if(getTransceiver() == nullptr)
+      init_transceiver(new MPITransceiver(false));
+}
+#endif
+
 // Return number of ranks/processes in given team/communicator
-uint64_t idtr_nprocs(int64_t team)
+uint64_t idtr_nprocs(Transceiver * tc)
 {
-    return getTransceiver()->nranks();
+#ifdef NO_TRANSCEIVER
+    initMPIRuntime();
+    tc = getTransceiver();
+#endif
+    return tc->nranks();
 }
 #pragma weak _idtr_nprocs = idtr_nprocs
 
 // Return rank in given team/communicator
-uint64_t idtr_prank(int64_t team)
+uint64_t idtr_prank(Transceiver * tc)
 {
-    return getTransceiver()->rank();
+#ifdef NO_TRANSCEIVER
+    initMPIRuntime();
+    tc = getTransceiver();
+#endif
+    return tc->rank();
 }
 #pragma weak _idtr_prank = idtr_prank
 
@@ -173,7 +189,9 @@ void forall(uint64_t d, const T * cptr, const int64_t * sizes, const int64_t * s
         }
     } else {
         for(auto i=0; i<sz; ++i) {
+            const T * tmp = cptr;
             forall(d+1, cptr, sizes, strides, nd, op);
+            cptr = tmp + strides[d];
         }
     }
 }
@@ -190,20 +208,26 @@ bool is_contiguous(const int64_t * sizes, const int64_t * strides, uint64_t nd)
     return true;
 }
 
-void * bufferize(void * cptr, DTypeId dtype, const int64_t * sizes, const int64_t * strides, uint64_t nd, void * out)
-{
-    if(is_contiguous(sizes, strides, nd)) {
-        return cptr;
-    } else {
-        dispatch(dtype, cptr, [sizes, strides, nd, out](auto * ptr) {
-            auto buff = static_cast<decltype(ptr)>(out);
-            forall(0, ptr, sizes, strides, nd, [&buff](const auto * in) {
-                *buff = *in;
-                ++buff;
-            });
-        });
-        return out;
-    }
+void bufferize(void * cptr, DTypeId dtype, const int64_t * sizes, const int64_t * strides, const int64_t * tStarts, const int64_t * tSizes, uint64_t nd, uint64_t N, void * out)
+{    
+    dispatch(dtype, cptr, [sizes, strides, tStarts, tSizes, nd, N, out](auto * ptr) {
+        auto buff = static_cast<decltype(ptr)>(out);
+        
+        for(auto i=0; i<N; ++i) {
+            auto szs = &tSizes[i*nd];
+            if(szs[0] > 0) {
+                auto sts = &tStarts[i*nd];
+                uint64_t off = 0;
+                for(int64_t r=0; r<nd; ++r) {
+                    off += sts[r] * strides[r];
+                }
+                forall(0, &ptr[off], szs, strides, nd, [&buff](const auto * in) {
+                    *buff = *in;
+                    ++buff;
+                });
+            }
+        }
+    });
 }
 
 extern "C" {
@@ -223,6 +247,7 @@ void _idtr_reduce_all(uint64_t rank, void * data, const int64_t * sizes, const i
                     mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
+#if 0
 void _idtr_rebalance(uint64_t rank, const int64_t * gShape, const int64_t * lOffs,
                      void * data, const int64_t * sizes, const int64_t * strides, int dtype,
                      uint64_t outRank, void * out, const int64_t * outSizes, const int64_t * outStrides)
@@ -269,7 +294,7 @@ void _idtr_rebalance(uint64_t rank, const int64_t * gShape, const int64_t * lOff
     // Finally communicate elements
     getTransceiver()->alltoall(ptr, sszs.data(), soffs.data(), ddpttype, out, rszs.data(), roffs.data());
 }
-
+#endif
 
 /// @brief repartition tensor
 /// We assume tensor is partitioned along the first dimension (only) and partitions are ordered by ranks
@@ -288,18 +313,20 @@ void _idtr_repartition(int64_t rank, int64_t * gShapePtr, int dtype,
                        void * lDataPtr, int64_t * lOffsPtr, int64_t * lShapePtr, int64_t * lStridesPtr,
                        int64_t * offsPtr, int64_t * szsPtr, void * outPtr, Transceiver * tc)
 {
-    assert(is_contiguous(lShapePtr, lStridesPtr, rank));
-
+#ifdef NO_TRANSCEIVER
+    initMPIRuntime();
+    tc = getTransceiver();
+#endif
     auto N = tc->nranks();
     auto me = tc->rank();
     auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
-    auto nSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1, std::multiplies<int64_t>());
 
     // First we allgather the requested target partitioning
 
     auto myBOff = 2 * rank * me;
     ::std::vector<int64_t> buff(2*rank*N);
     for(int64_t i=0; i<rank; ++i) {
+        // assert(offsPtr[i] - lOffsPtr[i] + szsPtr[i] <= gShapePtr[i]);
         buff[myBOff+i] = offsPtr[i];
         buff[myBOff+i+rank] = szsPtr[i];
     }
@@ -315,23 +342,43 @@ void _idtr_repartition(int64_t rank, int64_t * gShapePtr, int dtype,
     auto myOff = lOffsPtr[0];
     auto mySz = lShapePtr[0];
     auto myEnd = myOff + mySz;
+    auto myTileSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1, std::multiplies<int64_t>());
 
     std::vector<int> soffs(N);
     std::vector<int> sszs(N, 0);
+    std::vector<int64_t> tStarts(N*rank, 0);
+    std::vector<int64_t> tSizes(N*rank, 0);
+    std::vector<int64_t> nSizes(N);
+    int64_t totSSz = 0;
+    bool needsBufferize = !is_contiguous(lShapePtr, lStridesPtr, rank);
 
     for(auto i=0; i<N; ++i) {
+        nSizes[i] = std::accumulate(&buff[2*rank*i+rank+1], &buff[2*rank*i+rank+rank], 1, std::multiplies<int64_t>());
+        if(nSizes[i] != myTileSz) needsBufferize = true;
+    }
+    for(auto i=0; i<N; ++i) {
+        auto nSz = nSizes[i];
         auto tOff = buff[2*rank*i];
         auto tSz = buff[2*rank*i+rank];
         auto tEnd = tOff + tSz;
+
         if(tEnd > myOff && tOff < myEnd) {
             // We have a target partition which is inside my local data
             // we now compute what data goes to this target partition
             auto start = std::max(myOff, tOff);
             auto end = std::min(myEnd, tEnd);
-            soffs[i] = (int)(start - myOff) * nSz;
+            tStarts[i*rank] = start - myOff;
+            tSizes[i*rank] = end - start;
+            soffs[i] = needsBufferize ? (i ? soffs[i-1] + sszs[i-1] : 0) : (int)(start - myOff) * myTileSz;
             sszs[i] = (int)(end - start) * nSz;
         } else {
             soffs[i] = i ? soffs[i-1] + sszs[i-1] : 0;
+        }
+        totSSz += sszs[i];
+        for(auto r=1; r<rank; ++r) {
+            tStarts[i*rank+r] = buff[2*rank*i+r];
+            tSizes[i*rank+r] = buff[2*rank*i+rank+r];
+            // assert(tSizes[i*rank+r] <= lShapePtr[r]);
         }
     }
     
@@ -348,7 +395,15 @@ void _idtr_repartition(int64_t rank, int64_t * gShapePtr, int dtype,
     }
 
     // Finally communicate elements
-    getTransceiver()->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr, rszs.data(), roffs.data());
+    if(needsBufferize) {
+        // create send buffer if strided
+        Buffer buff(totSSz * sizeof_dtype(ddpttype), 2);
+        bufferize(lDataPtr, ddpttype, lShapePtr, lStridesPtr, tStarts.data(), tSizes.data(), rank, N, buff.data());
+        getTransceiver()->alltoall(buff.data(), sszs.data(), soffs.data(), ddpttype, outPtr, rszs.data(), roffs.data());
+        std::cerr << "yey\n";
+    } else {
+        getTransceiver()->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr, rszs.data(), roffs.data());
+    }
 }
 
 void _idtr_extractslice(int64_t * slcOffs,
@@ -360,13 +415,13 @@ void _idtr_extractslice(int64_t * slcOffs,
                             int64_t * lSlcSizes,
                             int64_t * gSlcOffsets)
 {
-    std::cerr << "slcOffs: " << slcOffs[0] << " " << slcOffs[1] << std::endl;
-    std::cerr << "slcSizes: " << slcSizes[0] << " " << slcSizes[1] << std::endl;
-    std::cerr << "slcStrides: " << slcStrides[0] << " " << slcStrides[1] << std::endl;
-    std::cerr << "tOffs: " << tOffs[0] << " " << tOffs[1] << std::endl;
-    std::cerr << "tSizes: " << tSizes[0] << " " << tSizes[1] << std::endl;
-    std::cerr << "lSlcOffsets: " << lSlcOffsets[0] << " " << lSlcOffsets[1] << std::endl;
-    std::cerr << "lSlcSizes: " << lSlcSizes[0] << " " << lSlcSizes[1] << std::endl;
-    std::cerr << "gSlcOffsets: " << gSlcOffsets[0] << " " << gSlcOffsets[1] << std::endl;
+    if(slcOffs) std::cerr << "slcOffs: " << slcOffs[0] << " " << slcOffs[1] << std::endl;
+    if(slcSizes) std::cerr << "slcSizes: " << slcSizes[0] << " " << slcSizes[1] << std::endl;
+    if(slcStrides) std::cerr << "slcStrides: " << slcStrides[0] << " " << slcStrides[1] << std::endl;
+    if(tOffs) std::cerr << "tOffs: " << tOffs[0] << " " << tOffs[1] << std::endl;
+    if(tSizes) std::cerr << "tSizes: " << tSizes[0] << " " << tSizes[1] << std::endl;
+    if(lSlcOffsets) std::cerr << "lSlcOffsets: " << lSlcOffsets[0] << " " << lSlcOffsets[1] << std::endl;
+    if(lSlcSizes) std::cerr << "lSlcSizes: " << lSlcSizes[0] << " " << lSlcSizes[1] << std::endl;
+    if(gSlcOffsets) std::cerr << "gSlcOffsets: " << gSlcOffsets[0] << " " << gSlcOffsets[1] << std::endl;
 }
 } // extern "C"
