@@ -6,7 +6,6 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct IEWBinOp
-{
-    static ddptensor * op(IEWBinOpId op, ddptensor & a, const py::object & b);
+struct IEWBinOp {
+  static ddptensor *op(IEWBinOpId op, ddptensor &a, const py::object &b);
 };

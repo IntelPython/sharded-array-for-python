@@ -1,42 +1,52 @@
 import ddptensor as dt
 import numpy as np
 
-mpi_dtypes = [dt.float64, dt.float32, dt.int64, dt.uint64, dt.int32, dt.uint32, dt.int8, dt.uint8]
+mpi_dtypes = [
+    dt.float64,
+    dt.float32,
+    dt.int64,
+    dt.uint64,
+    dt.int32,
+    dt.uint32,
+    dt.int8,
+    dt.uint8,
+]
+
 
 class TestEWB:
     def test_add1(self):
         for dtyp in [dt.int64]:
             print(dtyp)
-            a = dt.ones([6,6], dtype=dtyp)
-            b = dt.ones([6,6], dtype=dtyp)
+            a = dt.ones([6, 6], dtype=dtyp)
+            b = dt.ones([6, 6], dtype=dtyp)
             c = a + b
-            r1 = dt.sum(c, [0,1])
-            v = 6*6*2
+            r1 = dt.sum(c, [0, 1])
+            v = 6 * 6 * 2
             assert float(r1) == v
 
     def test_add2(self):
-        a = dt.ones([16,16], dtype=dt.int64)
+        a = dt.ones([16, 16], dtype=dt.int64)
         c = a + 1
-        r1 = dt.sum(c, [0,1])
-        v = 16*16*2
+        r1 = dt.sum(c, [0, 1])
+        v = 16 * 16 * 2
         assert float(r1) == v
 
     def test_add3(self):
-        a = dt.ones([16,16], dtype=dt.int64)
-        b = dt.ones([16,16], dtype=dt.int64)
+        a = dt.ones([16, 16], dtype=dt.int64)
+        b = dt.ones([16, 16], dtype=dt.int64)
         c = a + b + 1
-        r1 = dt.sum(c, [0,1])
-        v = 16*16*3
+        r1 = dt.sum(c, [0, 1])
+        v = 16 * 16 * 3
         assert float(r1) == v
 
     def test_add_shifted1(self):
-        aa = dt.ones([16,16], dtype=dt.int64)
-        bb = dt.ones([16,16], dtype=dt.int64)
+        aa = dt.ones([16, 16], dtype=dt.int64)
+        bb = dt.ones([16, 16], dtype=dt.int64)
         a = aa[0:8, 0:16]
         b = bb[5:13, 0:16]
         c = a + b + 1
-        r1 = dt.sum(c, [0,1])
-        v = 8*16*3
+        r1 = dt.sum(c, [0, 1])
+        v = 8 * 16 * 3
         assert float(r1) == v
 
     # def test_add_shifted2(self):

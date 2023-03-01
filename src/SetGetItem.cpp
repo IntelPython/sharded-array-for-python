@@ -1,13 +1,13 @@
-#include "ddptensor/UtilsAndTypes.hpp"
 #include "ddptensor/SetGetItem.hpp"
-#include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Mediator.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/Mediator.hpp"
 #include "ddptensor/NDSlice.hpp"
+#include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/UtilsAndTypes.hpp"
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
 #include <mlir/IR/Builders.h>
 
@@ -185,170 +185,168 @@ namespace x {
 } // namespace x
 #endif // if 0
 
-struct DeferredSetItem : public Deferred
-{
-    id_type _a;
-    id_type _b;
-    NDSlice _slc;
+struct DeferredSetItem : public Deferred {
+  id_type _a;
+  id_type _b;
+  NDSlice _slc;
 
-    DeferredSetItem() = default;
-    DeferredSetItem(const tensor_i::future_type & a, const tensor_i::future_type & b, const std::vector<py::slice> & v)
-        : _a(a.id()), _b(b.id()), _slc(v)
-    {}
+  DeferredSetItem() = default;
+  DeferredSetItem(const tensor_i::future_type &a,
+                  const tensor_i::future_type &b,
+                  const std::vector<py::slice> &v)
+      : _a(a.id()), _b(b.id()), _slc(v) {}
 
-    void run()
-    {
-        //const auto a = std::move(Registry::get(_a).get());
-        //const auto b = std::move(Registry::get(_b).get());
-        //set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // const auto b = std::move(Registry::get(_b).get());
+    // set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
+  }
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    // get params and extract offsets/sizes/strides
+    const auto dtype = this->dtype();
+    auto av = dm.getDependent(builder, _a);
+    auto bv = dm.getDependent(builder, _b);
+    auto &offs = _slc.offsets();
+    auto &sizes = _slc.sizes();
+    auto &strides = _slc.strides();
+    auto nd = offs.size();
+    // convert C++ slices into vectors of MLIR Values
+    std::vector<::mlir::Value> offsV(nd);
+    std::vector<::mlir::Value> sizesV(nd);
+    std::vector<::mlir::Value> stridesV(nd);
+    for (auto i = 0; i < nd; ++i) {
+      offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
+      sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+      stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
     }
+    // insertsliceop has no return value, so we just craete the op...
+    builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV, sizesV,
+                                                   stridesV);
+    // ... and use av as to later create the ptensor
+    dm.addVal(this->guid(), av,
+              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+                     void *aligned, intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, uint64_t *gs_allocated,
+                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     uint64_t *lo_aligned, uint64_t balanced) {
+                this->set_value(Registry::get(this->_a).get());
+                // this->set_value(std::move(mk_tnsr(dtype, rank, allocated,
+                // aligned, offset, sizes, strides,
+                //                                   gs_allocated, gs_aligned,
+                //                                   lo_allocated,
+                //                                   lo_aligned)));
+              });
+    return false;
+  }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
-    {
-        // get params and extract offsets/sizes/strides
-        const auto dtype = this->dtype();
-        auto av = dm.getDependent(builder, _a);
-        auto bv = dm.getDependent(builder, _b);
-        auto & offs = _slc.offsets();
-        auto & sizes = _slc.sizes();
-        auto & strides = _slc.strides();
-        auto nd = offs.size();
-        // convert C++ slices into vectors of MLIR Values
-        std::vector<::mlir::Value> offsV(nd);
-        std::vector<::mlir::Value> sizesV(nd);
-        std::vector<::mlir::Value> stridesV(nd);
-        for(auto i = 0; i<nd; ++i) {
-            offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-            sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
-            stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-        }
-        // insertsliceop has no return value, so we just craete the op...
-        builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV, sizesV, stridesV);
-        // ... and use av as to later create the ptensor
-        dm.addVal(this->guid(), av,
-                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
-            this->set_value(Registry::get(this->_a).get());
-            // this->set_value(std::move(mk_tnsr(dtype, rank, allocated, aligned, offset, sizes, strides,
-            //                                   gs_allocated, gs_aligned, lo_allocated, lo_aligned)));
-        });
-        return false;
-    }
+  FactoryId factory() const { return F_SETITEM; }
 
-    FactoryId factory() const
-    {
-        return F_SETITEM;
-    }
-
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template value<sizeof(_b)>(_b);
-        ser.template object(_slc);
-    }
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_b)>(_b);
+    ser.template object(_slc);
+  }
 };
 
-ddptensor * SetItem::__setitem__(ddptensor & a, const std::vector<py::slice> & v, const ddptensor & b)
-{
-    return new ddptensor(defer<DeferredSetItem>(a.get(), b.get(), v));
+ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
+                                const ddptensor &b) {
+  return new ddptensor(defer<DeferredSetItem>(a.get(), b.get(), v));
 }
 
-struct DeferredGetItem : public Deferred
-{
-    id_type _a;
-    NDSlice _slc;
+struct DeferredGetItem : public Deferred {
+  id_type _a;
+  NDSlice _slc;
 
-    DeferredGetItem() = default;
-    DeferredGetItem(const tensor_i::future_type & a, const std::vector<py::slice> & v)
-        : Deferred(a.dtype(), a.rank(), false), _a(a.id()), _slc(v)
-    {}
+  DeferredGetItem() = default;
+  DeferredGetItem(const tensor_i::future_type &a,
+                  const std::vector<py::slice> &v)
+      : Deferred(a.dtype(), a.rank(), false), _a(a.id()), _slc(v) {}
 
-    void run()
-    {
-        //const auto a = std::move(Registry::get(_a).get());
-        //set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
-    }
-    
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
-    {
-        // get params and extract offsets/sizes/strides
-        const auto dtype = this->dtype();
-        auto av = dm.getDependent(builder, _a);
-        auto & offs = _slc.offsets();
-        auto & sizes = _slc.sizes();
-        auto & strides = _slc.strides();
-        auto nd = offs.size();
-        // convert C++ slices into vectors of MLIR Values
-        std::vector<::mlir::OpFoldResult> offsV(nd);
-        std::vector<::mlir::OpFoldResult> sizesV(nd);
-        std::vector<::mlir::OpFoldResult> stridesV(nd);
-        ::mlir::SmallVector<int64_t> shape(nd, ::mlir::ShapedType::kDynamic);
-        for(auto i = 0; i<nd; ++i) {
-            offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-            stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-            if(sizes[i] == 1) {
-                sizesV[i] = builder.getIndexAttr(sizes[i]);
-                shape[i] = sizes[i];
-            } else {
-                sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
-            }
-        }
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
+  }
 
-        auto oTyp = ::imex::dist::getPTensorType(av);
-        // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
-        auto outTyp = ::imex::ptensor::PTensorType::get(shape, oTyp.getElementType());
-        // now we can create the PTensor op using the above Values
-        auto res = builder.create<::imex::ptensor::SubviewOp>(loc, outTyp, av, offsV, sizesV, stridesV);
-        dm.addVal(this->guid(),
-                  res,
-                  [this, dtype](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                                uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
-            this->set_value(std::move(mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
-        });
-        return false;
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    // get params and extract offsets/sizes/strides
+    const auto dtype = this->dtype();
+    auto av = dm.getDependent(builder, _a);
+    auto &offs = _slc.offsets();
+    auto &sizes = _slc.sizes();
+    auto &strides = _slc.strides();
+    auto nd = offs.size();
+    // convert C++ slices into vectors of MLIR Values
+    std::vector<::mlir::OpFoldResult> offsV(nd);
+    std::vector<::mlir::OpFoldResult> sizesV(nd);
+    std::vector<::mlir::OpFoldResult> stridesV(nd);
+    ::mlir::SmallVector<int64_t> shape(nd, ::mlir::ShapedType::kDynamic);
+    for (auto i = 0; i < nd; ++i) {
+      offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
+      stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
+      if (sizes[i] == 1) {
+        sizesV[i] = builder.getIndexAttr(sizes[i]);
+        shape[i] = sizes[i];
+      } else {
+        sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+      }
     }
 
-    FactoryId factory() const
-    {
-        return F_GETITEM;
-    }
+    auto oTyp = ::imex::dist::getPTensorType(av);
+    // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
+    auto outTyp =
+        ::imex::ptensor::PTensorType::get(shape, oTyp.getElementType());
+    // now we can create the PTensor op using the above Values
+    auto res = builder.create<::imex::ptensor::SubviewOp>(
+        loc, outTyp, av, offsV, sizesV, stridesV);
+    dm.addVal(this->guid(), res,
+              [this, dtype](Transceiver *transceiver, uint64_t rank,
+                            void *allocated, void *aligned, intptr_t offset,
+                            const intptr_t *sizes, const intptr_t *strides,
+                            uint64_t *gs_allocated, uint64_t *gs_aligned,
+                            uint64_t *lo_allocated, uint64_t *lo_aligned,
+                            uint64_t balanced) {
+                this->set_value(std::move(
+                    mk_tnsr(transceiver, dtype, rank, allocated, aligned,
+                            offset, sizes, strides, gs_allocated, gs_aligned,
+                            lo_allocated, lo_aligned, balanced)));
+              });
+    return false;
+  }
 
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template object(_slc);
-    }
+  FactoryId factory() const { return F_GETITEM; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template object(_slc);
+  }
 };
 
-ddptensor * GetItem::__getitem__(const ddptensor & a, const std::vector<py::slice> & v)
-{
-    return new ddptensor(defer<DeferredGetItem>(a.get(), v));
+ddptensor *GetItem::__getitem__(const ddptensor &a,
+                                const std::vector<py::slice> &v) {
+  return new ddptensor(defer<DeferredGetItem>(a.get(), v));
 }
 
-py::object GetItem::get_slice(const ddptensor & a, const std::vector<py::slice> & v)
-{
-    const auto aa = std::move(a.get());
-    return {}; // FIXME TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
+py::object GetItem::get_slice(const ddptensor &a,
+                              const std::vector<py::slice> &v) {
+  const auto aa = std::move(a.get());
+  return {}; // FIXME TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
 }
 
-py::object GetItem::get_local(const ddptensor & a, py::handle h)
-{
-    const auto aa = std::move(a.get().get());
-    return {}; // FIXME TypeDispatch<x::SPMD>(aa, h);
+py::object GetItem::get_local(const ddptensor &a, py::handle h) {
+  const auto aa = std::move(a.get().get());
+  return {}; // FIXME TypeDispatch<x::SPMD>(aa, h);
 }
 
-py::object GetItem::do_gather(const tensor_i::ptr_type & a, rank_type root)
-{
-    return {}; // FIXME TypeDispatch<x::SPMD>(a, root);
+py::object GetItem::do_gather(const tensor_i::ptr_type &a, rank_type root) {
+  return {}; // FIXME TypeDispatch<x::SPMD>(a, root);
 }
 
-py::object GetItem::gather(const ddptensor & a, rank_type root)
-{
-    const auto aa = std::move(a.get().get());
-    return do_gather(aa, root);
+py::object GetItem::gather(const ddptensor &a, rank_type root) {
+  const auto aa = std::move(a.get().get());
+  return do_gather(aa, root);
 }
 
 FACTORY_INIT(DeferredGetItem, F_GETITEM);

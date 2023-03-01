@@ -58,3 +58,10 @@ and multi-process run is executed like
 ```bash
 python DDPT_IDTR_SO=`pwd`/ddptensor/libidtr.so mpirun -n 5 python simple.py
 ```
+
+## Contributing
+Please setup precommit hooks like this
+```
+pre-commit install -f -c ./.pre-commit-config.yaml
+pre-commit autoupdate
+```

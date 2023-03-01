@@ -6,7 +6,6 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct SortOp
-{
-    static ddptensor * sort(const ddptensor & a, bool descending = false);
+struct SortOp {
+  static ddptensor *sort(const ddptensor &a, bool descending = false);
 };

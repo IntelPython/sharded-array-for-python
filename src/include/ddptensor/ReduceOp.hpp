@@ -6,7 +6,7 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct ReduceOp
-{
-    static ddptensor * op(ReduceOpId op, const ddptensor & a, const dim_vec_type & dim);
+struct ReduceOp {
+  static ddptensor *op(ReduceOpId op, const ddptensor &a,
+                       const dim_vec_type &dim);
 };

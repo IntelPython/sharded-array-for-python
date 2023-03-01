@@ -44,7 +44,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ===============
 # Deps
-# =============== 
+# ===============
 # Find dependent packages like IMEX, Python3 and NumPy
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_package(pybind11 CONFIG)

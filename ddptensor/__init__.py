@@ -20,7 +20,7 @@ from ._ddptensor import (
     FLOAT32 as float32,
     INT64 as int64,
     INT32 as int32,
-    INT16  as int16,
+    INT16 as int16,
     INT8 as int8,
     UINT64 as uint64,
     UINT32 as uint32,
@@ -29,7 +29,7 @@ from ._ddptensor import (
     BOOL as bool,
     init as _init,
     fini,
-    sync
+    sync,
 )
 
 from .ddptensor import dtensor
@@ -37,14 +37,17 @@ from os import getenv
 from . import array_api as api
 from . import spmd
 
-_ddpt_cw = _bool(int(getenv('DDPT_CW', True)))
+_ddpt_cw = _bool(int(getenv("DDPT_CW", True)))
+
 
 def init(cw=None):
     cw = _ddpt_cw if cw is None else cw
     _init(cw)
 
+
 def to_numpy(a):
     return _cdt.to_numpy(a._t)
+
 
 for op in api.api_categories["EWBinOp"]:
     if not op.startswith("__"):
@@ -56,9 +59,7 @@ for op in api.api_categories["EWBinOp"]:
 for op in api.api_categories["EWUnyOp"]:
     if not op.startswith("__"):
         OP = op.upper()
-        exec(
-            f"{op} = lambda this: dtensor(_cdt.EWUnyOp.op(_cdt.{OP}, this._t))"
-        )
+        exec(f"{op} = lambda this: dtensor(_cdt.EWUnyOp.op(_cdt.{OP}, this._t))")
 
 for func in api.api_categories["Creator"]:
     FUNC = func.upper()
@@ -98,7 +99,10 @@ for func in api.api_categories["ManipOp"]:
 
 for func in api.api_categories["LinAlgOp"]:
     FUNC = func.upper()
-    if func in ["tensordot", "vecdot",]:
+    if func in [
+        "tensordot",
+        "vecdot",
+    ]:
         exec(
             f"{func} = lambda this, other, axis: dtensor(_cdt.LinAlgOp.{func}(this._t, other._t, axis))"
         )
@@ -107,9 +111,7 @@ for func in api.api_categories["LinAlgOp"]:
             f"{func} = lambda this, other: dtensor(_cdt.LinAlgOp.vecdot(this._t, other._t, 0))"
         )
     elif func == "matrix_transpose":
-        exec(
-            f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))"
-        )
+        exec(f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))")
 
 for func in api.api_categories["SortOp"]:
     exec(

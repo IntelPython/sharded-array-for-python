@@ -1,8 +1,8 @@
 #include "ddptensor/IEWBinOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
-#include "ddptensor/Creator.hpp"
+#include "ddptensor/TypeDispatch.hpp"
 
 #if 0
 namespace x {
@@ -77,44 +77,37 @@ namespace x {
 } // namespace x
 #endif // if 0
 
-struct DeferredIEWBinOp : public Deferred
-{
-    id_type _a;
-    id_type _b;
-    IEWBinOpId _op;
+struct DeferredIEWBinOp : public Deferred {
+  id_type _a;
+  id_type _b;
+  IEWBinOpId _op;
 
-    DeferredIEWBinOp() = default;
-    DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : _a(a.id()), _b(b.id()), _op(op)
-    {}
+  DeferredIEWBinOp() = default;
+  DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
+                   const tensor_i::future_type &b)
+      : _a(a.id()), _b(b.id()), _op(op) {}
 
-    void run()
-    {
-        // const auto a = std::move(Registry::get(_a).get());
-        // const auto b = std::move(Registry::get(_b).get());
-        // set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
-    }
-     
-    FactoryId factory() const
-    {
-        return F_IEWBINOP;
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // const auto b = std::move(Registry::get(_b).get());
+    // set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
+  }
 
-    }
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template value<sizeof(_b)>(_b);
-        ser.template value<sizeof(_op)>(_op);
-    }
+  FactoryId factory() const { return F_IEWBINOP; }
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_b)>(_b);
+    ser.template value<sizeof(_op)>(_op);
+  }
 };
 
-ddptensor * IEWBinOp::op(IEWBinOpId op, ddptensor & a, const py::object & b)
-{
-    auto bb = Creator::mk_future(b);
-    auto res = new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
-    if(bb.second) delete bb.first;
-    return res;
+ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
+  auto bb = Creator::mk_future(b);
+  auto res =
+      new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
+  if (bb.second)
+    delete bb.first;
+  return res;
 }
 
 FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);

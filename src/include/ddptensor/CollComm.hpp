@@ -3,30 +3,30 @@
 #pragma once
 
 #include "CppTypes.hpp"
-#include "PVSlice.hpp"
 #include "DDPTensorImpl.hpp"
+#include "PVSlice.hpp"
 
-struct CollComm
-{
-    using map_info_type = std::vector<std::vector<int>>;
+struct CollComm {
+  using map_info_type = std::vector<std::vector<int>>;
 
-    // Compute offset and displacements when mapping o_slc to n_slc. This is
-    // necessary when slices are not equally partitioned. Basically we provide
-    // the information how to ship all elements of a_ptr to where the equivalent
-    // positions in b_ptr reside (using alltoall).  For example, if the 7th
-    // element of n_slc resides on rank 2, element o_slc[7] will be shipped to
-    // rank 2.
-    //
-    // Notice: slices might have strides > 1 and might not start at position 0.
-    //         Results are provided relative to the given slices. It's up to the
-    //         caller to translate to absolute positions.
-    // 
-    // returns vector [counts_send, disp_send, counts_recv, disp_recv]
-    static map_info_type map(const PVSlice & n_slc, const PVSlice & o_slc);
+  // Compute offset and displacements when mapping o_slc to n_slc. This is
+  // necessary when slices are not equally partitioned. Basically we provide
+  // the information how to ship all elements of a_ptr to where the equivalent
+  // positions in b_ptr reside (using alltoall).  For example, if the 7th
+  // element of n_slc resides on rank 2, element o_slc[7] will be shipped to
+  // rank 2.
+  //
+  // Notice: slices might have strides > 1 and might not start at position 0.
+  //         Results are provided relative to the given slices. It's up to the
+  //         caller to translate to absolute positions.
+  //
+  // returns vector [counts_send, disp_send, counts_recv, disp_recv]
+  static map_info_type map(const PVSlice &n_slc, const PVSlice &o_slc);
 
-    template<typename T, typename U>
-    static tensor_i::ptr_type coll_copy(std::shared_ptr<DDPTensorImpl> b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr)
-    {
+  template <typename T, typename U>
+  static tensor_i::ptr_type
+  coll_copy(std::shared_ptr<DDPTensorImpl> b_ptr,
+            const std::shared_ptr<DDPTensorImpl> &a_ptr) {
 #if 0
         assert(! a_ptr->is_sliced() && ! b_ptr->is_sliced());
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
@@ -41,16 +41,17 @@ struct CollComm
                                  info[3].data(),
                                  DTYPE<T>::value);
 #endif
-            
-        return b_ptr;
-    }
 
-    template<typename T, typename U>
-    static std::array<int, 4> coll_map(const std::shared_ptr<DDPTensorImpl> & b_ptr, const std::shared_ptr<DDPTensorImpl> & a_ptr, std::vector<U> & rbuff)
-    {
+    return b_ptr;
+  }
+
+  template <typename T, typename U>
+  static std::array<int, 4>
+  coll_map(const std::shared_ptr<DDPTensorImpl> &b_ptr,
+           const std::shared_ptr<DDPTensorImpl> &a_ptr, std::vector<U> &rbuff) {
 #if 0
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
-        
+
         auto nr = getTransceiver()->nranks();
         auto r = getTransceiver()->rank();
 
@@ -85,15 +86,17 @@ struct CollComm
                                  info[2].data(),
                                  info[3].data(),
                                  DTYPE<U>::value);
-            
+
         return {my_cnt_send, info[1][r], my_cnt_recv, info[3][r]};
 #endif
-        return {-1,-1,-1,-1};
-    }
+    return {-1, -1, -1, -1};
+  }
 
-    template<typename A, typename B>
-    static std::array<uint64_t, 2> coll_copy(const std::shared_ptr<DDPTensorImpl> & a_ptr, const std::array<std::vector<NDSlice>, 2> & a_overlap, std::vector<B> & rbuff)
-    {
+  template <typename A, typename B>
+  static std::array<uint64_t, 2>
+  coll_copy(const std::shared_ptr<DDPTensorImpl> &a_ptr,
+            const std::array<std::vector<NDSlice>, 2> &a_overlap,
+            std::vector<B> &rbuff) {
 #if 0
         if(a_overlap[0].empty()) return {0, 0};
 
@@ -117,7 +120,7 @@ struct CollComm
             }
         }
         rbuff.resize((disp_recv[nr-1] + counts_recv[nr-1]));
-                
+
         getTransceiver()->alltoall(sbuff.data(), // buffer_send
                                  &counts_send[0],
                                  &disp_send[0],
@@ -128,6 +131,6 @@ struct CollComm
                                  DTYPE<B>::value);
         return {(uint64_t)disp_send[rank], (uint64_t)disp_recv[rank]};
 #endif
-        return {-1,-1};
-    }
+    return {-1, -1};
+  }
 };

@@ -6,7 +6,6 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct EWBinOp
-{
-    static ddptensor * op(EWBinOpId op, const py::object & a, const py::object & b);
+struct EWBinOp {
+  static ddptensor *op(EWBinOpId op, const py::object &a, const py::object &b);
 };

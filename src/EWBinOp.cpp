@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "ddptensor/EWBinOp.hpp"
-#include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/Registry.hpp"
-#include "ddptensor/Creator.hpp"
-#include "ddptensor/TypePromotion.hpp"
 #include "ddptensor/CollComm.hpp"
+#include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Factory.hpp"
+#include "ddptensor/LinAlgOp.hpp"
+#include "ddptensor/Registry.hpp"
+#include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/TypePromotion.hpp"
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <mlir/IR/Builders.h>
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/IR/Builders.h>
 
 // #######################################################################################
-// The 2 operators/tensors can have shifted partitions, e.g. local data might not be the
-// same on a and b. This means we
-// need to copy/communicate to bring the relevant parts of the tensor to the
-// right processes.
+// The 2 operators/tensors can have shifted partitions, e.g. local data might
+// not be the same on a and b. This means we need to copy/communicate to bring
+// the relevant parts of the tensor to the right processes.
 //
 // The minimal copy would be to map one array to other. This however can create
 // a unbalanced distribution which we currently only support through slicing.
@@ -70,7 +69,7 @@ namespace x {
         }
         return false;
     }
-            
+
     class EWBinOp
     {
     public:
@@ -150,7 +149,7 @@ namespace x {
                 return (_ptr = _rbuff.data() + off);
             }
         };
-            
+
 #pragma GCC diagnostic ignored "-Wswitch"
         template<typename A, typename B>
         static ptr_type op(EWBinOpId bop, const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
@@ -204,9 +203,9 @@ namespace x {
                     auto a_view = xt::adapt(a_ptr, a_csz, xt::no_ownership(), typename xt::xarray<AB>::shape_type({a_csz}));
                     auto b_view = xt::adapt(b_ptr, b_csz, xt::no_ownership(), typename xt::xarray<AB>::shape_type({b_csz}));
                     auto r_view = xt::view(r_xv, xt::range(pos, pos + r_csz));
-                    
+
                     dispatch_op<R, AB>(bop, r_view, a_view, b_view);
-                    
+
                     ptr += r_csz;
                     pos += r_csz;
                 }
@@ -374,134 +373,136 @@ namespace x {
 #endif // if 0
 
 // convert id of our binop to id of imex::ptensor binop
-static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop)
-{
-    switch(bop) {
-    case __ADD__:
-    case ADD:
-    case __RADD__:
-        return ::imex::ptensor::ADD;
-    case ATAN2:
-        return ::imex::ptensor::ATAN2;
-    case __FLOORDIV__:
-    case FLOOR_DIVIDE:
-    case __RFLOORDIV__:
-        return ::imex::ptensor::FLOOR_DIVIDE;
-        // __MATMUL__ is handled before dispatching, see below
-    case __MUL__:
-    case MULTIPLY:
-    case __RMUL__:
-        return ::imex::ptensor::MULTIPLY;
-    case __SUB__:
-    case SUBTRACT:
-    case __RSUB__:
-        return ::imex::ptensor::SUBTRACT;
-    case __TRUEDIV__:
-    case DIVIDE:
-    case __RTRUEDIV__:
-        return ::imex::ptensor::TRUE_DIVIDE;
-    case __POW__:
-    case POW:
-    case __RPOW__:
-        return ::imex::ptensor::POWER;
-    case LOGADDEXP:
-        return ::imex::ptensor::LOGADDEXP;
-    case __LSHIFT__:
-    case BITWISE_LEFT_SHIFT:
-    case __RLSHIFT__:
-        return ::imex::ptensor::BITWISE_LEFT_SHIFT;
-    case __MOD__:
-    case REMAINDER:
-    case __RMOD__:
-        return ::imex::ptensor::MODULO;
-    case __RSHIFT__:
-    case BITWISE_RIGHT_SHIFT:
-    case __RRSHIFT__:
-        return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
-    case __AND__:
-    case BITWISE_AND:
-    case __RAND__:
-        return ::imex::ptensor::BITWISE_AND;
-    case __OR__:
-    case BITWISE_OR:
-    case __ROR__:
-        return ::imex::ptensor::BITWISE_OR;
-    case __XOR__:
-    case BITWISE_XOR:
-    case __RXOR__:
-        return ::imex::ptensor::BITWISE_XOR;
-    default:
-        throw std::runtime_error("Unknown/invalid elementwise binary operation");
-    }
+static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop) {
+  switch (bop) {
+  case __ADD__:
+  case ADD:
+  case __RADD__:
+    return ::imex::ptensor::ADD;
+  case ATAN2:
+    return ::imex::ptensor::ATAN2;
+  case __FLOORDIV__:
+  case FLOOR_DIVIDE:
+  case __RFLOORDIV__:
+    return ::imex::ptensor::FLOOR_DIVIDE;
+    // __MATMUL__ is handled before dispatching, see below
+  case __MUL__:
+  case MULTIPLY:
+  case __RMUL__:
+    return ::imex::ptensor::MULTIPLY;
+  case __SUB__:
+  case SUBTRACT:
+  case __RSUB__:
+    return ::imex::ptensor::SUBTRACT;
+  case __TRUEDIV__:
+  case DIVIDE:
+  case __RTRUEDIV__:
+    return ::imex::ptensor::TRUE_DIVIDE;
+  case __POW__:
+  case POW:
+  case __RPOW__:
+    return ::imex::ptensor::POWER;
+  case LOGADDEXP:
+    return ::imex::ptensor::LOGADDEXP;
+  case __LSHIFT__:
+  case BITWISE_LEFT_SHIFT:
+  case __RLSHIFT__:
+    return ::imex::ptensor::BITWISE_LEFT_SHIFT;
+  case __MOD__:
+  case REMAINDER:
+  case __RMOD__:
+    return ::imex::ptensor::MODULO;
+  case __RSHIFT__:
+  case BITWISE_RIGHT_SHIFT:
+  case __RRSHIFT__:
+    return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
+  case __AND__:
+  case BITWISE_AND:
+  case __RAND__:
+    return ::imex::ptensor::BITWISE_AND;
+  case __OR__:
+  case BITWISE_OR:
+  case __ROR__:
+    return ::imex::ptensor::BITWISE_OR;
+  case __XOR__:
+  case BITWISE_XOR:
+  case __RXOR__:
+    return ::imex::ptensor::BITWISE_XOR;
+  default:
+    throw std::runtime_error("Unknown/invalid elementwise binary operation");
+  }
 }
 #pragma GCC diagnostic pop
 
-struct DeferredEWBinOp : public Deferred
-{
-    id_type _a;
-    id_type _b;
-    EWBinOpId _op;
+struct DeferredEWBinOp : public Deferred {
+  id_type _a;
+  id_type _b;
+  EWBinOpId _op;
 
-    DeferredEWBinOp() = default;
-    DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type & a, const tensor_i::future_type & b)
-        : Deferred(a.dtype(), std::max(a.rank(), b.rank()), true),
-          _a(a.id()), _b(b.id()), _op(op)
-    {}
+  DeferredEWBinOp() = default;
+  DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type &a,
+                  const tensor_i::future_type &b)
+      : Deferred(a.dtype(), std::max(a.rank(), b.rank()), true), _a(a.id()),
+        _b(b.id()), _op(op) {}
 
-    void run() override
-    {
+  void run() override {
 #if 0
         const auto a = std::move(Registry::get(_a).get());
         const auto b = std::move(Registry::get(_b).get());
         set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
 #endif
-    }
+  }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
-    {
-        // FIXME the type of the result is based on a only
-        auto av = dm.getDependent(builder, _a);
-        auto bv = dm.getDependent(builder, _b);
-        
-        auto aTyp = ::imex::dist::getPTensorType(av);
-        ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
-        auto outTyp = ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    // FIXME the type of the result is based on a only
+    auto av = dm.getDependent(builder, _a);
+    auto bv = dm.getDependent(builder, _b);
 
-        dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::EWBinOp>(loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
-                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
-            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
+    auto aTyp = ::imex::dist::getPTensorType(av);
+    ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
+    auto outTyp =
+        ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+
+    dm.addVal(
+        this->guid(),
+        builder.create<::imex::ptensor::EWBinOp>(
+            loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
+        [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+               void *aligned, intptr_t offset, const intptr_t *sizes,
+               const intptr_t *strides, uint64_t *gs_allocated,
+               uint64_t *gs_aligned, uint64_t *lo_allocated,
+               uint64_t *lo_aligned, uint64_t balanced) {
+          this->set_value(std::move(
+              mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset,
+                      sizes, strides, gs_allocated, gs_aligned, lo_allocated,
+                      lo_aligned, balanced)));
         });
-        return false;
-    }
+    return false;
+  }
 
-    FactoryId factory() const
-    {
-        return F_EWBINOP;
-    }
+  FactoryId factory() const { return F_EWBINOP; }
 
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template value<sizeof(_b)>(_b);
-        ser.template value<sizeof(_op)>(_op);
-    }
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_b)>(_b);
+    ser.template value<sizeof(_op)>(_op);
+  }
 };
 
-ddptensor * EWBinOp::op(EWBinOpId op, const py::object & a, const py::object & b)
-{
-    auto bb = Creator::mk_future(b);
-    auto aa = Creator::mk_future(a);
-    if(op == __MATMUL__) {
-        return LinAlgOp::vecdot(*aa.first, *bb.first, 0);
-    }
-    auto res = new ddptensor(defer<DeferredEWBinOp>(op, aa.first->get(), bb.first->get()));
-    if(aa.second) delete aa.first;
-    if(bb.second) delete bb.first;
-    return res;    
+ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
+  auto bb = Creator::mk_future(b);
+  auto aa = Creator::mk_future(a);
+  if (op == __MATMUL__) {
+    return LinAlgOp::vecdot(*aa.first, *bb.first, 0);
+  }
+  auto res = new ddptensor(
+      defer<DeferredEWBinOp>(op, aa.first->get(), bb.first->get()));
+  if (aa.second)
+    delete aa.first;
+  if (bb.second)
+    delete bb.first;
+  return res;
 }
 
 FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);

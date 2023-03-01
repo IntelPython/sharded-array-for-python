@@ -1,10 +1,12 @@
 import sys, os
+
 sys.path.append(os.path.abspath(os.path.dirname(sys.argv[1])))
 exec(f"import {os.path.basename(sys.argv[1]).split('.')[0]} as api")
 
-sys.stdout = open(sys.argv[2], 'w')
+sys.stdout = open(sys.argv[2], "w")
 
-print("""// Auto-generated file
+print(
+    """// Auto-generated file
 // #######################################################
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 // !! DO NOT EDIT, USE ../scripts/code_gen.py TO UPDATE !!
@@ -17,7 +19,8 @@ print("""// Auto-generated file
 #include <pybind11/stl.h>
 namespace py = pybind11;
 #endif
-""")
+"""
+)
 
 prev = 0
 for cat, lst in api.api_categories.items():
@@ -29,9 +32,11 @@ for cat, lst in api.api_categories.items():
     print(f"    {prev}")
     print("};\n")
 
-print("""#ifdef DEF_PY11_ENUMS
+print(
+    """#ifdef DEF_PY11_ENUMS
 static void def_enums(py::module_ & m)
-{""")
+{"""
+)
 for cat, lst in api.api_categories.items():
     print(f'    py::enum_<{cat}Id>(m, "{cat}Id")')
     for x in lst:

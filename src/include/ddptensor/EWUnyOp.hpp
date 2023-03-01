@@ -6,7 +6,6 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct EWUnyOp
-{
-    static ddptensor * op(EWUnyOpId op, const ddptensor & a);
+struct EWUnyOp {
+  static ddptensor *op(EWUnyOpId op, const ddptensor &a);
 };

@@ -2,21 +2,18 @@
 
 #include <ddptensor/Mediator.hpp>
 
-static Mediator * theMediator = nullptr;
+static Mediator *theMediator = nullptr;
 
-void init_mediator(Mediator * t)
- {
-    if(theMediator) delete theMediator;
-    theMediator = t;
+void init_mediator(Mediator *t) {
+  if (theMediator)
+    delete theMediator;
+  theMediator = t;
 }
 
-void fini_mediator()
-{
-    if(theMediator) delete theMediator;
-    theMediator = nullptr;
+void fini_mediator() {
+  if (theMediator)
+    delete theMediator;
+  theMediator = nullptr;
 }
 
-Mediator * getMediator()
-{
-    return theMediator;
-}
+Mediator *getMediator() { return theMediator; }

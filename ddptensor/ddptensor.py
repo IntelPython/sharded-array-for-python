@@ -9,6 +9,7 @@ https://data-apis.org/array-api/latest
 from . import _ddptensor as _cdt
 from . import array_api as api
 
+
 class dtensor:
     def __init__(self, t):
         self._t = t
@@ -41,21 +42,17 @@ class dtensor:
             )
 
     for method in api.api_categories["UnyOp"]:
-        exec(
-            f"{method} = lambda self: self._t.{method}()"
-        )
+        exec(f"{method} = lambda self: self._t.{method}()")
 
     for att in api.attributes:
-        exec(
-            f"{att} = property(lambda self: self._t.{att})"
-        )
+        exec(f"{att} = property(lambda self: self._t.{att})")
 
     def __getitem__(self, key):
         key = key if isinstance(key, tuple) else (key,)
-        key = [x if isinstance(x, slice) else slice(x, x+1, 1) for x in key]
+        key = [x if isinstance(x, slice) else slice(x, x + 1, 1) for x in key]
         return dtensor(self._t.__getitem__(key))
 
     def __setitem__(self, key, value):
         key = key if isinstance(key, tuple) else (key,)
-        key = [x if isinstance(x, slice) else slice(x, x+1, 1) for x in key]
-        self._t.__setitem__(key, value._t) # if isinstance(value, dtensor) else value)
+        key = [x if isinstance(x, slice) else slice(x, x + 1, 1) for x in key]
+        self._t.__setitem__(key, value._t)  # if isinstance(value, dtensor) else value)

@@ -37,7 +37,7 @@ uint64_t linearize(const std::vector<T> & idx, const std::vector<uint64_t> & tss
 {
     uint64_t tidx = idx.back();
     auto i = idx.rbegin()+1;
-    auto sz = tssizes.rbegin(); 
+    auto sz = tssizes.rbegin();
     for(; i != idx.rend(); ++sz, ++i) {
         tidx += (*sz) * (*i);
     }

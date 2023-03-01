@@ -6,7 +6,6 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
-struct LinAlgOp
-{
-    static ddptensor * vecdot(const ddptensor & a, const ddptensor & b, int axis);
+struct LinAlgOp {
+  static ddptensor *vecdot(const ddptensor &a, const ddptensor &b, int axis);
 };

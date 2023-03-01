@@ -11,11 +11,11 @@
          controlling layer has to make sure dependences are met.
 */
 namespace Registry {
-    constexpr static id_type NOGUID = -1;
+constexpr static id_type NOGUID = -1;
 
-    id_type get_guid();
-    extern void put(const tensor_i::future_type & ptr);
-    tensor_i::future_type get(id_type id);
-    void del(id_type id);
-    void fini();
-};
+id_type get_guid();
+extern void put(const tensor_i::future_type &ptr);
+tensor_i::future_type get(id_type id);
+void del(id_type id);
+void fini();
+}; // namespace Registry

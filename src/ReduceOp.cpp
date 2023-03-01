@@ -6,10 +6,10 @@
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <mlir/IR/Builders.h>
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/IR/Builders.h>
 
 #if 0
 namespace x {
@@ -76,87 +76,87 @@ namespace x {
 #endif // if 0
 
 // convert id of our reduction op to id of imex::ptensor reduction op
-static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop)
-{
-    switch(rop) {
-    case MEAN:
-        return ::imex::ptensor::MEAN;
-    case PROD:
-        return ::imex::ptensor::PROD;
-    case SUM:
-        return ::imex::ptensor::SUM;
-    case STD:
-        return ::imex::ptensor::STD;
-    case VAR:
-        return ::imex::ptensor::VAR;
-    case MAX:
-        return ::imex::ptensor::MAX;
-    case MIN:
-        return ::imex::ptensor::MIN;
-    default:
-        throw std::runtime_error("Unknown reduction operation");
-    }
+static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop) {
+  switch (rop) {
+  case MEAN:
+    return ::imex::ptensor::MEAN;
+  case PROD:
+    return ::imex::ptensor::PROD;
+  case SUM:
+    return ::imex::ptensor::SUM;
+  case STD:
+    return ::imex::ptensor::STD;
+  case VAR:
+    return ::imex::ptensor::VAR;
+  case MAX:
+    return ::imex::ptensor::MAX;
+  case MIN:
+    return ::imex::ptensor::MIN;
+  default:
+    throw std::runtime_error("Unknown reduction operation");
+  }
 }
 
-struct DeferredReduceOp : public Deferred
-{
-    id_type _a;
-    dim_vec_type _dim;
-    ReduceOpId _op;
+struct DeferredReduceOp : public Deferred {
+  id_type _a;
+  dim_vec_type _dim;
+  ReduceOpId _op;
 
-    DeferredReduceOp() = default;
-    DeferredReduceOp(ReduceOpId op, const tensor_i::future_type & a, const dim_vec_type & dim)
-        : Deferred(a.dtype(), 0, true), // FIXME rank
-          _a(a.id()), _dim(dim), _op(op)
-    {}
+  DeferredReduceOp() = default;
+  DeferredReduceOp(ReduceOpId op, const tensor_i::future_type &a,
+                   const dim_vec_type &dim)
+      : Deferred(a.dtype(), 0, true), // FIXME rank
+        _a(a.id()), _dim(dim), _op(op) {}
 
-    void run()
-    {
-#if 0 
+  void run() {
+#if 0
         const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
 #endif
-    }
+  }
 
-    bool generate_mlir(::mlir::OpBuilder & builder, ::mlir::Location loc, jit::DepManager & dm) override
-    {
-        // FIXME reduction over individual dimensions is not supported
-        auto av = dm.getDependent(builder, _a);
-        auto aPtTyp = ::imex::dist::getPTensorType(av);
-        assert(aPtTyp);
-        ::mlir::Type dtype = aPtTyp.getElementType();
-        // return type 0d with same dtype as input
-        auto retPtTyp = ::imex::ptensor::PTensorType::get({::mlir::ShapedType::kDynamic}, dtype);
-        // reduction op
-        auto mop = ddpt2mlir(_op);
-        auto op = builder.getIntegerAttr(builder.getIntegerType(sizeof(mop)*8), mop);
-        dm.addVal(this->guid(),
-                  builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
-                  [this](Transceiver * transceiver, uint64_t rank, void *allocated, void *aligned, intptr_t offset, const intptr_t * sizes, const intptr_t * strides,
-                         uint64_t * gs_allocated, uint64_t * gs_aligned, uint64_t * lo_allocated, uint64_t * lo_aligned, uint64_t balanced) {
-            this->set_value(std::move(mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset, sizes, strides,
-                                              gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced)));
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    // FIXME reduction over individual dimensions is not supported
+    auto av = dm.getDependent(builder, _a);
+    auto aPtTyp = ::imex::dist::getPTensorType(av);
+    assert(aPtTyp);
+    ::mlir::Type dtype = aPtTyp.getElementType();
+    // return type 0d with same dtype as input
+    auto retPtTyp = ::imex::ptensor::PTensorType::get(
+        {::mlir::ShapedType::kDynamic}, dtype);
+    // reduction op
+    auto mop = ddpt2mlir(_op);
+    auto op =
+        builder.getIntegerAttr(builder.getIntegerType(sizeof(mop) * 8), mop);
+    dm.addVal(
+        this->guid(),
+        builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
+        [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+               void *aligned, intptr_t offset, const intptr_t *sizes,
+               const intptr_t *strides, uint64_t *gs_allocated,
+               uint64_t *gs_aligned, uint64_t *lo_allocated,
+               uint64_t *lo_aligned, uint64_t balanced) {
+          this->set_value(std::move(
+              mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset,
+                      sizes, strides, gs_allocated, gs_aligned, lo_allocated,
+                      lo_aligned, balanced)));
         });
-        return false;
-    }
+    return false;
+  }
 
-    FactoryId factory() const
-    {
-        return F_REDUCEOP;
-    }
-    
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template container<sizeof(dim_vec_type::value_type)>(_dim, 8);
-        ser.template value<sizeof(_op)>(_op);
-    }
+  FactoryId factory() const { return F_REDUCEOP; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template container<sizeof(dim_vec_type::value_type)>(_dim, 8);
+    ser.template value<sizeof(_op)>(_op);
+  }
 };
 
-ddptensor * ReduceOp::op(ReduceOpId op, const ddptensor & a, const dim_vec_type & dim)
-{
-    return new ddptensor(defer<DeferredReduceOp>(op, a.get(), dim));
+ddptensor *ReduceOp::op(ReduceOpId op, const ddptensor &a,
+                        const dim_vec_type &dim) {
+  return new ddptensor(defer<DeferredReduceOp>(op, a.get(), dim));
 }
 
 FACTORY_INIT(DeferredReduceOp, F_REDUCEOP);

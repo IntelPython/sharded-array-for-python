@@ -2,8 +2,8 @@
 
 #include "ddptensor/CollComm.hpp"
 
-// Compute offset and displacements when mapping n_slc to o_slc. This is necessary when
-// slices are not equally partitioned.
+// Compute offset and displacements when mapping n_slc to o_slc. This is
+// necessary when slices are not equally partitioned.
 //
 // We assume we split in first dimension.
 // We also assume partitions are assigned to ranks in sequence from 0-N.
@@ -12,23 +12,24 @@
 // Actually, the tile-size might change only if old or new shape does not evenly
 // distribute data (e.g. last partition is smaller).
 // In theory we could re-shape in-place when the norm-tile-size does not change.
-// This is not implemented: we need an extra mechanism to work with reshape-views or alike.
-std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice & o_slc)
-{
+// This is not implemented: we need an extra mechanism to work with
+// reshape-views or alike.
+std::vector<std::vector<int>> CollComm::map(const PVSlice &n_slc,
+                                            const PVSlice &o_slc) {
 #if 0
     auto nr = getTransceiver()->nranks();
     std::vector<int> counts_send(nr, 0);
     std::vector<int> disp_send(nr, 0);
     std::vector<int> counts_recv(nr, 0);
     std::vector<int> disp_recv(nr, 0);
-        
+
     // norm tile-size of  orig array
     auto o_ntsz =  o_slc.tile_size(0);
     // tilesize of my local partition of orig array
     auto o_tsz = o_slc.tile_size();
     // linearized local slice of orig array
     auto o_llslc = Slice(o_ntsz * getTransceiver()->rank(), o_ntsz * getTransceiver()->rank() + o_tsz);
-            
+
     // norm tile-size of new (reshaped) array
     auto n_ntsz =  n_slc.tile_size(0);
     // tilesize of my local partition of new (reshaped) array
@@ -65,5 +66,5 @@ std::vector<std::vector<int>> CollComm::map(const PVSlice & n_slc, const PVSlice
     }
     return {counts_send, disp_send, counts_recv, disp_recv};
 #endif // if 0
-    return {};
+  return {};
 }

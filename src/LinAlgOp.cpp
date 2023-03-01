@@ -1,9 +1,9 @@
 #include <mpi.h>
 //#include <mkl.h>
-#include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/LinAlgOp.hpp"
+#include "ddptensor/TypeDispatch.hpp"
 
 #if 0
 namespace x {
@@ -25,7 +25,7 @@ namespace x {
                 const auto & bx = b_ptr->xarray();
                 auto nda = a_ptr->slice().ndims();
                 auto ndb = b_ptr->slice().ndims();
-                
+
                 if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
                     if(nda != 1 || ndb != 1)
                         throw(std::runtime_error("vecdoc on sliced tensors supported for 1d tensors only"));
@@ -33,7 +33,7 @@ namespace x {
                     const auto & bv = xt::strided_view(bx, b_ptr->lslice());
                     return vecdot_1d(av, bv, axis);
                 }
-                
+
                 if(nda == 1 && ndb == 1) {
                     return vecdot_1d(ax, bx, axis);
                 } else if(nda == 2 && ndb == 2) {
@@ -111,41 +111,33 @@ namespace x {
 }
 #endif // if 0
 
-struct DeferredLinAlgOp : public Deferred
- {
-    id_type _a;
-    id_type _b;
-    int _axis;
+struct DeferredLinAlgOp : public Deferred {
+  id_type _a;
+  id_type _b;
+  int _axis;
 
-     DeferredLinAlgOp() = default;
-     DeferredLinAlgOp(const tensor_i::future_type & a, const tensor_i::future_type & b, int axis)
-        : _a(a.id()), _b(b.id()), _axis(axis)
-    {}
+  DeferredLinAlgOp() = default;
+  DeferredLinAlgOp(const tensor_i::future_type &a,
+                   const tensor_i::future_type &b, int axis)
+      : _a(a.id()), _b(b.id()), _axis(axis) {}
 
-    void run()
-    {
-        //const auto a = std::move(Registry::get(_a).get());
-        //const auto b = std::move(Registry::get(_b).get());
-        //set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
-    }
-    
-    FactoryId factory() const
-    {
-        return F_LINALGOP;
-    }
-    
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template value<sizeof(_b)>(_b);
-        ser.template value<sizeof(_axis)>(_axis);
-    }
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // const auto b = std::move(Registry::get(_b).get());
+    // set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
+  }
+
+  FactoryId factory() const { return F_LINALGOP; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_b)>(_b);
+    ser.template value<sizeof(_axis)>(_axis);
+  }
 };
 
-ddptensor * LinAlgOp::vecdot(const ddptensor & a, const ddptensor & b, int axis)
-{
-    return new ddptensor(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
+ddptensor *LinAlgOp::vecdot(const ddptensor &a, const ddptensor &b, int axis) {
+  return new ddptensor(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
 }
 
 FACTORY_INIT(DeferredLinAlgOp, F_LINALGOP);

@@ -13,46 +13,44 @@
 ///
 class NDSlice {
 public:
-    using vec_t = std::vector<uint64_t>;
+  using vec_t = std::vector<uint64_t>;
+
 private:
-    // vector with offsets per dimension
-    vec_t _offsets;
-    // vector with sizes per dimension
-    vec_t _sizes;
-    // vector with strides per dimension
-    vec_t _strides;
+  // vector with offsets per dimension
+  vec_t _offsets;
+  // vector with sizes per dimension
+  vec_t _sizes;
+  // vector with strides per dimension
+  vec_t _strides;
 
 public:
-    NDSlice() = default;
-    NDSlice(NDSlice &&) = default;
-    NDSlice(const NDSlice &) = default;
-    // assumes a function exists to extract values per slice (compute_slice(T, ...))
-    template<typename T>
-    NDSlice(const std::vector<T> & v)
-        : _offsets(v.size()), _sizes(v.size()), _strides(v.size())
-    {
-        auto nd = v.size();
-        auto i = 0;
-        for(auto s : v) {
-            compute_slice(s, _offsets[i], _sizes[i], _strides[i]);
-            ++i;
-        };
-    }
+  NDSlice() = default;
+  NDSlice(NDSlice &&) = default;
+  NDSlice(const NDSlice &) = default;
+  // assumes a function exists to extract values per slice (compute_slice(T,
+  // ...))
+  template <typename T>
+  NDSlice(const std::vector<T> &v)
+      : _offsets(v.size()), _sizes(v.size()), _strides(v.size()) {
+    auto nd = v.size();
+    auto i = 0;
+    for (auto s : v) {
+      compute_slice(s, _offsets[i], _sizes[i], _strides[i]);
+      ++i;
+    };
+  }
 
-    const vec_t & offsets() const { return _offsets; };
-    const vec_t & sizes()   const { return _sizes; };
-    const vec_t & strides() const { return _strides; };
-    const uint64_t size() const { return VPROD(_sizes); };
+  const vec_t &offsets() const { return _offsets; };
+  const vec_t &sizes() const { return _sizes; };
+  const vec_t &strides() const { return _strides; };
+  const uint64_t size() const { return VPROD(_sizes); };
 
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.container8b(_offsets, 8);
-        ser.container8b(_sizes, 8);
-        ser.container8b(_strides, 8);
-    }
+  template <typename S> void serialize(S &ser) {
+    ser.container8b(_offsets, 8);
+    ser.container8b(_sizes, 8);
+    ser.container8b(_strides, 8);
+  }
 };
-
 
 #if 0
     NDSlice(const Slice & slc) : _slice_vec(1, slc), _sizes() {}
@@ -212,7 +210,7 @@ public:
                 return _slice_vec[i].overlap(slc.dim(i));
             } );
     }
-    
+
     ///
     /// @return Copy of NDSlice which was trimmed by t_slc and shifted by s_slc._start's
     ///
@@ -236,7 +234,7 @@ public:
         slc[D] = slc[D].normalize();
         return NDSlice(slc);
     }
-  
+
     ///
     /// @return NDSlice with same same, shifted left by offset in dimension D and with strides 1
     ///

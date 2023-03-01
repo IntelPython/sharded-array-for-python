@@ -1,9 +1,9 @@
-#include <mpi.h>
 #include "ddptensor/ManipOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/CollComm.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/TypeDispatch.hpp"
+#include <mpi.h>
 
 #if 0
 namespace x {
@@ -26,38 +26,29 @@ namespace x {
 }
 #endif // if 0
 
-struct DeferredManipOp : public Deferred
-{
-    id_type _a;
-    shape_type _shape;
+struct DeferredManipOp : public Deferred {
+  id_type _a;
+  shape_type _shape;
 
-    DeferredManipOp() = default;
-    DeferredManipOp(const tensor_i::future_type & a, const shape_type & shape)
-        : _a(a.id()), _shape(shape)
-    {}
+  DeferredManipOp() = default;
+  DeferredManipOp(const tensor_i::future_type &a, const shape_type &shape)
+      : _a(a.id()), _shape(shape) {}
 
-    void run()
-    {
-        //const auto a = std::move(Registry::get(_a).get());
-        //set_value(std::move(TypeDispatch<x::ManipOp>(a, _shape)));
-    }
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // set_value(std::move(TypeDispatch<x::ManipOp>(a, _shape)));
+  }
 
-    FactoryId factory() const
-    {
-        return F_MANIPOP;
-    }
-    
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
-    }
+  FactoryId factory() const { return F_MANIPOP; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
+  }
 };
 
-ddptensor * ManipOp::reshape(const ddptensor & a, const shape_type & shape)
-{
-    return new ddptensor(defer<DeferredManipOp>(a.get(), shape));
+ddptensor *ManipOp::reshape(const ddptensor &a, const shape_type &shape) {
+  return new ddptensor(defer<DeferredManipOp>(a.get(), shape));
 }
 
 FACTORY_INIT(DeferredManipOp, F_MANIPOP);

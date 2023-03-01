@@ -3,21 +3,18 @@
 
 #include <ddptensor/Transceiver.hpp>
 
-Transceiver * theTransceiver = nullptr;
+Transceiver *theTransceiver = nullptr;
 
-void init_transceiver(Transceiver * t)
- {
-    if(theTransceiver) delete theTransceiver;
-    theTransceiver = t;
+void init_transceiver(Transceiver *t) {
+  if (theTransceiver)
+    delete theTransceiver;
+  theTransceiver = t;
 }
 
-void fini_transceiver()
-{
-    if(theTransceiver) delete theTransceiver;
-    theTransceiver = nullptr;
+void fini_transceiver() {
+  if (theTransceiver)
+    delete theTransceiver;
+  theTransceiver = nullptr;
 }
 
-Transceiver * getTransceiver()
-{
-    return theTransceiver;
-}
+Transceiver *getTransceiver() { return theTransceiver; }

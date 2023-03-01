@@ -1,7 +1,7 @@
 #include "ddptensor/EWUnyOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/TypeDispatch.hpp"
 
 #if 0
 namespace x {
@@ -111,38 +111,29 @@ namespace x {
 } //namespace x
 #endif // if 0
 
-struct DeferredEWUnyOp : public Deferred
-{
-    id_type _a;
-    EWUnyOpId _op;
+struct DeferredEWUnyOp : public Deferred {
+  id_type _a;
+  EWUnyOpId _op;
 
-    DeferredEWUnyOp() = default;
-    DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type & a)
-        : _a(a.id()), _op(op)
-    {}
+  DeferredEWUnyOp() = default;
+  DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
+      : _a(a.id()), _op(op) {}
 
-    void run()
-    {
-        // const auto a = std::move(Registry::get(_a).get());
-        // set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
-    }
+  void run() {
+    // const auto a = std::move(Registry::get(_a).get());
+    // set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
+  }
 
-    FactoryId factory() const
-    {
-        return F_EWUNYOP;
-    }
-    
-    template<typename S>
-    void serialize(S & ser)
-    {
-        ser.template value<sizeof(_a)>(_a);
-        ser.template value<sizeof(_op)>(_op);
-    }
+  FactoryId factory() const { return F_EWUNYOP; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_op)>(_op);
+  }
 };
 
-ddptensor * EWUnyOp::op(EWUnyOpId op, const ddptensor & a)
-{
-    return new ddptensor(defer<DeferredEWUnyOp>(op, a.get()));
+ddptensor *EWUnyOp::op(EWUnyOpId op, const ddptensor &a) {
+  return new ddptensor(defer<DeferredEWUnyOp>(op, a.get()));
 }
 
 FACTORY_INIT(DeferredEWUnyOp, F_EWUNYOP);
