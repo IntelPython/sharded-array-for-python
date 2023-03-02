@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    Intel Distributed Runtime for MLIR
+*/
+
 #include <ddptensor/idtr.hpp>
 // #include <ddptensor/jit/mlir.hpp>
 #include <ddptensor/DDPTensorImpl.hpp>
@@ -128,6 +132,7 @@ static ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop) {
   }
 }
 
+// convert element type/dtype from MLIR to ddpt
 static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
   switch (dt) {
   case ::imex::ptensor::DType::F64:
@@ -168,6 +173,8 @@ static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
   };
 }
 
+// execute an OP on all elements of a tensor represented by
+// dimensionality/ptr/sizes/strides.
 template <typename T, typename OP>
 void forall(uint64_t d, const T *cptr, const int64_t *sizes,
             const int64_t *strides, uint64_t nd, OP op) {
@@ -186,6 +193,7 @@ void forall(uint64_t d, const T *cptr, const int64_t *sizes,
   }
 }
 
+/// @return true if size/strides represent a contiguous data layout
 bool is_contiguous(const int64_t *sizes, const int64_t *strides, uint64_t nd) {
   if (nd == 0)
     return true;
@@ -200,6 +208,7 @@ bool is_contiguous(const int64_t *sizes, const int64_t *strides, uint64_t nd) {
   return true;
 }
 
+/// copy possibly strided tensor into a contiguous block of data
 void bufferize(void *cptr, DTypeId dtype, const int64_t *sizes,
                const int64_t *strides, const int64_t *tStarts,
                const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
@@ -407,6 +416,7 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
   }
 }
 
+// debug helper
 void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
                         int64_t *slcStrides, int64_t *tOffs, int64_t *tSizes,
                         int64_t *lSlcOffsets, int64_t *lSlcSizes,

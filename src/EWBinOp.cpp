@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Elementwise binary ops.
+*/
+
 #include "ddptensor/EWBinOp.hpp"
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/Creator.hpp"
@@ -15,6 +19,7 @@
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 
+#if 0
 // #######################################################################################
 // The 2 operators/tensors can have shifted partitions, e.g. local data might
 // not be the same on a and b. This means we need to copy/communicate to bring
@@ -43,7 +48,6 @@
 // above regions and apply the op. All buffers/views get linearized/flattened.
 // #######################################################################################
 
-#if 0
 namespace x {
 
     // @return true if operation returs bool, false otherwise

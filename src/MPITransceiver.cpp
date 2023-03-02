@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Communication device based on MPI.
+*/
+
 #include "ddptensor/MPITransceiver.hpp"
 #include <iostream>
 #include <limits>
 #include <mpi.h>
 #include <sstream>
+
+// Init MPI and transceiver
 
 MPITransceiver::MPITransceiver(bool is_cw)
     : _nranks(1), _rank(0), _comm(MPI_COMM_WORLD), _is_cw(is_cw) {
@@ -122,6 +128,7 @@ MPITransceiver::~MPITransceiver() {
     MPI_Finalize();
 }
 
+// convert ddpt's dtype to MPI datatype
 static MPI_Datatype to_mpi(DTypeId T) {
   switch (T) {
   case FLOAT64:
@@ -147,6 +154,7 @@ static MPI_Datatype to_mpi(DTypeId T) {
   }
 }
 
+// convert ddpt's RedOpType into MPI_op
 static MPI_Op to_mpi(RedOpType o) {
   switch (o) {
   case MAX:

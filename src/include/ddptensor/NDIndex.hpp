@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+// depricated
+
 #pragma once
 
 #include <vector>

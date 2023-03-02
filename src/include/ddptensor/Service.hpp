@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+ Service operations, mostly used internally.
+*/
+
 #pragma once
 
 class ddptensor;

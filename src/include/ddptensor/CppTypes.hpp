@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    C++ types and utils. No Python/Pybind11 dependences.
+*/
+
 #pragma once
 
 #include "p2c_ids.hpp"

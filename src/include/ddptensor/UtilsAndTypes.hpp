@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+// convenience file/relict
+
 #pragma once
 
 #include <cstring>

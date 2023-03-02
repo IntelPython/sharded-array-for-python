@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Abstract communication device.
+*/
+
 #pragma once
 
 #include "CppTypes.hpp"

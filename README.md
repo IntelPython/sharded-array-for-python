@@ -35,6 +35,12 @@ mpirun -n $N python -m pytest test
 DDPT_CW=0 mpirun -n $N python -m pytest test
 ```
 
+If DDPT_MPI_SPAWN is set it spawns the provided number of MPI processes.
+By default new processes launch python executing a worker loop.
+This requires setting PYTHON_EXE.
+Alternatively DDPT_MPI_EXECUTABLE and DDPT_MPI_EXE_ARGS are used.
+Additionally DDPT_MPI_HOSTS can be used to control the host to use for spawning processes.
+
 ## Running
 ```python
 import ddptensor as dt

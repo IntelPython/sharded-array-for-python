@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  A factory producing runnable objects.
+  Implementation for registering factories.
+*/
+
 #include "ddptensor/Factory.hpp"
 
 std::vector<Factory::ptr_type> s_factories(FACTORY_LAST);

@@ -19,9 +19,18 @@ class NDSlice;
 ///
 class tensor_i {
 public:
+  /// (shared) pointer to a tensor
   typedef std::shared_ptr<tensor_i> ptr_type;
+  /// promise type propducing a future tensor
   typedef std::promise<ptr_type> promise_type;
 
+  /// Future tensor
+  /// in addition to allowing getting value (get()).
+  /// TFuture also readily provides meta information
+  ///   - id
+  ///   - dtype (element type)
+  ///   - rank (number of dimensions)
+  ///   - balanced (flag indicating if tensor's partitions are balanced)
   class TFuture : public std::shared_future<tensor_i::ptr_type> {
     id_type _id = -1;
     DTypeId _dtype = DTYPE_LAST;
@@ -54,14 +63,23 @@ public:
   typedef TFuture future_type;
 
   virtual ~tensor_i(){};
+  /// python object's __repr__
   virtual std::string __repr__() const = 0;
+  /// @return tensor's element type
   virtual DTypeId dtype() const = 0;
+  /// @return tensor's shape
   virtual const shape_type &shape() const = 0;
+  /// @returnnumber of dimensions of tensor
   virtual int ndims() const = 0;
+  /// @return global number of elements in tensor
   virtual uint64_t size() const = 0;
+  /// @return boolean value of 0d tensor
   virtual bool __bool__() const = 0;
+  /// @return float value of 0d tensor
   virtual double __float__() const = 0;
+  /// @return integer value of 0d tensor
   virtual int64_t __int__() const = 0;
+  /// @return global number of elements in first dimension
   virtual uint64_t __len__() const = 0;
 
   // size of a single element (in bytes)

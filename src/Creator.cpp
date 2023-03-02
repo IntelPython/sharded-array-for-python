@@ -1,3 +1,7 @@
+/*
+  C++ representation of the array-API's creation functions.
+*/
+
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Deferred.hpp"

@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  I/O ops.
+*/
+
 #include "ddptensor/IO.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/SetGetItem.hpp"

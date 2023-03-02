@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  A factory producing runnable objects.
+  To operate on distributed systems we assign unique ids to each runnable type.
+  The factory maps runnable ids to de/serialization of respective objects.
+*/
+
 #pragma once
 
 #include "CppTypes.hpp"
 #include "Deferred.hpp"
 
+/// Base factory.
+/// Concrete factories derive from here and implement virtual interface.
+/// See FactoryImpl
 struct Factory {
   using ptr_type = std::unique_ptr<Factory>;
 
@@ -18,6 +27,7 @@ struct Factory {
   static void put(Factory::ptr_type &&factory);
 };
 
+// Concrete factory, templetized by runnable type and corresponding id
 template <typename D, FactoryId fid> struct FactoryImpl : public Factory {
   Runable::ptr_type create(Deserializer &ser) const {
     auto dfrd = std::make_unique<D>();
@@ -39,5 +49,7 @@ template <typename D, FactoryId fid> struct FactoryImpl : public Factory {
   }
 };
 
+/// Initialize factory for given type/id
+/// type/id pairs are currently maintained "manually"
 #define FACTORY_INIT(_D, _ID)                                                  \
   template <> void Factory::init<_ID>() { FactoryImpl<_D, _ID>::put(); }

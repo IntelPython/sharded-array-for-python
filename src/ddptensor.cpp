@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /*
-  A Distributed Data-Parallel Tensor for Python, following the array API.
+  A Distributed Data-Parallel Tensor library for Python, following the array
+  API.
 
-  XTensor handles the actual functionality on each process.
+  Actual computation gets deferred and jit-compiled using MLIR.
   pybind11 handles the bridge to Python.
 
   We bridge dynamic dtypes of the Python array through dynamic type dispatch
@@ -11,7 +12,8 @@
   functionality for all elements types. Within kernels we dispatch the operation
   type by enum values. tensor_i is an abstract class to hide the element type
   which of the actual tensor. The concrete tensor implementation (DDPTensorImpl)
-  requires the element type as a template parameter.
+  stores the element type as a dynamic attribute and dispatches computation as
+  needed.
  */
 
 #include <pybind11/pybind11.h>

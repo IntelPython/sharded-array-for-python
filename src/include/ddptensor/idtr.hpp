@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    Intel Distributed Runtime for MLIR
+*/
+
 #pragma once
 
 #include <ddptensor/CppTypes.hpp>

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Initing and Finalizing mediator singleton.
+*/
+
 #include <ddptensor/Mediator.hpp>
 
 static Mediator *theMediator = nullptr;

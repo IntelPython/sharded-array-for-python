@@ -1,5 +1,8 @@
-
 // SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  Initing and Finalizing transceiver singleton.
+*/
 
 #include <ddptensor/Transceiver.hpp>
 

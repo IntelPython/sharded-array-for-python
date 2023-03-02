@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+// deprecated
+
 #include "ddptensor/PVSlice.hpp"
 
 using offsets_type = std::vector<uint64_t>;

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Communication device based on MPI.
+*/
+
 #pragma once
 
 #include "Transceiver.hpp"

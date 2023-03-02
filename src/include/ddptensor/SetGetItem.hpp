@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  C++ representation of the array-API's setitem and getitem features.
+  Also adds SPMD-like access to data.
+*/
+
 #pragma once
 
 #include "UtilsAndTypes.hpp"

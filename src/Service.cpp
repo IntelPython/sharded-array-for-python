@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+ Service operations, mostly used internally.
+ Dropping/out-of-scoping tensors.
+ Replicating tensors.
+*/
+
 #include "ddptensor/Service.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Deferred.hpp"

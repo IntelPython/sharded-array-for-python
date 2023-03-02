@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    Partitioning feature. Relict.
+*/
+
 #pragma once
 
 class Chunker {

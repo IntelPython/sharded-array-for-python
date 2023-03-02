@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  Linalg  ops.
+*/
+
 #include <mpi.h>
 //#include <mkl.h>
 #include "ddptensor/DDPTensorImpl.hpp"

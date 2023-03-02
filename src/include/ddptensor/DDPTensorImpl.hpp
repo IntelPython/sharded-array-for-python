@@ -16,6 +16,10 @@
 
 class Transceiver;
 
+/// The actual implementation of the DDPTensor, implementing the tensor_i
+/// interface. It holds the tensor data and some meta information. The member
+/// attributes are mostly inspired by the needs of interacting with MLIR. It
+/// also holds information needed for distributed operation.
 class DDPTensorImpl : public tensor_i {
   mutable rank_type _owner;
   Transceiver *_transceiver;
@@ -35,9 +39,11 @@ class DDPTensorImpl : public tensor_i {
 public:
   using ptr_type = std::shared_ptr<DDPTensorImpl>;
 
+  // don't allow copying.
   DDPTensorImpl(const DDPTensorImpl &) = delete;
   DDPTensorImpl(DDPTensorImpl &&) = default;
 
+  // construct from a and MLIR-jitted execution
   DDPTensorImpl(Transceiver *transceiver, DTypeId dtype, uint64_t ndims,
                 void *allocated, void *aligned, intptr_t offset,
                 const intptr_t *sizes, const intptr_t *strides,
@@ -57,34 +63,44 @@ public:
   // incomplete, useful for computing meta information
   DDPTensorImpl() : _owner(REPLICATED) { assert(_ndims <= 1); }
 
+  // @return a clone
   DDPTensorImpl::ptr_type clone(bool copy = true);
 
+  // helper
   void alloc(bool all = true);
 
+  // FIXME proper lifetime management for tensor data
   ~DDPTensorImpl() {
     delete[] _sizes;
     delete[] _strides;
   }
 
+  // @return pointer to raw data
   void *data();
 
+  /// @return true if tensor is a sliced
   bool is_sliced() const {
-    assert(false);
+    assert(!"Not implemented");
     return false;
   }
 
+  /// python object's __repr__
   virtual std::string __repr__() const;
 
+  /// @return tensor's element type
   virtual DTypeId dtype() const { return _dtype; }
 
+  /// @return tensor's shape
   virtual const shape_type &shape() const {
-    assert(false);
+    assert(!"Not implemented");
     static shape_type dmy;
     return dmy;
   }
 
+  /// @returnnumber of dimensions of tensor
   virtual int ndims() const { return _ndims; }
 
+  /// @return global number of elements in tensor
   virtual uint64_t size() const {
     switch (ndims()) {
     case 0:
@@ -97,6 +113,7 @@ public:
     }
   }
 
+  /// @return number of elements hold locally by calling process
   uint64_t local_size() const {
     return ndims() == 0 ? 0
                         : std::accumulate(_sizes, _sizes + ndims(), 1,
@@ -105,28 +122,43 @@ public:
 
   friend struct Service;
 
+  /// @return boolean value of 0d tensor
   virtual bool __bool__() const;
+  /// @return float value of 0d tensor
   virtual double __float__() const;
+  /// @return integer value of 0d tensor
   virtual int64_t __int__() const;
 
+  /// @return global number of elements in first dimension
   virtual uint64_t __len__() const { return ndims() ? *_gs_aligned : 1; }
 
+  /// @return true if tensor has a unique owner
   bool has_owner() const { return _owner < _OWNER_END; }
 
+  /// set the owner to given process rank
   void set_owner(rank_type o) const { _owner = o; }
 
+  /// @return owning process rank or REPLICATED
   rank_type owner() const { return _owner; }
 
+  /// @return Transceiver linked to this tensor
   Transceiver *transceiver() const { return _transceiver; }
 
+  /// @return true if tensor's partitions are balanced
   uint64_t balanced() const { return _balanced; }
 
+  /// @return true if tensor is replicated across all process ranks
   bool is_replicated() const { return _owner == REPLICATED; }
 
+  /// @return size of one element in number of bytes
   virtual int item_size() const { return sizeof_dtype(_dtype); }
 
+  /// add tensor to list of args in the format expected by MLIR
+  /// assuming tensor has ndims dims.
   virtual void add_to_args(std::vector<void *> &args, int ndims);
 
+  // helper function for __repr__; simple recursive printing of
+  // tensor content
   template <typename T>
   void printit(std::ostringstream &oss, uint64_t d, T *cptr) const {
     auto stride = _strides[d];
@@ -154,6 +186,7 @@ public:
   void replicate();
 };
 
+/// create a new DDPTensor from given args and wrap in shared pointer
 template <typename... Ts>
 static typename DDPTensorImpl::ptr_type mk_tnsr(Ts &&...args) {
   return std::make_shared<DDPTensorImpl>(std::forward<Ts>(args)...);

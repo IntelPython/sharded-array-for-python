@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    The tensor class exposed to Python.
+    A future type, data and implementation live elsewhere
+    (see tensor_i, DDPTensorImpl and Deferred).
+*/
+
 #pragma once
 
 #include "Service.hpp"

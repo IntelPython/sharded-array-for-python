@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  C++ representation of the array-API's creation functions.
+*/
+
 #pragma once
 
 #include "UtilsAndTypes.hpp"

@@ -1,5 +1,38 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Core MLIR functionality.
+  - Adding/creating input and output to functions
+  - Handling MLIR compiler machinery
+
+  To reduce compile/link time only MLIR dialects and passes get
+  registered/linked which are actually used.
+
+  A typical jit cycle is controlled by the worker process executing
+  process_promises.
+  - create MLIR module/function
+  - adding deferred operations
+  - adding appropriate casts and return statements
+  - updating function signature to accept existing tensors and returning new and
+  live ones
+
+  Typically operations have input dependences, e.g. tensors produced by other
+  operations. These can either come from outside the jit'ed function or be
+  created within the function. Since we strictly add operations in serial order
+  input dependences must lready exists. Deps are represented by guids and stored
+  in the Registry.
+
+  Internally ddpt's MLIR machinery keeps track of created and needed tensors.
+  Those which were not created internally are added as input arguments to the
+  jit-function. Those which are live (not destructed within the function) when
+  the function is finalized are added as return values.
+
+  MLIR/LLVM supports a single return value only. Following LLVM's policy we need
+  to pack al return tensors into one large buffer/struct. Input tensors get
+  represented as a series of arguments, as defined by MLIR/LLVM and IMEX's dist
+  dialect.
+*/
+
 #include "ddptensor/jit/mlir.hpp"
 #include "ddptensor/Registry.hpp"
 
@@ -75,6 +108,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
   return type;
 }
 
+// convert ddpt's DTYpeId into MLIR type
 static ::mlir::Type getDTType(::mlir::OpBuilder &builder, DTypeId dtype,
                               int rank, bool balanced) {
   ::mlir::Type etyp;
@@ -353,6 +387,8 @@ JIT::JIT()
   }
 }
 
+// register dialects and passes
+// adding everything leads to even more excessive compile/link time.
 void init() {
   assert(sizeof(intptr_t) == sizeof(void *));
   assert(sizeof(intptr_t) == sizeof(uint64_t));

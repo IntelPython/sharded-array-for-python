@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Creation/destruction of Deferreds.
+  Implementation of worker loop processing deferred objects.
+  This worker loop is executed in a separate thread until the system
+  gets shut down.
+*/
+
 #include "include/ddptensor/Deferred.hpp"
 #include "include/ddptensor/Mediator.hpp"
 #include "include/ddptensor/Registry.hpp"
@@ -14,20 +21,29 @@
 #include <iostream>
 #include <unordered_set>
 
+// thread-safe FIFO queue holding deferred objects
 static tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
 
+// add a deferred object to the queue
 void push_runable(Runable::ptr_type &&r) { _deferred.push(std::move(r)); }
 
+// if needed, object/promise is broadcasted to worker processes
+// (for controller/worker mode)
 void _dist(const Runable *p) {
   if (getTransceiver()->is_cw() && getTransceiver()->rank() == 0)
     getMediator()->to_workers(p);
 }
 
+// create a enriched future
 Deferred::future_type Deferred::get_future() {
   return {std::move(promise_type::get_future().share()), _guid, _dtype, _rank,
           _balanced};
 }
 
+// defer a tensor-producing computation by adding it to the queue.
+// return a future for the resulting tensor.
+// set is_global to false if result is a local temporary which does not need a
+// guid
 Deferred::future_type defer_tensor(Runable::ptr_type &&_d, bool is_global) {
   Deferred *d = dynamic_cast<Deferred *>(_d.get());
   if (!d)
@@ -42,6 +58,7 @@ Deferred::future_type defer_tensor(Runable::ptr_type &&_d, bool is_global) {
   return f;
 }
 
+// defer a global tensor producer
 void Deferred::defer(Runable::ptr_type &&p) {
   defer_tensor(std::move(p), true);
 }
@@ -50,6 +67,15 @@ void Runable::defer(Runable::ptr_type &&p) { push_runable(std::move(p)); }
 
 void Runable::fini() { _deferred.clear(); }
 
+// process promises as they arrive through calls to defer
+// This is run in a separate thread until shutdon is requested.
+// Shutdown is indicated by a Deferred object which evaluates to false.
+// The loop repeatedly creates MLIR functions for jit-compilation by letting
+// Deferred objects add their MLIR code until an object can not produce MLIR
+// but wants immediate execution (indicated by generate_mlir returning true).
+// When execution is needed, the function signature (input args, return
+// statement) is finalized, the function gets compiled and executed. The loop
+// completes by calling run() on the requesting object.
 void process_promises() {
   bool done = false;
   jit::JIT jit;

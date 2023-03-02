@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Helpers for dispatching computation dependent on dynamic types (DTypeId).
+*/
+
 #pragma once
 
 #include "CppTypes.hpp"

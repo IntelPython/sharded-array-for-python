@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  A registry of global tensors.
+  Each tensor has a globally unique id.
+*/
+
 #include "ddptensor/Registry.hpp"
 #include <mutex>
 #include <unordered_map>

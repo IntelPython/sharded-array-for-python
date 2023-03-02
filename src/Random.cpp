@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  Random number ops.
+*/
+
 #include "ddptensor/Random.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"

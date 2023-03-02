@@ -62,7 +62,8 @@ template <> struct PT_DTYPE<bool> {
   constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I1;
 };
 
-// function type for building body for linalg::generic
+// function type used for reporting back tensor results generated
+// by Deferred::generate_mlir
 using SetResFunc = std::function<void(
     Transceiver *transceiver, uint64_t rank, void *allocated, void *aligned,
     intptr_t offset, const intptr_t *sizes, const intptr_t *strides,
@@ -89,7 +90,7 @@ private:
 public:
   DepManager(::mlir::func::FuncOp &f) : _func(f) {}
   /// @return the ::mlir::Value representing the tensor with guid guid
-  /// If the tensor is not created wtihin the current function, it will
+  /// If the tensor is not created within the current function, it will
   /// be added as a function argument.
   ::mlir::Value getDependent(::mlir::OpBuilder &builder, id_type guid);
 

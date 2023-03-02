@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+    High-level collective communication functionality.
+*/
+
 #pragma once
 
 #include "CppTypes.hpp"

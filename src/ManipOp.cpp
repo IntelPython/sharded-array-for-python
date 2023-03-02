@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  Manipulation ops.
+*/
+
 #include "ddptensor/ManipOp.hpp"
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"

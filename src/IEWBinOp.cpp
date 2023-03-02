@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  Inplace elementwise binary ops.
+*/
+
 #include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"

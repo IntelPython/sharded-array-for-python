@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  A high-level mediation between processes/ranks.
+*/
+
 #pragma once
 
 #include "Deferred.hpp"

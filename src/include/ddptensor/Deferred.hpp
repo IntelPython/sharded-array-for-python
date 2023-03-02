@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/*
+  Operations on tensors may be deferred so that several of them can be
+  jit-compiled together. Each operation is represented as an object of type
+  "Deferred". A deferred object is a promise and a "Runnable". The promise gives
+  access to a future so that users can wait for the promise to provide the
+  value. Runnable is the interface allowing promises to execute and/or generate
+  MLIR.
+*/
+
 #pragma once
 
 #include "Registry.hpp"
@@ -9,13 +18,16 @@
 extern void process_promises();
 extern void sync_promises();
 
+// interface for promises/tasks to generate MLIR or execute immediately.
 struct Runable {
   using ptr_type = std::unique_ptr<Runable>;
   virtual ~Runable(){};
   /// actually execute, a deferred will set value of future
   virtual void run() = 0;
   /// generate MLIR code for jit
-  /// @return true if last operation in to-be-compiled region, false otherwise
+  /// the runable might not generate MLIR and instead return true
+  /// to request the scheduler to execute the run method instead.
+  /// @return false on success and true to request execution of run()
   virtual bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location,
                              jit::DepManager &) {
     throw(std::runtime_error("No MLIR support for this operation."));
@@ -28,6 +40,7 @@ struct Runable {
 
 extern void push_runable(Runable::ptr_type &&r);
 
+// helper class
 template <typename P, typename F> struct DeferredT : public P, public Runable {
   using ptr_type = std::unique_ptr<DeferredT>;
   using promise_type = P;
@@ -38,7 +51,7 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 };
 
 /// Deferred operation returning/producing a tensor
-/// holds a guid as well as rank and dtype of future tensor
+/// holds a guid as well as rank, dtype and balanced-flag of future tensor
 class Deferred
     : public DeferredT<tensor_i::promise_type, tensor_i::future_type> {
 public:

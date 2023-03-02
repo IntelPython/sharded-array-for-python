@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+/*
+  setitem and getitem features.
+  Also adds SPMD-like access to data.
+*/
+
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
