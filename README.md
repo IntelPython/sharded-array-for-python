@@ -71,3 +71,26 @@ Please setup precommit hooks like this
 pre-commit install -f -c ./.pre-commit-config.yaml
 pre-commit autoupdate
 ```
+
+## Overview
+### Deferred Execution
+Typically, ddptensor operations do not get executed immediately. Instead, the function returns a transparent object (a future) only.
+the actual computation gets deferred by creating a promise/deferred object and queuing it for later. This is not visible to users, they can use it as any other numpy-like library.
+
+Only when actual data is needed, computation will happen; that is when
+- the values of tensor elements are casted to bool int or float
+- the tensor is printed
+
+In the background a worker thread handles deferred objects. Until computation is needed it dequeues deferred objects from the FIFO queue and asks them to generate MLIR.
+Objects can either generate MLIR or instead provide a run() function to immediately execute. For the latter case the current MLIR function gets executed before calling run() to make sure potential dependences are met.
+
+### Distribution
+Tensors and operations on them get transparently distributed across multiple processes. Respective functionality is partly handled by this library and partly IMEX dist dialect.
+IMEX relies on a runtime library for complex communication tasks and for inspecting runtime configuration, such as number of processes and process id (MPI rank).
+ddptensor provides this library functionality in a separate dynamic library "idtr".
+
+Right now, data is split in the first dimension (only). Each process knows the partition it owns. For optimization partitions can actually overlap.
+
+ddptensor supports to execution modes:
+1. CSP/SPMD/explicitly-distributed execution, meaning all processes execute the same program, execution is replicated on all processes. Data is typically not replicated but distributed among processes.
+2. Controller-Worker/implicitly-distributed execution, meaning only a single process executes the program and it distributes data and work to worker processes.
