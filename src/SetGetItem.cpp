@@ -6,6 +6,7 @@
 */
 
 #include "ddptensor/SetGetItem.hpp"
+#include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Mediator.hpp"
@@ -258,8 +259,13 @@ struct DeferredSetItem : public Deferred {
 };
 
 ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
-                                const ddptensor &b) {
-  return new ddptensor(defer<DeferredSetItem>(a.get(), b.get(), v));
+                                const py::object &b) {
+
+  auto bb = Creator::mk_future(b);
+  auto res = new ddptensor(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
+  if (bb.second)
+    delete bb.first;
+  return res;
 }
 
 struct DeferredGetItem : public Deferred {

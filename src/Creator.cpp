@@ -127,12 +127,15 @@ struct DeferredFull : public Deferred {
                             const PyScalar &val, ::imex::ptensor::DType &dtyp) {
       dtyp = jit::PT_DTYPE<T>::value;
 
-      if constexpr (std::is_floating_point_v<T>)
+      if (is_none(val)) {
+        return {};
+      } else if constexpr (std::is_floating_point_v<T>) {
         return ::imex::createFloat<sizeof(T) * 8>(loc, builder, val._float);
-      else if constexpr (std::is_same_v<bool, T>)
+      } else if constexpr (std::is_same_v<bool, T>) {
         return ::imex::createInt<1>(loc, builder, val._int);
-      else if constexpr (std::is_integral_v<T>)
+      } else if constexpr (std::is_integral_v<T>) {
         return ::imex::createInt<sizeof(T) * 8>(loc, builder, val._int);
+      }
       assert("Unsupported dtype in dispatch");
       return {};
     };

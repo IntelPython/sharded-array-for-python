@@ -8,6 +8,7 @@
 
 #include "p2c_ids.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <numeric>
 #include <vector>
@@ -29,6 +30,8 @@ union PyScalar {
   int64_t _int;
   double _float;
 };
+
+inline bool is_none(PyScalar s) { return std::isnan(s._float); }
 
 enum _RANKS : rank_type {
   NOOWNER = std::numeric_limits<rank_type>::max(),

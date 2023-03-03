@@ -15,6 +15,10 @@ template <typename T> py::object get_impl_dtype() {
 
 inline PyScalar mk_scalar(const py::object &b, DTypeId dtype) {
   PyScalar s;
+  if (b.is_none()) {
+    s._float = std::numeric_limits<double>::quiet_NaN();
+    return s;
+  }
   switch (dtype) {
   case FLOAT64:
   case FLOAT32:

@@ -55,4 +55,4 @@ class dtensor:
     def __setitem__(self, key, value):
         key = key if isinstance(key, tuple) else (key,)
         key = [x if isinstance(x, slice) else slice(x, x + 1, 1) for x in key]
-        self._t.__setitem__(key, value._t)  # if isinstance(value, dtensor) else value)
+        self._t.__setitem__(key, value._t if isinstance(value, dtensor) else value)
