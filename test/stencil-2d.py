@@ -144,7 +144,6 @@ def main():
     for i in range(n):
         for j in range(n):
             A[i, j] = float(i + j)
-    print(A.dtype)
     B = numpy.zeros((n, n), dtype=numpy.float64)
 
     for k in range(iterations + 1):
@@ -154,9 +153,8 @@ def main():
 
         if pattern == "star":
             if r == 2:
-                B[2 : n - 2, 2 : n - 2] = (
-                    B[2 : n - 2, 2 : n - 2]
-                    + W[2, 2] * A[2 : n - 2, 2 : n - 2]
+                B[2 : n - 2, 2 : n - 2] += (
+                    W[2, 2] * A[2 : n - 2, 2 : n - 2]
                     + W[2, 0] * A[2 : n - 2, 0 : n - 4]
                     + W[2, 1] * A[2 : n - 2, 1 : n - 3]
                     + W[2, 3] * A[2 : n - 2, 3 : n - 1]
@@ -168,11 +166,10 @@ def main():
                 )
             else:
                 b = n - r
-                B[r:b, r:b] = B[r:b, r:b] + W[r, r] * A[r:b, r:b]
+                B[r:b, r:b] += W[r, r] * A[r:b, r:b]
                 for s in range(1, r + 1):
-                    B[r:b, r:b] = (
-                        B[r:b, r:b]
-                        + W[r, r - s] * A[r:b, r - s : b - s]
+                    B[r:b, r:b] += (
+                        W[r, r - s] * A[r:b, r - s : b - s]
                         + W[r, r + s] * A[r:b, r + s : b + s]
                         + W[r - s, r] * A[r - s : b - s, r:b]
                         + W[r + s, r] * A[r + s : b + s, r:b]
@@ -182,11 +179,7 @@ def main():
                 b = n - r
                 for s in range(-r, r + 1):
                     for t in range(-r, r + 1):
-                        B[r:b, r:b] = (
-                            B[r:b, r:b]
-                            + W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
-                        )
-
+                        B[r:b, r:b] += W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
         A = A + 1.0
 
     t1 = timer()
@@ -196,7 +189,9 @@ def main():
     # * Analyze and output results.
     # ******************************************************************************
 
-    print(W, B)
+    print(W)
+    print("********************************")
+    print(B)
     # norm = numpy.linalg.norm(numpy.reshape(B,n*n),ord=1)
     # active_points = (n-2*r)**2
     # norm /= active_points

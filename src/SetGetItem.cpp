@@ -204,12 +204,6 @@ struct DeferredSetItem : public Deferred {
                   const std::vector<py::slice> &v)
       : _a(a.id()), _b(b.id()), _slc(v) {}
 
-  void run() {
-    // const auto a = std::move(Registry::get(_a).get());
-    // const auto b = std::move(Registry::get(_b).get());
-    // set_value(std::move(TypeDispatch<x::SetItem>(a, b, _slc, _b)));
-  }
-
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
@@ -229,9 +223,9 @@ struct DeferredSetItem : public Deferred {
       sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
       stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
     }
-    // insertsliceop has no return value, so we just craete the op...
-    builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV, sizesV,
-                                                   stridesV);
+    // insertsliceop has no return value, so we just create the op...
+    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV,
+                                                         sizesV, stridesV);
     // ... and use av as to later create the ptensor
     dm.addVal(this->guid(), av,
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,

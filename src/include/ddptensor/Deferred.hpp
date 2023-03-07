@@ -23,7 +23,10 @@ struct Runable {
   using ptr_type = std::unique_ptr<Runable>;
   virtual ~Runable(){};
   /// actually execute, a deferred will set value of future
-  virtual void run() = 0;
+  virtual void run() {
+    throw(std::runtime_error(
+        "No immediate execution support for this operation."));
+  };
   /// generate MLIR code for jit
   /// the runable might not generate MLIR and instead return true
   /// to request the scheduler to execute the run method instead.

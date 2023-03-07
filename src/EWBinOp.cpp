@@ -5,7 +5,6 @@
 */
 
 #include "ddptensor/EWBinOp.hpp"
-#include "ddptensor/CollComm.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
@@ -448,14 +447,6 @@ struct DeferredEWBinOp : public Deferred {
                   const tensor_i::future_type &b)
       : Deferred(a.dtype(), std::max(a.rank(), b.rank()), true), _a(a.id()),
         _b(b.id()), _op(op) {}
-
-  void run() override {
-#if 0
-        const auto a = std::move(Registry::get(_a).get());
-        const auto b = std::move(Registry::get(_b).get());
-        set_value(std::move(TypeDispatch<x::EWBinOp>(a, b, _op)));
-#endif
-  }
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {

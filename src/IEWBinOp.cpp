@@ -8,80 +8,47 @@
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/Registry.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 
-#if 0
-namespace x {
+#include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinTypeInterfaces.h>
 
-    class IEWBinOp
-    {
-    public:
-        using ptr_type = DPTensorBaseX::ptr_type;
-
-        template<typename A, typename B>
-        static ptr_type op(IEWBinOpId iop, std::shared_ptr<DPTensorX<A>> a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
-        {
-            auto & ax = a_ptr->xarray();
-            const auto & bx = b_ptr->xarray();
-            if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
-                auto av = xt::strided_view(ax, a_ptr->lslice());
-                const auto & bv = xt::strided_view(bx, b_ptr->lslice());
-                return do_op(iop, av, bv, a_ptr);
-            }
-            return do_op(iop, ax, bx, a_ptr);
-        }
-
-#pragma GCC diagnostic ignored "-Wswitch"
-        template<typename A, typename T1, typename T2>
-        static ptr_type do_op(IEWBinOpId iop, T1 & a, const T2 & b, std::shared_ptr<DPTensorX<A>> a_ptr)
-        {
-            switch(iop) {
-            case __IADD__:
-                a += b;
-                return a_ptr;
-            case __IFLOORDIV__:
-                a = xt::floor(a / b);
-                return a_ptr;
-            case __IMUL__:
-                a *= b;
-                return a_ptr;
-            case __ISUB__:
-                a -= b;
-                return a_ptr;
-            case __ITRUEDIV__:
-                a /= b;
-                return a_ptr;
-            case __IPOW__:
-                throw std::runtime_error("Binary inplace operation not implemented");
-            }
-            if constexpr (std::is_integral<typename T1::value_type>::value && std::is_integral<typename T2::value_type>::value) {
-                switch(iop) {
-                case __IMOD__:
-                    a %= b;
-                    return a_ptr;
-                case __IOR__:
-                    a |= b;
-                    return a_ptr;
-                case __IAND__:
-                    a &= b;
-                    return a_ptr;
-                case __IXOR__:
-                    a ^= b;
-                case __ILSHIFT__:
-                    a = xt::left_shift(a, b);
-                    return a_ptr;
-                case __IRSHIFT__:
-                    a = xt::right_shift(a, b);
-                    return a_ptr;
-                }
-            }
-            throw std::runtime_error("Unknown/invalid inplace elementwise binary operation");
-        }
-#pragma GCC diagnostic pop
-
-    };
-} // namespace x
-#endif // if 0
+// convert id of our binop to id of imex::ptensor binop
+static ::imex::ptensor::EWBinOpId ddpt2mlir(const IEWBinOpId bop) {
+  switch (bop) {
+  case __IADD__:
+    return ::imex::ptensor::ADD;
+  case __IAND__:
+    return ::imex::ptensor::BITWISE_AND;
+  case __IFLOORDIV__:
+    return ::imex::ptensor::FLOOR_DIVIDE;
+  case __ILSHIFT__:
+    return ::imex::ptensor::BITWISE_LEFT_SHIFT;
+  case __IMOD__:
+    return ::imex::ptensor::MODULO;
+  case __IMUL__:
+    return ::imex::ptensor::MULTIPLY;
+  case __IOR__:
+    return ::imex::ptensor::BITWISE_OR;
+  case __IPOW__:
+    return ::imex::ptensor::POWER;
+  case __IRSHIFT__:
+    return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
+  case __ISUB__:
+    return ::imex::ptensor::SUBTRACT;
+  case __ITRUEDIV__:
+    return ::imex::ptensor::TRUE_DIVIDE;
+  case __IXOR__:
+    return ::imex::ptensor::BITWISE_XOR;
+  default:
+    throw std::runtime_error(
+        "Unknown/invalid inplace elementwise binary operation");
+  }
+}
 
 struct DeferredIEWBinOp : public Deferred {
   id_type _a;
@@ -91,15 +58,45 @@ struct DeferredIEWBinOp : public Deferred {
   DeferredIEWBinOp() = default;
   DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
                    const tensor_i::future_type &b)
-      : _a(a.id()), _b(b.id()), _op(op) {}
+      : Deferred(a.dtype(), a.rank(), a.balanced()), _a(a.id()), _b(b.id()),
+        _op(op) {}
 
-  void run() {
-    // const auto a = std::move(Registry::get(_a).get());
-    // const auto b = std::move(Registry::get(_b).get());
-    // set_value(std::move(TypeDispatch<x::IEWBinOp>(a, b, _op)));
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    // FIXME the type of the result is based on a only
+    auto av = dm.getDependent(builder, _a);
+    auto bv = dm.getDependent(builder, _b);
+
+    auto aTyp = ::imex::dist::getPTensorType(av);
+    ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
+    auto outTyp =
+        ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+
+    auto binop = builder.create<::imex::ptensor::EWBinOp>(
+        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
+    // insertsliceop has no return value, so we just create the op...
+    auto zero = ::imex::createIndex(loc, builder, 0);
+    auto one = ::imex::createIndex(loc, builder, 1);
+    auto dyn = ::imex::createIndex(loc, builder, ::mlir::ShapedType::kDynamic);
+    ::mlir::SmallVector<::mlir::Value> offs(rank(), zero);
+    ::mlir::SmallVector<::mlir::Value> szs(rank(), dyn);
+    ::mlir::SmallVector<::mlir::Value> strds(rank(), one);
+    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, binop, offs,
+                                                         szs, strds);
+    // ... and use av as to later create the ptensor
+    dm.addVal(this->guid(), av,
+              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+                     void *aligned, intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, uint64_t *gs_allocated,
+                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     uint64_t *lo_aligned, uint64_t balanced) {
+                this->set_value(Registry::get(this->_a).get());
+              });
+    return false;
   }
 
   FactoryId factory() const { return F_IEWBINOP; }
+
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
     ser.template value<sizeof(_b)>(_b);
