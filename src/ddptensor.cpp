@@ -93,6 +93,22 @@ void init(bool cw) {
 }
 
 // #########################################################################
+
+/// trigger compile&run and return future value
+#define PY_SYNC_RETURN(_f)                                                     \
+  Service::run();                                                              \
+  return (_f).get()
+
+/// trigger compile&run and return given attribute _x
+#define SYNC_RETURN(_f, _a)                                                    \
+  Service::run();                                                              \
+  return (_f).get().get()->_a()
+
+/// Rerplicate ddptensor/future and SYNC_RETURN attributre _a
+#define REPL_SYNC_RETURN(_f, _a)                                               \
+  auto r_ = std::unique_ptr<ddptensor>(Service::replicate(f));                 \
+  SYNC_RETURN(r_->get(), _a)
+
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
   // Factory::init<F_UNYOP>();
@@ -110,7 +126,7 @@ PYBIND11_MODULE(_ddptensor, m) {
   Factory::init<F_SERVICE>();
   Factory::init<F_SETITEM>();
   Factory::init<F_SORTOP>();
-  Factory::init<F_TONUMPY>();
+  Factory::init<F_GATHER>();
 
   jit::init();
 
@@ -125,8 +141,12 @@ PYBIND11_MODULE(_ddptensor, m) {
       .def("myrank", &myrank)
       .def("_get_slice", &GetItem::get_slice)
       .def("_get_local", &GetItem::get_local)
-      .def("_gather", &GetItem::gather)
-      .def("to_numpy", &IO::to_numpy);
+      .def("_gather",
+           [](const ddptensor &f, rank_type root = REPLICATED) {
+             PY_SYNC_RETURN(GetItem::gather(f, root));
+           })
+      .def("to_numpy",
+           [](const ddptensor &f) { PY_SYNC_RETURN(IO::to_numpy(f)); });
 
   py::class_<Creator>(m, "Creator")
       .def("create_from_shape", &Creator::create_from_shape)
@@ -134,27 +154,12 @@ PYBIND11_MODULE(_ddptensor, m) {
       .def("arange", &Creator::arange);
 
   py::class_<EWUnyOp>(m, "EWUnyOp").def("op", &EWUnyOp::op);
-
   py::class_<IEWBinOp>(m, "IEWBinOp").def("op", &IEWBinOp::op);
-
   py::class_<EWBinOp>(m, "EWBinOp").def("op", &EWBinOp::op);
-
   py::class_<ReduceOp>(m, "ReduceOp").def("op", &ReduceOp::op);
-
   py::class_<ManipOp>(m, "ManipOp").def("reshape", &ManipOp::reshape);
-
   py::class_<LinAlgOp>(m, "LinAlgOp").def("vecdot", &LinAlgOp::vecdot);
-
   py::class_<SortOp>(m, "SortOp").def("sort", &SortOp::sort);
-
-/// trigger compile&run and return given attribute _x
-#define SYNC_RETURN(_f, _a)                                                    \
-  Service::run();                                                              \
-  return (_f).get().get()->_a()
-/// Rerplicate ddptensor/future and SYNC_RETURN attributre _a
-#define REPL_SYNC_RETURN(_f, _a)                                               \
-  auto r_ = std::unique_ptr<ddptensor>(Service::replicate(f));                 \
-  SYNC_RETURN(r_->get(), _a)
 
   py::class_<ddptensor>(m, "DDPTFuture")
       // attributes we can get from the future itself

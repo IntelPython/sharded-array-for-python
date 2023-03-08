@@ -68,7 +68,7 @@ public:
   /// @return tensor's element type
   virtual DTypeId dtype() const = 0;
   /// @return tensor's shape
-  virtual const shape_type &shape() const = 0;
+  virtual const uint64_t *shape() const = 0;
   /// @returnnumber of dimensions of tensor
   virtual int ndims() const = 0;
   /// @return global number of elements in tensor

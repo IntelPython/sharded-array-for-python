@@ -10,6 +10,8 @@
 #include "DDPTensorImpl.hpp"
 #include "PVSlice.hpp"
 
+void gather_tensor(DDPTensorImpl::ptr_type a_ptr, rank_type root, void *outPtr);
+
 struct CollComm {
   using map_info_type = std::vector<std::vector<int>>;
 

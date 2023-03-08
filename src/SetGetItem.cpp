@@ -6,11 +6,13 @@
 */
 
 #include "ddptensor/SetGetItem.hpp"
+#include "ddptensor/CollComm.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Mediator.hpp"
 #include "ddptensor/NDSlice.hpp"
+#include "ddptensor/Transceiver.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/UtilsAndTypes.hpp"
 
@@ -18,6 +20,10 @@
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
 #include <mlir/IR/Builders.h>
+
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
 
 #if 0
 namespace x {
@@ -140,58 +146,74 @@ namespace x {
             T * data = a_ptr->xarray().data();
             return py::array(std::move(slc.shape()), std::move(strides), data + off, handle);
         }
-
-        // gather
-        // We simply create a local buffer, copy our local data to the right place
-        // and then call AllGatherV via inplace operation.
-        template<typename T>
-        static py::object op(rank_type root, const std::shared_ptr<DPTensorX<T>> & a_ptr)
-        {
-            auto nranks = getTransceiver()->nranks();
-            auto rank = getTransceiver()->rank();
-            bool sendonly = root != REPLICATED && root != rank;
-            const auto & slc = a_ptr->slice();
-            auto mysz = slc.local_slice().size();
-
-            // create buffer/numpy array
-            T * ptr = nullptr;
-            py::array res;
-            if(sendonly) {
-                if(mysz > 0 && a_ptr->is_sliced()) ptr = new T[mysz];
-            } else {
-                res = py::array_t<T>(slc.shape());
-                ptr = reinterpret_cast<T*>(res.mutable_data());
-            }
-            int displacements[nranks];
-            int counts[nranks];
-            int off = 0;
-            // for each rank compute counts and displacements
-            for(auto i=0; i<nranks; ++i) {
-                uint64_t szi = i == rank ? mysz : slc.local_slice(i).size();
-                counts[i] = szi;
-                displacements[i] = off;
-                // copy our local data
-                if(i == rank) {
-                    if(a_ptr->is_sliced()) {
-                        // if non-contiguous copy element by element
-                        const auto & av = xt::strided_view(a_ptr->xarray(), a_ptr->lslice());
-                        uint64_t j = sendonly ? -1 : off - 1;
-                        for(auto v : av) ptr[++j] = v;
-                    } else {
-                        if(sendonly && mysz > 0) ptr = a_ptr->xarray().data();
-                        else memcpy(&ptr[off], a_ptr->xarray().data(), szi*sizeof(T));
-                    }
-                }
-                off += szi;
-            }
-            getTransceiver()->gather(ptr, counts, displacements, DTYPE<T>::value, root);
-            if(sendonly && mysz > 0 && a_ptr->is_sliced()) delete [] ptr;
-            return res;
-        }
     };
 
 } // namespace x
 #endif // if 0
+
+// ***************************************************************************
+
+struct DeferredGather
+    : public DeferredT<GetItem::py_promise_type, GetItem::py_future_type> {
+  id_type _a;
+  rank_type _root;
+
+  DeferredGather() = default;
+  DeferredGather(const tensor_i::future_type &a, rank_type root)
+      : _a(a.id()), _root(root) {}
+
+  template <typename T> struct mk_array {
+    template <typename C> static py::object op(C &&shp, void *&outPtr) {
+      auto ary = py::array_t<T>(std::forward<C>(shp));
+      outPtr = ary.mutable_data();
+      return ary;
+    }
+  };
+
+  void run() override {
+    // gather
+    // We simply create a local buffer, copy our local data to the right place
+    // and then call AllGatherV via inplace operation.
+    auto trscvr = getTransceiver();
+    auto myrank = trscvr->rank();
+    auto aa = std::move(Registry::get(_a).get());
+    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    assert(a_ptr);
+    bool sendonly = _root != REPLICATED && _root != myrank;
+
+    void *outPtr = nullptr;
+    py::object res;
+    if (!sendonly) {
+      auto tmp = a_ptr->shape();
+      // std::vector<ssize_t> shp(tmp, &tmp[a_ptr->ndims()]);
+      res = dispatch<mk_array>(a_ptr->dtype(),
+                               std::vector<ssize_t>(tmp, &tmp[a_ptr->ndims()]),
+                               outPtr);
+      // (void*)nullptr, [&shp, &res, &outPtr](auto * ptr) {
+      //     auto ary = py::array_t<double>({4,4});
+      //     res = ary;
+      //     outPtr = ary.mutable_data();
+      // });
+    }
+
+    gather_tensor(a_ptr, _root, outPtr);
+
+    set_value(res);
+  }
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    return true;
+  }
+
+  FactoryId factory() const { return F_GATHER; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+  }
+};
+
+// ***************************************************************************
 
 struct DeferredSetItem : public Deferred {
   id_type _a;
@@ -252,15 +274,7 @@ struct DeferredSetItem : public Deferred {
   }
 };
 
-ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
-                                const py::object &b) {
-
-  auto bb = Creator::mk_future(b);
-  auto res = new ddptensor(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
-  if (bb.second)
-    delete bb.first;
-  return res;
-}
+// ***************************************************************************
 
 struct DeferredGetItem : public Deferred {
   id_type _a;
@@ -331,9 +345,25 @@ struct DeferredGetItem : public Deferred {
   }
 };
 
+// ***************************************************************************
+
 ddptensor *GetItem::__getitem__(const ddptensor &a,
                                 const std::vector<py::slice> &v) {
   return new ddptensor(defer<DeferredGetItem>(a.get(), v));
+}
+
+GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
+  return defer<DeferredGather>(a.get(), root);
+}
+
+ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
+                                const py::object &b) {
+
+  auto bb = Creator::mk_future(b);
+  auto res = new ddptensor(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
+  if (bb.second)
+    delete bb.first;
+  return res;
 }
 
 py::object GetItem::get_slice(const ddptensor &a,
@@ -347,14 +377,6 @@ py::object GetItem::get_local(const ddptensor &a, py::handle h) {
   return {}; // FIXME TypeDispatch<x::SPMD>(aa, h);
 }
 
-py::object GetItem::do_gather(const tensor_i::ptr_type &a, rank_type root) {
-  return {}; // FIXME TypeDispatch<x::SPMD>(a, root);
-}
-
-py::object GetItem::gather(const ddptensor &a, rank_type root) {
-  const auto aa = std::move(a.get().get());
-  return do_gather(aa, root);
-}
-
 FACTORY_INIT(DeferredGetItem, F_GETITEM);
 FACTORY_INIT(DeferredSetItem, F_SETITEM);
+FACTORY_INIT(DeferredGather, F_GATHER);

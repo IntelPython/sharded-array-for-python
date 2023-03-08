@@ -85,23 +85,19 @@ public:
   }
 
   /// python object's __repr__
-  virtual std::string __repr__() const;
+  virtual std::string __repr__() const override;
 
   /// @return tensor's element type
-  virtual DTypeId dtype() const { return _dtype; }
+  virtual DTypeId dtype() const override { return _dtype; }
 
   /// @return tensor's shape
-  virtual const shape_type &shape() const {
-    assert(!"Not implemented");
-    static shape_type dmy;
-    return dmy;
-  }
+  virtual const uint64_t *shape() const override { return _gs_aligned; }
 
   /// @returnnumber of dimensions of tensor
-  virtual int ndims() const { return _ndims; }
+  virtual int ndims() const override { return _ndims; }
 
   /// @return global number of elements in tensor
-  virtual uint64_t size() const {
+  virtual uint64_t size() const override {
     switch (ndims()) {
     case 0:
       return 1;
@@ -115,22 +111,30 @@ public:
 
   /// @return number of elements hold locally by calling process
   uint64_t local_size() const {
-    return ndims() == 0 ? 0
-                        : std::accumulate(_sizes, _sizes + ndims(), 1,
-                                          std::multiplies<intptr_t>());
+    switch (ndims()) {
+    case 0:
+      return 1;
+    case 1:
+      return *_sizes;
+    default:
+      return std::accumulate(_sizes, _sizes + ndims(), 1,
+                             std::multiplies<intptr_t>());
+    }
   }
 
   friend struct Service;
 
   /// @return boolean value of 0d tensor
-  virtual bool __bool__() const;
+  virtual bool __bool__() const override;
   /// @return float value of 0d tensor
-  virtual double __float__() const;
+  virtual double __float__() const override;
   /// @return integer value of 0d tensor
-  virtual int64_t __int__() const;
+  virtual int64_t __int__() const override;
 
   /// @return global number of elements in first dimension
-  virtual uint64_t __len__() const { return ndims() ? *_gs_aligned : 1; }
+  virtual uint64_t __len__() const override {
+    return ndims() ? *_gs_aligned : 1;
+  }
 
   /// @return true if tensor has a unique owner
   bool has_owner() const { return _owner < _OWNER_END; }
@@ -151,11 +155,18 @@ public:
   bool is_replicated() const { return _owner == REPLICATED; }
 
   /// @return size of one element in number of bytes
-  virtual int item_size() const { return sizeof_dtype(_dtype); }
+  virtual int item_size() const override { return sizeof_dtype(_dtype); }
 
   /// add tensor to list of args in the format expected by MLIR
   /// assuming tensor has ndims dims.
-  virtual void add_to_args(std::vector<void *> &args, int ndims);
+  virtual void add_to_args(std::vector<void *> &args, int ndims) override;
+
+  /// @return local offsets into global tensor
+  const uint64_t *local_offsets() const { return _lo_aligned; }
+  /// @return shape of local data
+  const int64_t *local_shape() const { return _sizes; }
+  /// @return strides of local data
+  const int64_t *local_strides() const { return _strides; }
 
   // helper function for __repr__; simple recursive printing of
   // tensor content
@@ -194,4 +205,24 @@ static typename DDPTensorImpl::ptr_type mk_tnsr(Ts &&...args) {
 
 template <typename... Ts> static tensor_i::future_type mk_ftx(Ts &&...args) {
   return UnDeferred(mk_tnsr(std::forward(args)...)).get_future();
+}
+
+// execute an OP on all elements of a tensor represented by
+// dimensionality/ptr/sizes/strides.
+template <typename T, typename OP>
+void forall(uint64_t d, const T *cptr, const int64_t *sizes,
+            const int64_t *strides, uint64_t nd, OP op) {
+  auto stride = strides[d];
+  auto sz = sizes[d];
+  if (d == nd - 1) {
+    for (auto i = 0; i < sz; ++i) {
+      op(&cptr[i * stride]);
+    }
+  } else {
+    for (auto i = 0; i < sz; ++i) {
+      const T *tmp = cptr;
+      forall(d + 1, cptr, sizes, strides, nd, op);
+      cptr = tmp + strides[d];
+    }
+  }
 }

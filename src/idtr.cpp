@@ -173,26 +173,6 @@ static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
   };
 }
 
-// execute an OP on all elements of a tensor represented by
-// dimensionality/ptr/sizes/strides.
-template <typename T, typename OP>
-void forall(uint64_t d, const T *cptr, const int64_t *sizes,
-            const int64_t *strides, uint64_t nd, OP op) {
-  auto stride = strides[d];
-  auto sz = sizes[d];
-  if (d == nd - 1) {
-    for (auto i = 0; i < sz; ++i) {
-      op(&cptr[i * stride]);
-    }
-  } else {
-    for (auto i = 0; i < sz; ++i) {
-      const T *tmp = cptr;
-      forall(d + 1, cptr, sizes, strides, nd, op);
-      cptr = tmp + strides[d];
-    }
-  }
-}
-
 /// @return true if size/strides represent a contiguous data layout
 bool is_contiguous(const int64_t *sizes, const int64_t *strides, uint64_t nd) {
   if (nd == 0)
@@ -409,7 +389,6 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
               tSizes.data(), rank, N, buff.data());
     getTransceiver()->alltoall(buff.data(), sszs.data(), soffs.data(), ddpttype,
                                outPtr, rszs.data(), roffs.data());
-    std::cerr << "yey\n";
   } else {
     getTransceiver()->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype,
                                outPtr, rszs.data(), roffs.data());
@@ -442,4 +421,5 @@ void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
     std::cerr << "gSlcOffsets: " << gSlcOffsets[0] << " " << gSlcOffsets[1]
               << std::endl;
 }
+
 } // extern "C"

@@ -65,9 +65,10 @@ if sys.version_info >= (3, 3):
 else:
     from timeit import default_timer as timer
 
-import ddptensor as numpy
+import numpy
+import ddptensor as np
 
-# print('Numpy version  = ', numpy.version.version)
+# print('np version  = ', np.version.version)
 
 
 def main():
@@ -118,7 +119,7 @@ def main():
 
     # there is certainly a more Pythonic way to initialize W,
     # but it will have no impact on performance.
-    W = numpy.zeros(((2 * r + 1), (2 * r + 1)), dtype=numpy.float64)
+    W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float64)
     if pattern == "star":
         stencil_size = 4 * r + 1
         for i in range(1, r + 1):
@@ -140,11 +141,11 @@ def main():
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
     # A = numpy.fromfunction(lambda i,j: i+j, (n,n), dtype=float)
-    A = numpy.empty((n, n), dtype=numpy.float64)
+    A = np.empty((n, n), dtype=np.float64)
     for i in range(n):
         for j in range(n):
             A[i, j] = float(i + j)
-    B = numpy.zeros((n, n), dtype=numpy.float64)
+    B = np.zeros((n, n), dtype=np.float64)
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
@@ -182,6 +183,7 @@ def main():
                         B[r:b, r:b] += W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
         A = A + 1.0
 
+    np.sync()
     t1 = timer()
     stencil_time = t1 - t0
 
@@ -189,28 +191,26 @@ def main():
     # * Analyze and output results.
     # ******************************************************************************
 
-    print(W)
-    print("********************************")
-    print(B)
-    # norm = numpy.linalg.norm(numpy.reshape(B,n*n),ord=1)
-    # active_points = (n-2*r)**2
-    # norm /= active_points
+    BB = np.spmd.gather(B)
+    norm = numpy.linalg.norm(numpy.reshape(BB, n * n), ord=1)
+    active_points = (n - 2 * r) ** 2
+    norm /= active_points
 
-    # epsilon=1.e-8
+    epsilon = 1.0e-8
 
-    # # verify correctness
-    # reference_norm = 2*(iterations+1)
-    # if abs(norm-reference_norm) < epsilon:
-    #     print('Solution validates')
-    #     flops = (2*stencil_size+1) * active_points
-    #     avgtime = stencil_time/iterations
-    #     print('Rate (MFlops/s): ',1.e-6*flops/avgtime, ' Avg time (s): ',avgtime)
-    # else:
-    #     print('ERROR: L1 norm = ', norm,' Reference L1 norm = ', reference_norm)
-    #     sys.exit()
+    # verify correctness
+    reference_norm = 2 * (iterations + 1)
+    if abs(norm - reference_norm) < epsilon:
+        print("Solution validates")
+        flops = (2 * stencil_size + 1) * active_points
+        avgtime = stencil_time / iterations
+        print("Rate (MFlops/s): ", 1.0e-6 * flops / avgtime, " Avg time (s): ", avgtime)
+    else:
+        print("ERROR: L1 norm = ", norm, " Reference L1 norm = ", reference_norm)
+        sys.exit()
 
 
 if __name__ == "__main__":
-    numpy.init(False)
+    np.init(False)
     main()
-    numpy.fini()
+    np.fini()

@@ -207,8 +207,8 @@ enum FactoryId : int {
   F_SERVICE,
   F_SETITEM,
   F_SORTOP,
-  F_TONUMPY,
   F_UNYOP,
+  F_GATHER,
   FACTORY_LAST
 };
 

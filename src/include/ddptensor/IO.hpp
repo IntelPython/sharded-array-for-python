@@ -6,9 +6,8 @@
 
 #pragma once
 
-#include "UtilsAndTypes.hpp"
-#include "ddptensor.hpp"
+#include "ddptensor/SetGetItem.hpp"
 
 struct IO {
-  static py::object to_numpy(const ddptensor &a);
+  static GetItem::py_future_type to_numpy(const ddptensor &a);
 };
