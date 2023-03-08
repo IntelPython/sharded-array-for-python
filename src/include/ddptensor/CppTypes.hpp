@@ -209,6 +209,7 @@ enum FactoryId : int {
   F_SORTOP,
   F_UNYOP,
   F_GATHER,
+  F_GETLOCAL,
   FACTORY_LAST
 };
 

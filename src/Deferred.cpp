@@ -127,22 +127,25 @@ void process_promises() {
       function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(),
                         builder.getUnitAttr());
       function.getFunctionType().dump();
-      std::cout << std::endl;
       // add the function to the module
       module.push_back(function);
 
       // get input buffers (before results!)
       auto input = std::move(dm.store_inputs());
 
-      // compile and run the module
-      intptr_t *output = new intptr_t[osz];
-      if (jit.run(module, fname, input, output))
-        throw std::runtime_error("failed running jit");
+      if (osz > 0 || !input.empty()) {
+        // compile and run the module
+        intptr_t *output = new intptr_t[osz];
+        if (jit.run(module, fname, input, output))
+          throw std::runtime_error("failed running jit");
 
-      // push results to deliver promises
-      dm.deliver(output, osz);
+        // push results to deliver promises
+        dm.deliver(output, osz);
 
-      delete[] output;
+        delete[] output;
+      } else {
+        std::cerr << "\tskipping\n";
+      }
     } // no else needed
 
     // now we execute the deferred action which could not be compiled

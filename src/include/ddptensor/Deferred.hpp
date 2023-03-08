@@ -91,7 +91,8 @@ protected:
 
 extern void _dist(const Runable *p);
 
-// defer operations which do not return a tensor, e.g. which are not a Deferred
+// defer operations which do *not* return a tensor, e.g. which are not a
+// Deferred
 template <typename T, typename... Ts,
           std::enable_if_t<!std::is_base_of_v<Deferred, T>, bool> = true>
 typename T::future_type defer(Ts &&...args) {

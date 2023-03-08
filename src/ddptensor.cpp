@@ -127,6 +127,7 @@ PYBIND11_MODULE(_ddptensor, m) {
   Factory::init<F_SETITEM>();
   Factory::init<F_SORTOP>();
   Factory::init<F_GATHER>();
+  Factory::init<F_GETITEM>();
 
   jit::init();
 
@@ -140,7 +141,10 @@ PYBIND11_MODULE(_ddptensor, m) {
       .def("sync", &sync_promises)
       .def("myrank", &myrank)
       .def("_get_slice", &GetItem::get_slice)
-      .def("_get_local", &GetItem::get_local)
+      .def("_get_local",
+           [](const ddptensor &f, py::handle h) {
+             PY_SYNC_RETURN(GetItem::get_local(f, h));
+           })
       .def("_gather",
            [](const ddptensor &f, rank_type root = REPLICATED) {
              PY_SYNC_RETURN(GetItem::gather(f, root));

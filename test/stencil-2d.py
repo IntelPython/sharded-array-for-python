@@ -149,7 +149,8 @@ def main():
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
-        if k < 1:
+        if k <= 1:
+            np.sync()
             t0 = timer()
 
         if pattern == "star":
@@ -191,8 +192,8 @@ def main():
     # * Analyze and output results.
     # ******************************************************************************
 
-    BB = np.spmd.gather(B)
-    norm = numpy.linalg.norm(numpy.reshape(BB, n * n), ord=1)
+    B = np.spmd.gather(B)
+    norm = numpy.linalg.norm(numpy.reshape(B, n * n), ord=1)
     active_points = (n - 2 * r) ** 2
     norm /= active_points
 

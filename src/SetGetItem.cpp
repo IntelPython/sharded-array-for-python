@@ -151,6 +151,63 @@ namespace x {
 } // namespace x
 #endif // if 0
 
+template <typename T> struct mk_array {
+  template <typename C> static py::object op(C &&shp, void *&outPtr) {
+    auto ary = py::array_t<T>(std::forward<C>(shp));
+    outPtr = ary.mutable_data();
+    return ary;
+  }
+};
+
+template <typename T> struct wrap_array {
+  template <typename C, typename S>
+  static py::object op(C &&shp, S &&str, void *data, const py::handle &handle) {
+    return py::array(std::forward<C>(shp), std::forward<S>(str),
+                     reinterpret_cast<T *>(data), handle);
+  }
+};
+
+// ***************************************************************************
+
+struct DeferredGetLocal
+    : public DeferredT<GetItem::py_promise_type, GetItem::py_future_type> {
+  id_type _a;
+  py::handle _handle;
+
+  DeferredGetLocal() = default;
+  DeferredGetLocal(const tensor_i::future_type &a, py::handle &handle)
+      : _a(a.id()), _handle(handle) {}
+
+  void run() override {
+    auto aa = std::move(Registry::get(_a).get());
+    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    assert(a_ptr);
+    auto tmp_shp = a_ptr->local_shape();
+    auto tmp_str = a_ptr->local_strides();
+    auto nd = a_ptr->ndims();
+    auto eSz = sizeof_dtype(a_ptr->dtype());
+    std::vector<ssize_t> strides(nd);
+    for (auto i = 0; i < nd; ++i) {
+      strides[i] = eSz * tmp_str[i];
+    }
+    auto res = dispatch<wrap_array>(a_ptr->dtype(),
+                                    std::vector<ssize_t>(tmp_shp, &tmp_shp[nd]),
+                                    strides, a_ptr->data(), _handle);
+    set_value(res);
+  }
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    return true;
+  }
+
+  FactoryId factory() const { return F_GETLOCAL; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+  }
+};
+
 // ***************************************************************************
 
 struct DeferredGather
@@ -161,14 +218,6 @@ struct DeferredGather
   DeferredGather() = default;
   DeferredGather(const tensor_i::future_type &a, rank_type root)
       : _a(a.id()), _root(root) {}
-
-  template <typename T> struct mk_array {
-    template <typename C> static py::object op(C &&shp, void *&outPtr) {
-      auto ary = py::array_t<T>(std::forward<C>(shp));
-      outPtr = ary.mutable_data();
-      return ary;
-    }
-  };
 
   void run() override {
     // gather
@@ -352,6 +401,10 @@ ddptensor *GetItem::__getitem__(const ddptensor &a,
   return new ddptensor(defer<DeferredGetItem>(a.get(), v));
 }
 
+GetItem::py_future_type GetItem::get_local(const ddptensor &a, py::handle h) {
+  return defer<DeferredGetLocal>(a.get(), h);
+}
+
 GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
   return defer<DeferredGather>(a.get(), root);
 }
@@ -372,11 +425,7 @@ py::object GetItem::get_slice(const ddptensor &a,
   return {}; // FIXME TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.id());
 }
 
-py::object GetItem::get_local(const ddptensor &a, py::handle h) {
-  const auto aa = std::move(a.get().get());
-  return {}; // FIXME TypeDispatch<x::SPMD>(aa, h);
-}
-
 FACTORY_INIT(DeferredGetItem, F_GETITEM);
 FACTORY_INIT(DeferredSetItem, F_SETITEM);
 FACTORY_INIT(DeferredGather, F_GATHER);
+FACTORY_INIT(DeferredGather, F_GETLOCAL);
