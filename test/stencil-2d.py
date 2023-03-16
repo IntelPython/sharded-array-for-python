@@ -120,6 +120,8 @@ def main():
     # there is certainly a more Pythonic way to initialize W,
     # but it will have no impact on performance.
     W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float64)
+    A = np.empty((n, n), dtype=np.float64)
+    B = np.zeros((n, n), dtype=np.float64)
     if pattern == "star":
         stencil_size = 4 * r + 1
         for i in range(1, r + 1):
@@ -141,11 +143,9 @@ def main():
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
     # A = numpy.fromfunction(lambda i,j: i+j, (n,n), dtype=float)
-    A = np.empty((n, n), dtype=np.float64)
     for i in range(n):
         for j in range(n):
             A[i, j] = float(i + j)
-    B = np.zeros((n, n), dtype=np.float64)
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
@@ -182,7 +182,8 @@ def main():
                 for s in range(-r, r + 1):
                     for t in range(-r, r + 1):
                         B[r:b, r:b] += W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
-        A = A + 1.0
+        A[0:n, 0:n] = A + 1.0
+        # A += 1.0
 
     np.sync()
     t1 = timer()

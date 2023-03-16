@@ -10,6 +10,7 @@
 #include "include/ddptensor/Deferred.hpp"
 #include "include/ddptensor/Mediator.hpp"
 #include "include/ddptensor/Registry.hpp"
+#include "include/ddptensor/Service.hpp"
 #include "include/ddptensor/Transceiver.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
@@ -50,7 +51,9 @@ Deferred::future_type defer_tensor(Runable::ptr_type &&_d, bool is_global) {
     throw std::runtime_error("Expected Deferred Tensor promise");
   if (is_global) {
     _dist(d);
-    d->set_guid(Registry::get_guid());
+    if (d->guid() == Registry::NOGUID) {
+      d->set_guid(Registry::get_guid());
+    }
   }
   auto f = d->get_future();
   Registry::put(f);
@@ -154,9 +157,4 @@ void process_promises() {
   } while (!done);
 }
 
-void sync_promises() {
-  // FIXME this does not wait for the last deferred to complete
-  while (!_deferred.empty()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-}
+void sync_promises() { (void)Service::run().get(); }

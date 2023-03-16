@@ -19,6 +19,7 @@
 #include <mlir/Pass/PassManager.h>
 
 #include <functional>
+#include <map>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -69,6 +70,7 @@ using SetResFunc = std::function<void(
     intptr_t offset, const intptr_t *sizes, const intptr_t *strides,
     uint64_t *gs_allocated, uint64_t *gs_aligned, uint64_t *lo_allocated,
     uint64_t *lo_aligned, uint64_t balanced)>;
+using ReadyFunc = std::function<void(id_type guid)>;
 
 // initialize jit
 void init();
@@ -76,14 +78,16 @@ void init();
 /// Manages iput/output (tensor) dependences
 class DepManager {
 private:
-  using IdValueMap = std::unordered_map<id_type, ::mlir::Value>;
-  using IdCallbackMap = std::unordered_map<id_type, SetResFunc>;
-  using IdRankMap = std::unordered_map<id_type, int>;
+  using IdValueMap = std::map<id_type, ::mlir::Value>;
+  using IdCallbackMap = std::map<id_type, SetResFunc>;
+  using IdReadyMap = std::map<id_type, std::vector<ReadyFunc>>;
+  using IdRankMap = std::map<id_type, int>;
   using ArgList = std::vector<std::pair<id_type, int>>;
 
   ::mlir::func::FuncOp &_func; // MLIR function to which ops are added
   IdValueMap _ivm;             // guid -> mlir::Value
   IdCallbackMap _icm;          // guid -> deliver-callback
+  IdReadyMap _icr;             // guid -> ready-callback
   IdRankMap _irm;              // guid -> rank as computed in MLIR
   ArgList _args;               // input arguments of the generated function
 
@@ -98,6 +102,7 @@ public:
   /// the promise which generated the value if the tensor is alive when the
   /// function returns it will be added to the list of results
   void addVal(id_type guid, ::mlir::Value val, SetResFunc cb);
+  void addReady(id_type guid, ReadyFunc cb);
 
   /// signals end of lifetime of given tensor: does not need to be returned
   void drop(id_type guid);

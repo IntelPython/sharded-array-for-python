@@ -26,6 +26,9 @@ tensor_i::future_type get(id_type id);
 /// remove future tensor with guid id from registry
 void del(id_type id);
 
+/// @return true if given guid is registered
+bool has(id_type);
+
 /// finalize registry (before shutdown)
 void fini();
 

@@ -39,8 +39,11 @@ namespace x {
 }
 #endif // if 0
 
-struct DeferredService : public Deferred {
-  enum Op : int { REPLICATE, DROP, RUN, SERVICE_LAST };
+// **************************************************************************
+
+struct DeferredService : public DeferredT<Service::service_promise_type,
+                                          Service::service_future_type> {
+  enum Op : int { DROP, RUN, SERVICE_LAST };
 
   id_type _a;
   Op _op;
@@ -51,18 +54,12 @@ struct DeferredService : public Deferred {
 
   void run() {
     switch (_op) {
-    case REPLICATE: {
-      const auto a = std::move(Registry::get(_a).get());
-      auto ddpt = dynamic_cast<DDPTensorImpl *>(a.get());
-      assert(ddpt);
-      ddpt->replicate();
-      set_value(a);
-      break;
-    }
     case RUN:
+      set_value(true);
       break;
     default:
-      throw(std::runtime_error("Unkown Service operation requested."));
+      throw(std::runtime_error(
+          "Execution of unkown service operation requested."));
     }
   }
 
@@ -71,13 +68,14 @@ struct DeferredService : public Deferred {
     switch (_op) {
     case DROP:
       dm.drop(_a);
+      set_value(true);
       // FIXME create delete op and return it
       break;
     case RUN:
-    case REPLICATE:
       return true;
     default:
-      throw(std::runtime_error("Unkown Service operation requested."));
+      throw(std::runtime_error(
+          "MLIR generation for unkown service operation requested."));
     }
 
     return false;
@@ -91,24 +89,52 @@ struct DeferredService : public Deferred {
   }
 };
 
-ddptensor *Service::replicate(const ddptensor &a) {
-  return new ddptensor(
-      defer<DeferredService>(DeferredService::REPLICATE, a.get()));
-}
+// **************************************************************************
 
-void Service::run() {
-  defer<DeferredService>(DeferredService::RUN);
-  // defer_lambda([](){ return true; });
-}
+struct DeferredReplicate : public Deferred {
+  id_type _a;
+
+  DeferredReplicate() : _a() {}
+  DeferredReplicate(const tensor_i::future_type &a) : _a(a.id()) {}
+
+  void run() {
+    const auto a = std::move(Registry::get(_a).get());
+    auto ddpt = dynamic_cast<DDPTensorImpl *>(a.get());
+    assert(ddpt);
+    ddpt->replicate();
+    set_value(a);
+  }
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    return true;
+  }
+
+  FactoryId factory() const { return F_REPLICATE; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+  }
+};
+
+// **************************************************************************
 
 bool inited = false;
 bool finied = false;
 
-void Service::drop(const ddptensor &a) {
+Service::service_future_type Service::drop(const ddptensor &a) {
   if (inited) {
-    // if(getTransceiver()->is_spmd()) getTransceiver()->barrier();
-    defer<DeferredService>(DeferredService::DROP, a.get());
+    return defer<DeferredService>(DeferredService::DROP, a.get());
   }
 }
 
+Service::service_future_type Service::run() {
+  return defer<DeferredService>(DeferredService::RUN);
+}
+
+ddptensor *Service::replicate(const ddptensor &a) {
+  return new ddptensor(defer<DeferredReplicate>(a.get()));
+}
+
 FACTORY_INIT(DeferredService, F_SERVICE);
+FACTORY_INIT(DeferredReplicate, F_REPLICATE);

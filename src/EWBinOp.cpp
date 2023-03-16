@@ -459,20 +459,19 @@ struct DeferredEWBinOp : public Deferred {
     auto outTyp =
         ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
 
-    dm.addVal(
-        this->guid(),
-        builder.create<::imex::ptensor::EWBinOp>(
-            loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv),
-        [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-               void *aligned, intptr_t offset, const intptr_t *sizes,
-               const intptr_t *strides, uint64_t *gs_allocated,
-               uint64_t *gs_aligned, uint64_t *lo_allocated,
-               uint64_t *lo_aligned, uint64_t balanced) {
-          this->set_value(std::move(
-              mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset,
-                      sizes, strides, gs_allocated, gs_aligned, lo_allocated,
-                      lo_aligned, balanced)));
-        });
+    auto bop = builder.create<::imex::ptensor::EWBinOp>(
+        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
+    dm.addVal(this->guid(), bop,
+              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+                     void *aligned, intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, uint64_t *gs_allocated,
+                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     uint64_t *lo_aligned, uint64_t balanced) {
+                this->set_value(std::move(
+                    mk_tnsr(transceiver, _dtype, rank, allocated, aligned,
+                            offset, sizes, strides, gs_allocated, gs_aligned,
+                            lo_allocated, lo_aligned, balanced)));
+              });
     return false;
   }
 

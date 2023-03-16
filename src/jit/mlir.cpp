@@ -178,6 +178,7 @@ std::vector<void *> DepManager::store_inputs() {
   std::vector<void *> res;
   for (auto a : _args) {
     auto f = Registry::get(a.first);
+    std::cerr << " store guid " << a.first;
     f.get().get()->add_to_args(res, a.second);
     _ivm.erase(a.first); // inputs need no delivery
     _icm.erase(a.first);
@@ -191,9 +192,15 @@ void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb) {
   _icm[guid] = cb;
 }
 
+void DepManager::addReady(id_type guid, ReadyFunc cb) {
+  _icr[guid].emplace_back(cb);
+}
+
 void DepManager::drop(id_type guid) {
   _ivm.erase(guid);
   _icm.erase(guid);
+  _icr.erase(guid);
+  // Registry::del(guid);
   // FIXME create delete op
 }
 
@@ -289,6 +296,11 @@ void DepManager::deliver(intptr_t *output, uint64_t sz) {
       v.second(reinterpret_cast<Transceiver *>(team), rank, t_allocated,
                t_aligned, t_offset, t_sizes, t_stride, nullptr, nullptr,
                nullptr, nullptr, 1);
+    }
+  }
+  for (auto &v : _icr) {
+    for (auto cb : v.second) {
+      cb(v.first);
     }
   }
 }

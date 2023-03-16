@@ -98,7 +98,6 @@ set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/ManipOp.cpp
     ${PROJECT_SOURCE_DIR}/src/Random.cpp
     ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
-    ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
     ${PROJECT_SOURCE_DIR}/src/Sorting.cpp
 )
@@ -110,6 +109,7 @@ set(RTSrcs
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
+    ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
 )
 set(IDTRSrcs

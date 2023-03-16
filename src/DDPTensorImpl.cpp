@@ -8,6 +8,7 @@
 #include <ddptensor/Transceiver.hpp>
 
 #include <algorithm>
+#include <iostream>
 
 DDPTensorImpl::DDPTensorImpl(Transceiver *transceiver, DTypeId dtype,
                              uint64_t ndims, void *allocated, void *aligned,
@@ -161,6 +162,8 @@ void DDPTensorImpl::add_to_args(std::vector<void *> &args, int ndims) {
   buff[2] = static_cast<intptr_t>(_offset);
   memcpy(buff + 3, _sizes, ndims * sizeof(intptr_t));
   memcpy(buff + 3 + ndims, _strides, ndims * sizeof(intptr_t));
+  for (auto i = 0; i < 3 + 2 * ndims; ++i)
+    std::cerr << " " << buff[i];
   args.push_back(buff);
   // second the transceiver
   args.push_back(&_transceiver);

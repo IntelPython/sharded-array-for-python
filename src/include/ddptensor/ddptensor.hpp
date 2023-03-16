@@ -15,7 +15,8 @@ class ddptensor {
   tensor_i::future_type _ftx;
 
 public:
-  ddptensor(const tensor_i::future_type &f) : _ftx(f) {}
+  ddptensor(tensor_i::future_type &&f)
+      : _ftx(std::forward<tensor_i::future_type>(f)) {}
   ddptensor(std::shared_future<tensor_i::ptr_type> &&f, id_type id, DTypeId dt,
             int rank, bool balanced)
       : _ftx(std::forward<std::shared_future<tensor_i::ptr_type>>(f), id, dt,
@@ -24,4 +25,7 @@ public:
   ~ddptensor() { Service::drop(*this); }
 
   const tensor_i::future_type &get() const { return _ftx; }
+  void const put(tensor_i::future_type &&f) {
+    _ftx = std::forward<tensor_i::future_type>(f);
+  }
 };

@@ -22,7 +22,12 @@ id_type get_guid() { return ++_nguid; }
 
 void put(const tensor_i::future_type &ptr) {
   locker _l(_mutex);
-  _keeper[ptr.id()] = ptr;
+  _keeper.insert({ptr.id(), ptr});
+}
+
+bool has(id_type id) {
+  locker _l(_mutex);
+  return _keeper.find(id) != _keeper.end();
 }
 
 tensor_i::future_type get(id_type id) {

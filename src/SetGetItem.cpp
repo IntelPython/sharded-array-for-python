@@ -273,7 +273,8 @@ struct DeferredSetItem : public Deferred {
   DeferredSetItem(const tensor_i::future_type &a,
                   const tensor_i::future_type &b,
                   const std::vector<py::slice> &v)
-      : _a(a.id()), _b(b.id()), _slc(v) {}
+      : Deferred(a.id(), a.dtype(), a.rank(), a.balanced()), _a(a.id()),
+        _b(b.id()), _slc(v) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
@@ -298,19 +299,10 @@ struct DeferredSetItem : public Deferred {
     (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV,
                                                          sizesV, stridesV);
     // ... and use av as to later create the ptensor
-    dm.addVal(this->guid(), av,
-              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-                     void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
-                     uint64_t *lo_aligned, uint64_t balanced) {
-                this->set_value(Registry::get(this->_a).get());
-                // this->set_value(std::move(mk_tnsr(dtype, rank, allocated,
-                // aligned, offset, sizes, strides,
-                //                                   gs_allocated, gs_aligned,
-                //                                   lo_allocated,
-                //                                   lo_aligned)));
-              });
+    dm.addReady(this->guid(), [this](id_type guid) {
+      assert(this->guid() == guid);
+      this->set_value(Registry::get(this->_a).get());
+    });
     return false;
   }
 
@@ -368,6 +360,10 @@ struct DeferredGetItem : public Deferred {
     // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
     auto outTyp =
         ::imex::ptensor::PTensorType::get(shape, oTyp.getElementType());
+    // if(auto dtyp = av.getType().dyn_cast<::imex::dist::DistTensorType>()) {
+    //   av = builder.create<::mlir::UnrealizedConversionCastOp>(loc,
+    //   dtyp.getPTensorType(), av).getResult(0);
+    // }
     // now we can create the PTensor op using the above Values
     auto res = builder.create<::imex::ptensor::SubviewOp>(
         loc, outTyp, av, offsV, sizesV, stridesV);
@@ -413,10 +409,10 @@ ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
                                 const py::object &b) {
 
   auto bb = Creator::mk_future(b);
-  auto res = new ddptensor(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
+  a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
   if (bb.second)
     delete bb.first;
-  return res;
+  return &a;
 }
 
 py::object GetItem::get_slice(const ddptensor &a,
