@@ -185,6 +185,8 @@ target_link_libraries(_ddpt_rt PRIVATE
     MLIRLinalgTransforms
     MLIRLLVMDialect
     MLIRMathDialect
+    MLIRMathToFuncs
+    MLIRMathToLibm
     MLIRMathToLLVM
     MLIRMathTransforms
     MLIRMemRefDialect
@@ -197,6 +199,8 @@ target_link_libraries(_ddpt_rt PRIVATE
     MLIRShapeDialect
     MLIRShapeOpsTransforms
     MLIRShapeToStandard
+    MLIRTosaDialect
+    MLIRTosaToLinalg
     MLIRTensorTransforms
 )
     # LLVM${LLVM_NATIVE_ARCH}CodeGen

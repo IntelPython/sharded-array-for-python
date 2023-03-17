@@ -65,7 +65,7 @@
 // #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
-// #include "mlir/Dialect/Tosa/Transforms/Passes.h"
+#include "mlir/Dialect/Tosa/Transforms/Passes.h"
 // #include "mlir/Dialect/Transform/Transforms/Passes.h"
 // #include "mlir/Dialect/Vector/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
@@ -73,10 +73,11 @@
 
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
-
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+
+#include <llvm/Support/raw_sha1_ostream.h>
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/InitIMEXDialects.h>
@@ -178,7 +179,6 @@ std::vector<void *> DepManager::store_inputs() {
   std::vector<void *> res;
   for (auto a : _args) {
     auto f = Registry::get(a.first);
-    std::cerr << " store guid " << a.first;
     f.get().get()->add_to_args(res, a.second);
     _ivm.erase(a.first); // inputs need no delivery
     _icm.erase(a.first);
@@ -254,7 +254,8 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   return 2 * sz;
 }
 
-void DepManager::deliver(intptr_t *output, uint64_t sz) {
+void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
+  auto output = outputV.data();
   size_t pos = 0;
   for (auto &v : _icm) {
     auto rank = _irm[v.first];
@@ -305,14 +306,30 @@ void DepManager::deliver(intptr_t *output, uint64_t sz) {
   }
 }
 
-int JIT::run(::mlir::ModuleOp &module, const std::string &fname,
-             std::vector<void *> &inp, intptr_t *out) {
-  // lower to LLVM
-  if (::mlir::failed(_pm.run(module)))
-    throw std::runtime_error("failed to run pass manager");
-
-  if (_verbose)
-    module.dump();
+std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
+                               const std::string &fname,
+                               std::vector<void *> &inp, size_t osz) {
+  if (_useCache) {
+    ::mlir::ModuleOp cached;
+    static std::vector<
+        std::pair<std::array<unsigned char, 20>, ::mlir::ModuleOp>>
+        cache;
+    llvm::raw_sha1_ostream xxx;
+    module->print(xxx);
+    auto cksm = xxx.sha1();
+    for (auto x : cache) {
+      if (x.first == cksm) {
+        cached = x.second;
+        break;
+      }
+    }
+    if (cached) {
+      module = cached;
+      std::cerr << "using cached module" << std::endl;
+    } else {
+      cache.push_back(std::make_pair(cksm, module));
+    }
+  }
 
   // An optimization pipeline to use within the execution engine.
   auto optPipeline =
@@ -322,21 +339,27 @@ int JIT::run(::mlir::ModuleOp &module, const std::string &fname,
 
   // Create an ::mlir execution engine. The execution engine eagerly
   // JIT-compiles the module.
-  ::mlir::ExecutionEngineOptions engineOptions;
-  engineOptions.transformer = optPipeline;
-  // const char * crunner = getenv("DDPT_CRUNNER_SO");
-  // crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
-  const char *idtr = getenv("DDPT_IDTR_SO");
-  idtr = idtr ? idtr : "libidtr.so";
-  // ::llvm::ArrayRef<::llvm::StringRef> shlibs = {crunner, idtr};
-  engineOptions.sharedLibPaths = {idtr};
-  auto maybeEngine = ::mlir::ExecutionEngine::create(module, engineOptions);
+  ::mlir::ExecutionEngineOptions opts;
+  opts.transformer = optPipeline;
+  opts.sharedLibPaths = {_sharedLibPaths};
+  opts.enableObjectDump = _useCache;
+
+  // lower to LLVM
+  if (::mlir::failed(_pm.run(module)))
+    throw std::runtime_error("failed to run pass manager");
+
+  if (_verbose)
+    module.dump();
+
+  auto maybeEngine = ::mlir::ExecutionEngine::create(module, opts);
   assert(maybeEngine && "failed to construct an execution engine");
   auto &engine = maybeEngine.get();
 
   llvm::SmallVector<void *> args;
+  std::vector<intptr_t> out(osz);
+  auto tmp = out.data();
   // first arg must be the result ptr
-  args.push_back(&out);
+  args.push_back(&tmp);
   // we need a void*& for every input tensor
   // we refer directly to the storage in inp
   for (auto &arg : inp) {
@@ -350,7 +373,7 @@ int JIT::run(::mlir::ModuleOp &module, const std::string &fname,
     throw std::runtime_error("JIT invocation failed");
   }
 
-  return 0;
+  return out;
 }
 
 static const char *pass_pipeline =
@@ -362,11 +385,13 @@ static const char *pass_pipeline =
         //    "builtin.module(func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts)";
         : "func.func(ptensor-dist,dist-coalesce),convert-dist-to-standard,"
           "convert-ptensor-to-linalg,canonicalize,convert-shape-to-std,arith-"
-          "expand,canonicalize,arith-bufferize,func-bufferize,func.func(empty-"
-          "tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
+          "expand,canonicalize,arith-bufferize,func-bufferize,func.func(tosa-"
+          "to-linalg,"
+          "empty-tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
           "bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
           "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
-          "canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-"
+          "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
+          "math-to-funcs,convert-math-to-libm,lower-"
           "affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-"
           "llvm,reconcile-unrealized-casts";
 JIT::JIT()
@@ -391,12 +416,27 @@ JIT::JIT()
     if (v == "1" || v == "y" || v == "Y" || v == "on" || v == "ON")
       _verbose = true;
   }
+  _pm.enableTiming();
   // some verbosity
   if (_verbose) {
     _pm.enableStatistics();
     _pm.enableIRPrinting();
     _pm.dump();
   }
+
+  const char *envptr = getenv("DDPT_USE_CACHE");
+  envptr = envptr ? envptr : "1";
+  {
+    auto c = std::string(envptr);
+    _useCache = c == "1" || c == "y" || c == "Y" || c == "on" || c == "ON";
+    std::cerr << "enableObjectDump=" << _useCache << std::endl;
+  }
+
+  // const char * crunner = getenv("DDPT_CRUNNER_SO");
+  // crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
+  envptr = getenv("DDPT_IDTR_SO");
+  _sharedLibPaths = envptr ? envptr : "libidtr.so";
+  // ::llvm::ArrayRef<::llvm::StringRef> shlibs = {crunner, envptr};
 }
 
 // register dialects and passes
@@ -411,6 +451,10 @@ void init() {
   ::mlir::registerConvertShapeToStandardPass();
   ::mlir::tensor::registerTensorPasses();
   ::mlir::registerLinalgPasses();
+  ::mlir::registerTosaToLinalg();
+  ::mlir::registerConvertMathToFuncs();
+  ::mlir::registerConvertMathToLibm();
+  ::mlir::tosa::registerTosaOptPasses();
   ::mlir::func::registerFuncPasses();
   ::mlir::registerConvertFuncToLLVMPass();
   ::mlir::bufferization::registerBufferizationPasses();

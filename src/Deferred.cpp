@@ -20,7 +20,6 @@
 #include <oneapi/tbb/concurrent_queue.h>
 
 #include <iostream>
-#include <unordered_set>
 
 // thread-safe FIFO queue holding deferred objects
 static tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
@@ -71,7 +70,7 @@ void Runable::defer(Runable::ptr_type &&p) { push_runable(std::move(p)); }
 void Runable::fini() { _deferred.clear(); }
 
 // process promises as they arrive through calls to defer
-// This is run in a separate thread until shutdon is requested.
+// This is run in a separate thread until shutdown is requested.
 // Shutdown is indicated by a Deferred object which evaluates to false.
 // The loop repeatedly creates MLIR functions for jit-compilation by letting
 // Deferred objects add their MLIR code until an object can not produce MLIR
@@ -138,14 +137,12 @@ void process_promises() {
 
       if (osz > 0 || !input.empty()) {
         // compile and run the module
-        intptr_t *output = new intptr_t[osz];
-        if (jit.run(module, fname, input, output))
+        auto output = jit.run(module, fname, input, osz);
+        if (output.size() != osz)
           throw std::runtime_error("failed running jit");
 
         // push results to deliver promises
         dm.deliver(output, osz);
-
-        delete[] output;
       } else {
         std::cerr << "\tskipping\n";
       }

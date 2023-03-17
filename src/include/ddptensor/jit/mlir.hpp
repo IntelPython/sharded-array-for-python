@@ -113,7 +113,7 @@ public:
   uint64_t handleResult(::mlir::OpBuilder &builder);
 
   /// devlier promise after execution
-  void deliver(intptr_t *, uint64_t);
+  void deliver(std::vector<intptr_t> &, uint64_t);
 
   /// @return total size of all input arguments in number of intptr_t
   uint64_t arg_size();
@@ -137,12 +137,13 @@ public:
 
   JIT();
   // run
-  int run(::mlir::ModuleOp &, const std::string &, std::vector<void *> &,
-          intptr_t *);
+  std::vector<intptr_t> run(::mlir::ModuleOp &, const std::string &,
+                            std::vector<void *> &, size_t);
 
   ::mlir::MLIRContext _context;
   ::mlir::PassManager _pm;
-  bool _verbose;
+  bool _verbose, _useCache;
+  const char *_sharedLibPaths;
 };
 
 // size of memreftype in number of intptr_t's

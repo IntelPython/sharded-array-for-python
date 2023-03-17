@@ -119,6 +119,7 @@ def main():
 
     # there is certainly a more Pythonic way to initialize W,
     # but it will have no impact on performance.
+    t0 = timer()
     W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float64)
     A = np.empty((n, n), dtype=np.float64)
     B = np.zeros((n, n), dtype=np.float64)
@@ -149,8 +150,8 @@ def main():
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
+        np.sync()
         if k <= 1:
-            np.sync()
             t0 = timer()
 
         if pattern == "star":
