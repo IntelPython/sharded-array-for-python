@@ -123,6 +123,8 @@ void process_promises() {
     }
 
     if (!runables.empty()) {
+      // get input buffers (before results!)
+      auto input = std::move(dm.store_inputs());
       // create return statement and adjust function type
       uint64_t osz = dm.handleResult(builder);
       // also request generation of c-wrapper function
@@ -131,9 +133,6 @@ void process_promises() {
       function.getFunctionType().dump();
       // add the function to the module
       module.push_back(function);
-
-      // get input buffers (before results!)
-      auto input = std::move(dm.store_inputs());
 
       if (osz > 0 || !input.empty()) {
         // compile and run the module

@@ -183,8 +183,7 @@ def main():
                 for s in range(-r, r + 1):
                     for t in range(-r, r + 1):
                         B[r:b, r:b] += W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
-        A[0:n, 0:n] = A + 1.0
-        # A += 1.0
+        A = A + 1.0
 
     np.sync()
     t1 = timer()

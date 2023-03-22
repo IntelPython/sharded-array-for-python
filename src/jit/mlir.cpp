@@ -71,6 +71,8 @@
 #include "mlir/Transforms/Passes.h"
 // #include <mlir/InitAllPasses.h>
 
+#include "mlir/Parser/Parser.h"
+
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
@@ -242,6 +244,8 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     _irm[v.first] = rank;
     // add sizes of dtensor (3 memrefs + team + balanced) to sz
     sz += dtensor_sz(rank);
+    // clear reference to MLIR value
+    v.second = nullptr;
     ++idx;
   }
 
@@ -249,59 +253,71 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   auto ret_value = builder.create<::mlir::func::ReturnOp>(
       builder.getUnknownLoc(), ret_values);
 
-  // clear any reference to MLIR values
-  _ivm.clear();
+  // _ivm defines the order of return values -> do not clear
+
   return 2 * sz;
 }
 
 void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
   auto output = outputV.data();
   size_t pos = 0;
-  for (auto &v : _icm) {
-    auto rank = _irm[v.first];
-    // first extract tensor
-    void *t_allocated = reinterpret_cast<void *>(output[pos]);
-    void *t_aligned = reinterpret_cast<void *>(output[pos + 1]);
-    intptr_t t_offset = output[pos + 2];
-    intptr_t *t_sizes = output + pos + 3;
-    intptr_t *t_stride = output + pos + 3 + rank;
-    pos += memref_sz(rank);
-    // second is the team
-    auto team = output[pos];
-    pos += 1;
-    // third is balanced
-    auto balanced = output[pos];
-    pos += 1;
-    if (rank > 0) {
-      // third extract global shape
-      uint64_t *gs_allocated = reinterpret_cast<uint64_t *>(output[pos]);
-      uint64_t *gs_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
-      intptr_t gs_offset = output[pos + 2];
-      // no sizes/stride needed
-      pos += memref_sz(1);
-      // lastly extract local offsets
-      uint64_t *lo_allocated = reinterpret_cast<uint64_t *>(output[pos]);
-      uint64_t *lo_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
-      intptr_t lo_offset = output[pos + 2];
-      // no sizes/stride needed
-      pos += memref_sz(1);
-      // call finalization
-      v.second(reinterpret_cast<Transceiver *>(team), rank, t_allocated,
-               t_aligned, t_offset, t_sizes, t_stride, // tensor
-               gs_allocated,
-               gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
-               lo_allocated,
-               lo_aligned + lo_offset, // local offset is 1d tensor of uint64_t
-               balanced);
-    } else { // 0d tensor
-      v.second(reinterpret_cast<Transceiver *>(team), rank, t_allocated,
-               t_aligned, t_offset, t_sizes, t_stride, nullptr, nullptr,
-               nullptr, nullptr, 1);
+
+  // _ivm defines the order of return values
+  for (auto &r : _ivm) {
+    auto guid = r.first;
+    if (auto v = _icm.find(guid); v != _icm.end()) {
+      assert(v->first == guid);
+      auto rank = _irm[guid];
+      // first extract tensor
+      void *t_allocated = reinterpret_cast<void *>(output[pos]);
+      void *t_aligned = reinterpret_cast<void *>(output[pos + 1]);
+      intptr_t t_offset = output[pos + 2];
+      intptr_t *t_sizes = output + pos + 3;
+      intptr_t *t_stride = output + pos + 3 + rank;
+      pos += memref_sz(rank);
+      // second is the team
+      auto team = output[pos];
+      pos += 1;
+      // third is balanced
+      auto balanced = output[pos];
+      pos += 1;
+      if (rank > 0) {
+        // third extract global shape
+        uint64_t *gs_allocated = reinterpret_cast<uint64_t *>(output[pos]);
+        uint64_t *gs_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
+        intptr_t gs_offset = output[pos + 2];
+        // no sizes/stride needed
+        pos += memref_sz(1);
+        // lastly extract local offsets
+        uint64_t *lo_allocated = reinterpret_cast<uint64_t *>(output[pos]);
+        uint64_t *lo_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
+        intptr_t lo_offset = output[pos + 2];
+        // no sizes/stride needed
+        pos += memref_sz(1);
+        // call finalization
+        v->second(
+            reinterpret_cast<Transceiver *>(team), rank, t_allocated, t_aligned,
+            t_offset, t_sizes, t_stride, // tensor
+            gs_allocated,
+            gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
+            lo_allocated,
+            lo_aligned + lo_offset, // local offset is 1d tensor of uint64_t
+            balanced);
+      } else { // 0d tensor
+        v->second(reinterpret_cast<Transceiver *>(team), rank, t_allocated,
+                  t_aligned, t_offset, t_sizes, t_stride, nullptr, nullptr,
+                  nullptr, nullptr, 1);
+      }
+    } else {
+      assert(false);
     }
   }
-  for (auto &v : _icr) {
-    for (auto cb : v.second) {
-      cb(v.first);
+
+  // ready signals will always be sent, at this point they are not linked to a
+  // return value
+  for (auto &readyV : _icr) {
+    for (auto cb : readyV.second) {
+      cb(readyV.first);
     }
   }
 }
@@ -327,6 +343,7 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
       module = cached;
       std::cerr << "using cached module" << std::endl;
     } else {
+      std::cerr << "compiling..." << std::endl;
       cache.push_back(std::make_pair(cksm, module));
     }
   }
