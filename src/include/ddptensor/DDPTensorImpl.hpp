@@ -209,20 +209,41 @@ template <typename... Ts> static tensor_i::future_type mk_ftx(Ts &&...args) {
 
 // execute an OP on all elements of a tensor represented by
 // dimensionality/ptr/sizes/strides.
-template <typename T, typename OP>
-void forall(uint64_t d, const T *cptr, const int64_t *sizes,
-            const int64_t *strides, uint64_t nd, OP op) {
+template <typename T, typename OP, bool PASSIDX>
+void forall_(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
+             uint64_t nd, OP op, std::vector<int64_t> *idx) {
+  assert(!PASSIDX || idx);
   auto stride = strides[d];
   auto sz = sizes[d];
   if (d == nd - 1) {
     for (auto i = 0; i < sz; ++i) {
-      op(&cptr[i * stride]);
+      if constexpr (PASSIDX) {
+        (*idx)[d] = i;
+        op(*idx, &cptr[i * stride]);
+      } else if constexpr (!PASSIDX) {
+        op(&cptr[i * stride]);
+      }
     }
   } else {
     for (auto i = 0; i < sz; ++i) {
-      const T *tmp = cptr;
-      forall(d + 1, cptr, sizes, strides, nd, op);
+      T *tmp = cptr;
+      if constexpr (PASSIDX) {
+        (*idx)[d] = i;
+      }
+      forall_<T, OP, PASSIDX>(d + 1, cptr, sizes, strides, nd, op, idx);
       cptr = tmp + strides[d];
     }
   }
+}
+
+template <typename T, typename OP>
+void forall(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
+            uint64_t nd, OP op) {
+  forall_<T, OP, false>(d, cptr, sizes, strides, nd, op, nullptr);
+}
+
+template <typename T, typename OP>
+void forall(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
+            uint64_t nd, std::vector<int64_t> &idx, OP op) {
+  forall_<T, OP, true>(d, cptr, sizes, strides, nd, op, &idx);
 }

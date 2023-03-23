@@ -167,6 +167,21 @@ template <typename T> struct wrap_array {
   }
 };
 
+py::object wrap(DDPTensorImpl::ptr_type tnsr, const py::handle &handle) {
+  auto tmp_shp = tnsr->local_shape();
+  auto tmp_str = tnsr->local_strides();
+  auto nd = tnsr->ndims();
+  auto eSz = sizeof_dtype(tnsr->dtype());
+  std::vector<ssize_t> strides(nd);
+  for (auto i = 0; i < nd; ++i) {
+    strides[i] = eSz * tmp_str[i];
+  }
+
+  return dispatch<wrap_array>(tnsr->dtype(),
+                              std::vector<ssize_t>(tmp_shp, &tmp_shp[nd]),
+                              strides, tnsr->data(), handle);
+}
+
 // ***************************************************************************
 
 struct DeferredGetLocal
@@ -182,17 +197,7 @@ struct DeferredGetLocal
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
     assert(a_ptr);
-    auto tmp_shp = a_ptr->local_shape();
-    auto tmp_str = a_ptr->local_strides();
-    auto nd = a_ptr->ndims();
-    auto eSz = sizeof_dtype(a_ptr->dtype());
-    std::vector<ssize_t> strides(nd);
-    for (auto i = 0; i < nd; ++i) {
-      strides[i] = eSz * tmp_str[i];
-    }
-    auto res = dispatch<wrap_array>(a_ptr->dtype(),
-                                    std::vector<ssize_t>(tmp_shp, &tmp_shp[nd]),
-                                    strides, a_ptr->data(), _handle);
+    auto res = wrap(a_ptr, _handle);
     set_value(res);
   }
 
@@ -317,6 +322,58 @@ struct DeferredSetItem : public Deferred {
 
 // ***************************************************************************
 
+struct DeferredMap : public Deferred {
+  id_type _a;
+  py::object _func;
+
+  DeferredMap() = default;
+  DeferredMap(const tensor_i::future_type &a, py::object &func)
+      : Deferred(a.id(), a.dtype(), a.rank(), a.balanced()), _a(a.id()),
+        _func(func) {}
+
+  void run() override {
+    auto aa = std::move(Registry::get(_a).get());
+    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    assert(a_ptr);
+    auto nd = a_ptr->ndims();
+    auto lOffs = a_ptr->local_offsets();
+    std::vector<int64_t> lIdx(nd);
+    std::vector<int64_t> gIdx(nd);
+
+    dispatch(a_ptr->dtype(), a_ptr->data(), [&](auto *ptr) {
+      forall(
+          0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), nd, lIdx,
+          [&](const std::vector<int64_t> &idx, auto *elPtr) {
+            for (auto i = 0; i < nd; ++i) {
+              gIdx[i] = idx[i] + lOffs[i];
+            }
+            auto pyIdx = _make_tuple(gIdx);
+            *elPtr =
+                _func(*pyIdx)
+                    .cast<
+                        typename std::remove_pointer<decltype(elPtr)>::type>();
+          });
+    });
+
+    this->set_value(aa);
+  };
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    return true;
+  }
+
+  FactoryId factory() const { return F_MAP; }
+
+  template <typename S> void serialize(S &ser) {
+    assert(false);
+    ser.template value<sizeof(_a)>(_a);
+    // nope ser.template value<sizeof(_func)>(_func);
+  }
+};
+
+// ***************************************************************************
+
 struct DeferredGetItem : public Deferred {
   id_type _a;
   NDSlice _slc;
@@ -407,11 +464,15 @@ GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
 
 ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
                                 const py::object &b) {
-
   auto bb = Creator::mk_future(b);
   a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
   if (bb.second)
     delete bb.first;
+  return &a;
+}
+
+ddptensor *SetItem::map(ddptensor &a, py::object &b) {
+  a.put(defer<DeferredMap>(a.get(), b));
   return &a;
 }
 
@@ -423,5 +484,6 @@ py::object GetItem::get_slice(const ddptensor &a,
 
 FACTORY_INIT(DeferredGetItem, F_GETITEM);
 FACTORY_INIT(DeferredSetItem, F_SETITEM);
+FACTORY_INIT(DeferredMap, F_MAP);
 FACTORY_INIT(DeferredGather, F_GATHER);
-FACTORY_INIT(DeferredGather, F_GETLOCAL);
+FACTORY_INIT(DeferredGetLocal, F_GETLOCAL);

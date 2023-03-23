@@ -67,6 +67,7 @@ else:
 
 import numpy
 import ddptensor as np
+import ddptensor.numpy
 
 # print('np version  = ', np.version.version)
 
@@ -123,6 +124,7 @@ def main():
     W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float64)
     A = np.empty((n, n), dtype=np.float64)
     B = np.zeros((n, n), dtype=np.float64)
+
     if pattern == "star":
         stencil_size = 4 * r + 1
         for i in range(1, r + 1):
@@ -143,10 +145,7 @@ def main():
             W[r + j, r + j] = +1.0 / (4 * j * r)
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
-    # A = numpy.fromfunction(lambda i,j: i+j, (n,n), dtype=float)
-    for i in range(n):
-        for j in range(n):
-            A[i, j] = float(i + j)
+    A = np.numpy.fromfunction(lambda i, j: i + j, (n, n), dtype=np.float64)
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
@@ -204,12 +203,11 @@ def main():
     reference_norm = 2 * (iterations + 1)
     if abs(norm - reference_norm) < epsilon:
         print("Solution validates")
-        flops = (2 * stencil_size + 1) * active_points
-        avgtime = stencil_time / iterations
-        print("Rate (MFlops/s): ", 1.0e-6 * flops / avgtime, " Avg time (s): ", avgtime)
     else:
         print("ERROR: L1 norm = ", norm, " Reference L1 norm = ", reference_norm)
-        sys.exit()
+    flops = (2 * stencil_size + 1) * active_points
+    avgtime = stencil_time / iterations
+    print("Rate (MFlops/s): ", 1.0e-6 * flops / avgtime, " Avg time (s): ", avgtime)
 
 
 if __name__ == "__main__":

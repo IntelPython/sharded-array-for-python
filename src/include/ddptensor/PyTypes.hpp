@@ -115,6 +115,12 @@ template <typename T> py::tuple _make_tuple(const std::vector<T> &v) {
       [](const V &v, int i) { return v[i]; });
 }
 
+template <typename T> py::tuple _make_tuple(const T ptr, size_t n) {
+  return _make_tuple(
+      ptr, [n](const T &) { return n; },
+      [](const T &v, int i) { return v[i]; });
+}
+
 template <typename T> T to_native(const py::object &o) { return o.cast<T>(); }
 
 inline void compute_slice(const py::slice &slc, uint64_t &offset,

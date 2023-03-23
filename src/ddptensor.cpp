@@ -55,6 +55,7 @@ extern bool finied;
 
 // users currently need to call fini to make MPI terminate gracefully
 void fini() {
+  py::gil_scoped_release release;
   if (finied)
     return;
   fini_mediator(); // stop task is sent in here
@@ -92,15 +93,22 @@ void init(bool cw) {
   finied = false;
 }
 
+void sync_promises() {
+  py::gil_scoped_release release;
+  (void)Service::run().get();
+}
+
 // #########################################################################
 
 /// trigger compile&run and return future value
 #define PY_SYNC_RETURN(_f)                                                     \
+  py::gil_scoped_release release;                                              \
   Service::run();                                                              \
   return (_f).get()
 
 /// trigger compile&run and return given attribute _x
 #define SYNC_RETURN(_f, _a)                                                    \
+  py::gil_scoped_release release;                                              \
   Service::run();                                                              \
   return (_f).get().get()->_a()
 
@@ -188,7 +196,8 @@ PYBIND11_MODULE(_ddptensor, m) {
            [](const ddptensor &f) { REPL_SYNC_RETURN(f, __int__); })
       // attributes returning a new ddptensor
       .def("__getitem__", &GetItem::__getitem__)
-      .def("__setitem__", &SetItem::__setitem__);
+      .def("__setitem__", &SetItem::__setitem__)
+      .def("map", &SetItem::map);
 #undef REPL_SYNC_RETURN
 #undef SYNC_RETURN
 

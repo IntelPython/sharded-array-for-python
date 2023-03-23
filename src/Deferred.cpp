@@ -19,6 +19,9 @@
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <oneapi/tbb/concurrent_queue.h>
 
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
 #include <iostream>
 
 // thread-safe FIFO queue holding deferred objects
@@ -148,9 +151,10 @@ void process_promises() {
     } // no else needed
 
     // now we execute the deferred action which could not be compiled
-    if (d)
+    if (d) {
+      py::gil_scoped_acquire acquire;
       d->run();
+      d.reset();
+    }
   } while (!done);
 }
-
-void sync_promises() { (void)Service::run().get(); }

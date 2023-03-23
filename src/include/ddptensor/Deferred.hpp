@@ -16,7 +16,6 @@
 #include "tensor_i.hpp"
 
 extern void process_promises();
-extern void sync_promises();
 
 // interface for promises/tasks to generate MLIR or execute immediately.
 struct Runable {

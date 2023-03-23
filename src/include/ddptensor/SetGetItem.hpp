@@ -26,4 +26,5 @@ struct GetItem {
 struct SetItem {
   static ddptensor *__setitem__(ddptensor &a, const std::vector<py::slice> &v,
                                 const py::object &b);
+  static ddptensor *map(ddptensor &a, py::object &b);
 };

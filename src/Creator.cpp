@@ -151,8 +151,11 @@ struct DeferredFull : public Deferred {
     ::imex::ptensor::DType dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
 
-    auto team = ::imex::createIndex(
-        loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
+    auto team = /*getTransceiver()->nranks() <= 1
+                  ? ::mlir::Value()
+                  :*/
+        ::imex::createIndex(loc, builder,
+                            reinterpret_cast<uint64_t>(getTransceiver()));
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val,
@@ -206,8 +209,12 @@ struct DeferredArange : public Deferred {
     auto stop = ::imex::createInt(loc, builder, _end);
     auto step = ::imex::createInt(loc, builder, _step);
     // ::mlir::Value
-    auto team = ::imex::createIndex(
-        loc, builder, reinterpret_cast<uint64_t>(getTransceiver()));
+    auto team = /*getTransceiver()->nranks() <= 1
+                ? ::mlir::Value()
+                :*/
+        ::imex::createIndex(loc, builder,
+                            reinterpret_cast<uint64_t>(getTransceiver()));
+
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::ARangeOp>(loc, start, stop, step,
                                                         nullptr, team),
