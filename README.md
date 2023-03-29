@@ -4,14 +4,14 @@ A tensor implementation following the [array API as defined by the data-API cons
 It supports a controller-worker execution model as well as a CSP-like execution.
 
 ## Setting up build environment
-Install MLIR/LLVM and IMEX from branch refactor (see https://github.com/intel/mlir-extensions/tree/refactor).
+Install MLIR/LLVM and IMEX from branch dist-ndarray (see https://github.com/intel-innersource/frameworks.ai.mlir.mlir-extensions/tree/dist-ndarray).
 ```bash
 git --recurse-submodules clone https://github.com/intel-sandbox/personal.fschlimb.ddptensor
 cd personal.fschlimb.ddptensor
+git checkout jit
 conda env create -f conda-env.yml -n ddpt
 conda activate ddpt
 export MPIROOT=$CONDA_PREFIX
-export MKLROOT=$CONDA_PREFIX
 export MLIRROOT=<your-MLIR-install-dir>
 export IMEXROOT=<your-IMEX-install-dir>
 ```
@@ -21,7 +21,7 @@ python setup.py develop
 ```
 If your compiler does not default to a recent version, try something like `CC=gcc-9 CXX=g++-9 python setup.py develop`
 
-## Running Tests
+## Running Tests [non functional]
 __Test are currently not operational on this branch.__
 
 ```bash
@@ -58,11 +58,11 @@ dt.fini()
 ```
 Assuming the above is in file `simple.py` a single-process run is executed like
 ```bash
-python DDPT_IDTR_SO=`pwd`/ddptensor/libidtr.so python simple.py
+DDPT_IDTR_SO=`pwd`/ddptensor/libidtr.so python simple.py
 ```
 and multi-process run is executed like
 ```bash
-python DDPT_IDTR_SO=`pwd`/ddptensor/libidtr.so mpirun -n 5 python simple.py
+DDPT_IDTR_SO=`pwd`/ddptensor/libidtr.so mpirun -n 5 python simple.py
 ```
 
 ## Contributing

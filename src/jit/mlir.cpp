@@ -396,21 +396,17 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
 static const char *pass_pipeline =
     getenv("DDPT_PASSES")
         ? getenv("DDPT_PASSES")
-        //    :
-        //    "func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-expand,canonicalize,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize),func-bufferize,canonicalize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts";
-        //    :
-        //    "builtin.module(func.func(ptensor-dist),convert-dist-to-standard,convert-ptensor-to-linalg,arith-bufferize,func.func(empty-tensor-to-alloc-tensor,scf-bufferize,linalg-bufferize,tensor-bufferize,bufferization-bufferize),func-bufferize,func.func(finalizing-bufferize,convert-linalg-to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-strided-metadata,lower-affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-casts)";
         : "func.func(ptensor-dist,dist-coalesce),convert-dist-to-standard,"
           "convert-ptensor-to-linalg,canonicalize,convert-shape-to-std,arith-"
-          "expand,canonicalize,arith-bufferize,func-bufferize,func.func(tosa-"
-          "to-linalg,"
-          "empty-tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
-          "bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
+          "expand,func.func(tosa-to-linalg,canonicalize,linalg-fuse-"
+          "elementwise-ops,empty-tensor-to-alloc-tensor),memref-expand,arith-"
+          "bufferize,func-bufferize,func.func(scf-bufferize,tensor-bufferize,"
+          "linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
           "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
           "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
-          "math-to-funcs,convert-math-to-libm,lower-"
-          "affine,convert-scf-to-cf,convert-memref-to-llvm,convert-func-to-"
-          "llvm,reconcile-unrealized-casts";
+          "math-to-funcs,convert-math-to-libm,lower-affine,convert-scf-to-cf,"
+          "finalize-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-"
+          "casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
       _verbose(false) {
@@ -477,9 +473,9 @@ void init() {
   ::mlir::bufferization::registerBufferizationPasses();
   ::mlir::arith::registerArithPasses();
   ::mlir::registerAffinePasses();
-  ::mlir::registerMemRefToLLVMConversionPass();
   ::mlir::registerCanonicalizerPass();
   ::mlir::registerConvertAffineToStandardPass();
+  ::mlir::registerFinalizeMemRefToLLVMConversionPass();
   ::mlir::memref::registerMemRefPasses();
   ::mlir::registerReconcileUnrealizedCastsPass();
 
