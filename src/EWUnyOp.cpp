@@ -9,6 +9,8 @@
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 
+#include <imex/Dialect/Dist/IR/DistOps.h>
+
 #if 0
 namespace x {
 
@@ -117,17 +119,113 @@ namespace x {
 } //namespace x
 #endif // if 0
 
+// convert id of our unary op to id of imex::ptensor unary op
+static ::imex::ptensor::EWUnyOpId ddpt2mlir(const EWUnyOpId uop) {
+  switch (uop) {
+  case __ABS__:
+  case ABS:
+    return ::imex::ptensor::ABS;
+  case ACOS:
+    return ::imex::ptensor::ACOS;
+  case ACOSH:
+    return ::imex::ptensor::ACOSH;
+  case ASIN:
+    return ::imex::ptensor::ASIN;
+  case ASINH:
+    return ::imex::ptensor::ASINH;
+  case ATAN:
+    return ::imex::ptensor::ATAN;
+  case ATANH:
+    return ::imex::ptensor::ATANH;
+  case CEIL:
+    return ::imex::ptensor::CEIL;
+  case COS:
+    return ::imex::ptensor::COS;
+  case COSH:
+    return ::imex::ptensor::COSH;
+  case EXP:
+    return ::imex::ptensor::EXP;
+  case EXPM1:
+    return ::imex::ptensor::EXPM1;
+  case FLOOR:
+    return ::imex::ptensor::FLOOR;
+  case ISFINITE:
+    return ::imex::ptensor::ISFINITE;
+  case ISINF:
+    return ::imex::ptensor::ISINF;
+  case ISNAN:
+    return ::imex::ptensor::ISNAN;
+  case LOG:
+    return ::imex::ptensor::LOG;
+  case LOG1P:
+    return ::imex::ptensor::LOG1P;
+  case LOG2:
+    return ::imex::ptensor::LOG2;
+  case LOG10:
+    return ::imex::ptensor::LOG10;
+  case ROUND:
+    return ::imex::ptensor::ROUND;
+  case SIGN:
+    return ::imex::ptensor::SIGN;
+  case SIN:
+    return ::imex::ptensor::SIN;
+  case SINH:
+    return ::imex::ptensor::SINH;
+  case SQUARE:
+    return ::imex::ptensor::SQUARE;
+  case SQRT:
+    return ::imex::ptensor::SQRT;
+  case TAN:
+    return ::imex::ptensor::TAN;
+  case TANH:
+    return ::imex::ptensor::TANH;
+  case TRUNC:
+    return ::imex::ptensor::TRUNC;
+  case ERF:
+    return ::imex::ptensor::ERF;
+  case LOGICAL_NOT:
+    return ::imex::ptensor::LOGICAL_NOT;
+  case __NEG__:
+  case NEGATIVE:
+  case __POS__:
+  case POSITIVE:
+  default:
+    throw std::runtime_error("Unknown/invalid elementwise unary operation");
+  }
+}
+
+
 struct DeferredEWUnyOp : public Deferred {
   id_type _a;
   EWUnyOpId _op;
 
   DeferredEWUnyOp() = default;
   DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
-      : _a(a.id()), _op(op) {}
+      : Deferred(a.dtype(), a.rank(), true), _a(a.id()), _op(op) {}
 
-  void run() {
-    // const auto a = std::move(Registry::get(_a).get());
-    // set_value(std::move(TypeDispatch<x::EWUnyOp>(a, _op)));
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    auto av = dm.getDependent(builder, _a);
+
+    auto aTyp = ::imex::dist::getPTensorType(av);
+    ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
+    auto outTyp =
+        ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+
+    auto uop = builder.create<::imex::ptensor::EWUnyOp>(
+        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av);
+    dm.addVal(this->guid(), uop,
+              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+                     void *aligned, intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, uint64_t *gs_allocated,
+                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     uint64_t *lo_aligned, uint64_t balanced) {
+                this->set_value(std::move(
+                    mk_tnsr(transceiver, _dtype, rank, allocated, aligned,
+                            offset, sizes, strides, gs_allocated, gs_aligned,
+                            lo_allocated, lo_aligned, balanced)));
+              });
+    return false;
   }
 
   FactoryId factory() const { return F_EWUNYOP; }
