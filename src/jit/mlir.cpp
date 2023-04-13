@@ -406,10 +406,9 @@ static const char *pass_pipeline =
           "linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
           "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
           "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
-          "math-to-funcs,lower-affine,convert-scf-to-cf,"
-          "finalize-memref-to-llvm,convert-math-to-llvm,convert-func-to-llvm,"
-          "reconcile-unrealized-"
-          "casts";
+          "math-to-funcs,lower-affine,convert-scf-to-cf,finalize-memref-to-"
+          "llvm,convert-math-to-llvm,convert-math-to-libm,convert-func-to-"
+          "llvm,reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
       _verbose(false) {
@@ -473,6 +472,7 @@ void init() {
   ::mlir::registerTosaToLinalg();
   ::mlir::registerConvertMathToFuncs();
   ::mlir::registerConvertMathToLibm();
+  ::mlir::registerConvertMathToLLVMPass();
   ::mlir::tosa::registerTosaOptPasses();
   ::mlir::func::registerFuncPasses();
   ::mlir::registerConvertFuncToLLVMPass();
