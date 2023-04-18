@@ -192,8 +192,12 @@ target_link_libraries(_ddpt_rt PRIVATE
     MLIRMemRefDialect
     MLIRMemRefToLLVM
     MLIRMemRefTransforms
+    MLIROpenMPDialect
+    MLIROpenMPToLLVM
+    MLIROpenMPToLLVMIRTranslation
     MLIRReconcileUnrealizedCasts
     MLIRSCFDialect
+    MLIRSCFToOpenMP
     MLIRSCFToControlFlow
     MLIRSCFTransforms
     MLIRShapeDialect

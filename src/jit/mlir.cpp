@@ -77,7 +77,9 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/OpenMP/OpenMPToLLVMIRTranslation.h"
 
 #include <llvm/Support/raw_sha1_ostream.h>
 
@@ -341,9 +343,9 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     }
     if (cached) {
       module = cached;
-      std::cerr << "using cached module" << std::endl;
+      // std::cerr << "using cached module" << std::endl;
     } else {
-      std::cerr << "compiling..." << std::endl;
+      // std::cerr << "compiling..." << std::endl;
       cache.push_back(std::make_pair(cksm, module));
     }
   }
@@ -404,8 +406,9 @@ static const char *pass_pipeline =
           "linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
           "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
           "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
-          "math-to-funcs,convert-math-to-libm,lower-affine,convert-scf-to-cf,"
-          "finalize-memref-to-llvm,convert-func-to-llvm,reconcile-unrealized-"
+          "math-to-funcs,lower-affine,convert-scf-to-cf,"
+          "finalize-memref-to-llvm,convert-math-to-llvm,convert-func-to-llvm,"
+          "reconcile-unrealized-"
           "casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
@@ -413,6 +416,8 @@ JIT::JIT()
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
   ::mlir::registerLLVMDialectTranslation(_context);
+  ::mlir::registerBuiltinDialectTranslation(_context);
+  ::mlir::registerOpenMPDialectTranslation(_context);
   // load the dialects we use
   _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
   _context.getOrLoadDialect<::mlir::func::FuncDialect>();
@@ -460,6 +465,7 @@ void init() {
   // ::mlir::registerAllPasses();
   ::mlir::registerSCFPasses();
   ::mlir::registerSCFToControlFlowPass();
+  ::mlir::registerConvertSCFToOpenMPPass();
   ::mlir::registerShapePasses();
   ::mlir::registerConvertShapeToStandardPass();
   ::mlir::tensor::registerTensorPasses();
@@ -476,6 +482,11 @@ void init() {
   ::mlir::registerCanonicalizerPass();
   ::mlir::registerConvertAffineToStandardPass();
   ::mlir::registerFinalizeMemRefToLLVMConversionPass();
+  ::mlir::registerArithToLLVMConversionPass();
+  ::mlir::registerConvertMathToLLVMPass();
+  ::mlir::registerConvertControlFlowToLLVMPass();
+  ::mlir::registerConvertLinalgToLLVMPass();
+  ::mlir::registerConvertOpenMPToLLVMPass();
   ::mlir::memref::registerMemRefPasses();
   ::mlir::registerReconcileUnrealizedCastsPass();
 
