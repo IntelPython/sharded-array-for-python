@@ -99,7 +99,6 @@ set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/Random.cpp
     ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
-    ${PROJECT_SOURCE_DIR}/src/Sorting.cpp
 )
 set(RTSrcs
     ${PROJECT_SOURCE_DIR}/src/CollComm.cpp

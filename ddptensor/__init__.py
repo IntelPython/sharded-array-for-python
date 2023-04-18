@@ -112,8 +112,3 @@ for func in api.api_categories["LinAlgOp"]:
         )
     elif func == "matrix_transpose":
         exec(f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))")
-
-for func in api.api_categories["SortOp"]:
-    exec(
-        f"{func} = lambda this, axis=-1, descending=False, stable=True: dtensor(_cdt.SortOp.{func}(this._t, descending))"
-    )

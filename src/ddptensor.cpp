@@ -133,7 +133,6 @@ PYBIND11_MODULE(_ddptensor, m) {
   Factory::init<F_REDUCEOP>();
   Factory::init<F_SERVICE>();
   Factory::init<F_SETITEM>();
-  Factory::init<F_SORTOP>();
   Factory::init<F_GATHER>();
   Factory::init<F_GETITEM>();
 
@@ -171,7 +170,6 @@ PYBIND11_MODULE(_ddptensor, m) {
   py::class_<ReduceOp>(m, "ReduceOp").def("op", &ReduceOp::op);
   py::class_<ManipOp>(m, "ManipOp").def("reshape", &ManipOp::reshape);
   py::class_<LinAlgOp>(m, "LinAlgOp").def("vecdot", &LinAlgOp::vecdot);
-  py::class_<SortOp>(m, "SortOp").def("sort", &SortOp::sort);
 
   py::class_<ddptensor>(m, "DDPTFuture")
       // attributes we can get from the future itself
