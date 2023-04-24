@@ -128,6 +128,7 @@ PYBIND11_MODULE(_ddptensor, m) {
   Factory::init<F_GETITEM>();
   Factory::init<F_IEWBINOP>();
   Factory::init<F_LINALGOP>();
+  Factory::init<F_LINSPACE>();
   Factory::init<F_MANIPOP>();
   Factory::init<F_RANDOM>();
   Factory::init<F_REDUCEOP>();
@@ -162,7 +163,8 @@ PYBIND11_MODULE(_ddptensor, m) {
   py::class_<Creator>(m, "Creator")
       .def("create_from_shape", &Creator::create_from_shape)
       .def("full", &Creator::full)
-      .def("arange", &Creator::arange);
+      .def("arange", &Creator::arange)
+      .def("linspace", &Creator::linspace);
 
   py::class_<EWUnyOp>(m, "EWUnyOp").def("op", &EWUnyOp::op);
   py::class_<IEWBinOp>(m, "IEWBinOp").def("op", &IEWBinOp::op);

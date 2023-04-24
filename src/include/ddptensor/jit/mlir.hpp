@@ -63,6 +63,35 @@ template <> struct PT_DTYPE<bool> {
   constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I1;
 };
 
+inline ::imex::ptensor::DType getPTDType(DTypeId dt) {
+  switch (dt) {
+  case FLOAT64:
+    return PT_DTYPE<TYPE<FLOAT64>::dtype>::value;
+  case INT64:
+    return PT_DTYPE<TYPE<INT64>::dtype>::value;
+  case FLOAT32:
+    return PT_DTYPE<TYPE<FLOAT32>::dtype>::value;
+  case INT32:
+    return PT_DTYPE<TYPE<INT32>::dtype>::value;
+  case INT16:
+    return PT_DTYPE<TYPE<INT16>::dtype>::value;
+  case INT8:
+    return PT_DTYPE<TYPE<INT8>::dtype>::value;
+  case UINT64:
+    return PT_DTYPE<TYPE<UINT64>::dtype>::value;
+  case UINT32:
+    return PT_DTYPE<TYPE<UINT32>::dtype>::value;
+  case UINT16:
+    return PT_DTYPE<TYPE<UINT16>::dtype>::value;
+  case UINT8:
+    return PT_DTYPE<TYPE<UINT8>::dtype>::value;
+  case BOOL:
+    return PT_DTYPE<TYPE<BOOL>::dtype>::value;
+  default:
+    throw std::runtime_error("unknown dtype");
+  }
+}
+
 // function type used for reporting back tensor results generated
 // by Deferred::generate_mlir
 using SetResFunc = std::function<void(

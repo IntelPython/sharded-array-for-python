@@ -83,6 +83,10 @@ for func in api.api_categories["Creator"]:
         exec(
             f"{func} = lambda start, end, step, dtype, team=0: dtensor(_cdt.Creator.arange(start, end, step, dtype, team))"
         )
+    elif func == "linspace":
+        exec(
+            f"{func} = lambda start, end, step, endpoint, dtype, team=0: dtensor(_cdt.Creator.linspace(start, end, step, endpoint, dtype, team))"
+        )
 
 for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()

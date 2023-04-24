@@ -203,6 +203,7 @@ enum FactoryId : int {
   F_GETLOCAL,
   F_IEWBINOP,
   F_LINALGOP,
+  F_LINSPACE,
   F_MANIPOP,
   F_MAP,
   F_RANDOM,
