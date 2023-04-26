@@ -99,6 +99,15 @@ void process_promises() {
     // Create the jit func
     // create dummy type, we'll replace it with the actual type later
     auto dummyFuncType = builder.getFunctionType({}, {});
+    if (false) {
+      ::mlir::OpBuilder::InsertionGuard guard(builder);
+      // Insert before module terminator.
+      builder.setInsertionPoint(module.getBody(),
+                                std::prev(module.getBody()->end()));
+      auto func = builder.create<::mlir::func::FuncOp>(loc, "_debugFunc",
+                                                       dummyFuncType);
+      func.setPrivate();
+    }
     std::string fname("ddpt_jit");
     auto function =
         builder.create<::mlir::func::FuncOp>(loc, fname, dummyFuncType);

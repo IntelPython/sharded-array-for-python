@@ -375,7 +375,9 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
   std::vector<intptr_t> out(osz);
   auto tmp = out.data();
   // first arg must be the result ptr
-  args.push_back(&tmp);
+  if (osz) {
+    args.push_back(&tmp);
+  }
   // we need a void*& for every input tensor
   // we refer directly to the storage in inp
   for (auto &arg : inp) {

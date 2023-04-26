@@ -43,7 +43,7 @@ public:
   // @ return team, 0 means non-distributed
   int team() const { return _team; }
 
-  /// @return rank (number of dims) of future tensor
+  /// @return if future tensor will have balanced partitions
   int balanced() const { return _balanced; }
 
   void set_guid(id_type guid) { _guid = guid; }

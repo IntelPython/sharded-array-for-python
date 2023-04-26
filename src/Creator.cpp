@@ -18,8 +18,10 @@
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 
+static const char *FORCE_DIST = getenv("DDPT_FORCE_DIST");
+
 inline uint64_t mkTeam(uint64_t team) {
-  if (team && getTransceiver()->nranks() > 1) {
+  if (team && (FORCE_DIST || getTransceiver()->nranks() > 1)) {
     return 1;
   }
   return 0;

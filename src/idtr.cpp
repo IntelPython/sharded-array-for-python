@@ -422,4 +422,5 @@ void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
               << std::endl;
 }
 
+void _debugFunc() { std::cerr << "_debugfunc\n"; }
 } // extern "C"
