@@ -12,6 +12,43 @@
 
 class NDSlice;
 
+/// Futures and promises readily provide meta information
+///   - id
+///   - dtype (element type)
+///   - rank (number of dimensions)
+///   - team
+///   - balanced (flag indicating if tensor's partitions are balanced)
+class TensorMeta {
+protected:
+  id_type _guid = -1;
+  DTypeId _dtype = DTYPE_LAST;
+  int _rank = -1;
+  uint64_t _team;
+  bool _balanced = true;
+
+public:
+  TensorMeta(id_type id, DTypeId dt, int rank, uint64_t team, bool balanced)
+      : _guid(id), _dtype(dt), _rank(rank), _team(team), _balanced(balanced) {}
+  TensorMeta() = default;
+
+  /// @return globally unique id
+  id_type guid() const { return _guid; }
+
+  /// @return dtype of future tensor
+  DTypeId dtype() const { return _dtype; }
+
+  /// @return rank (number of dims) of future tensor
+  int rank() const { return _rank; }
+
+  // @ return team, 0 means non-distributed
+  int team() const { return _team; }
+
+  /// @return rank (number of dims) of future tensor
+  int balanced() const { return _balanced; }
+
+  void set_guid(id_type guid) { _guid = guid; }
+};
+
 ///
 /// Abstract interface for a tensor implementation.
 /// Used to hide the element type so we can bridge dynamic array types in Python
@@ -21,8 +58,6 @@ class tensor_i {
 public:
   /// (shared) pointer to a tensor
   typedef std::shared_ptr<tensor_i> ptr_type;
-  /// promise type propducing a future tensor
-  typedef std::promise<ptr_type> promise_type;
 
   /// Future tensor
   /// in addition to allowing getting value (get()).
@@ -31,36 +66,20 @@ public:
   ///   - dtype (element type)
   ///   - rank (number of dimensions)
   ///   - balanced (flag indicating if tensor's partitions are balanced)
-  class TFuture : public std::shared_future<tensor_i::ptr_type> {
-    id_type _id = -1;
-    DTypeId _dtype = DTYPE_LAST;
-    int _rank = -1;
-    bool _balanced = true;
-
+  template <typename T> class Metaified : public T, public TensorMeta {
   public:
-    TFuture() = default;
-    TFuture(const TFuture &f) = default;
-    TFuture(std::shared_future<tensor_i::ptr_type> &&f, id_type id, DTypeId dt,
-            int rank, bool balanced)
-        : std::shared_future<tensor_i::ptr_type>(std::move(f)), _id(id),
-          _dtype(dt), _rank(rank), _balanced(balanced) {}
-
-    ~TFuture() {}
-
-    /// @return globally unique id
-    id_type id() const { return _id; }
-
-    /// @return dtype of future tensor
-    DTypeId dtype() const { return _dtype; }
-
-    /// @return rank (number of dims) of future tensor
-    int rank() const { return _rank; }
-
-    /// @return rank (number of dims) of future tensor
-    int balanced() const { return _balanced; }
+    Metaified() = default;
+    Metaified(T &&f, id_type id, DTypeId dt, int rank, uint64_t team,
+              bool balanced)
+        : T(std::move(f)), TensorMeta(id, dt, rank, team, balanced) {}
+    Metaified(id_type id, DTypeId dt, int rank, uint64_t team, bool balanced)
+        : T(), TensorMeta(id, dt, rank, team, balanced) {}
+    ~Metaified() {}
   };
 
-  typedef TFuture future_type;
+  /// promise type producing a future tensor
+  using promise_type = Metaified<std::promise<ptr_type>>;
+  using future_type = Metaified<std::shared_future<tensor_i::ptr_type>>;
 
   virtual ~tensor_i(){};
   /// python object's __repr__
@@ -68,7 +87,7 @@ public:
   /// @return tensor's element type
   virtual DTypeId dtype() const = 0;
   /// @return tensor's shape
-  virtual const uint64_t *shape() const = 0;
+  virtual const int64_t *shape() const = 0;
   /// @returnnumber of dimensions of tensor
   virtual int ndims() const = 0;
   /// @return global number of elements in tensor
@@ -94,7 +113,7 @@ public:
 template<typename S>
 void serialize(S & ser, tensor_i::future_type & f)
 {
-    uint64_t id = f.id();
+    uint64_t id = f.guid();
     ser.value8b(id);
     if constexpr (std::is_same<Deserializer, S>::value) {
 

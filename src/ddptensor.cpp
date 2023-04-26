@@ -123,7 +123,6 @@ PYBIND11_MODULE(_ddptensor, m) {
   Factory::init<F_ARANGE>();
   Factory::init<F_EWBINOP>();
   Factory::init<F_EWUNYOP>();
-  Factory::init<F_FROMSHAPE>();
   Factory::init<F_FULL>();
   Factory::init<F_GETITEM>();
   Factory::init<F_IEWBINOP>();
@@ -161,7 +160,6 @@ PYBIND11_MODULE(_ddptensor, m) {
            [](const ddptensor &f) { PY_SYNC_RETURN(IO::to_numpy(f)); });
 
   py::class_<Creator>(m, "Creator")
-      .def("create_from_shape", &Creator::create_from_shape)
       .def("full", &Creator::full)
       .def("arange", &Creator::arange)
       .def("linspace", &Creator::linspace);

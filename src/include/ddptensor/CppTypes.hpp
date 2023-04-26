@@ -196,7 +196,6 @@ enum FactoryId : int {
   F_ARANGE,
   F_EWBINOP,
   F_EWUNYOP,
-  F_FROMSHAPE,
   F_FULL,
   F_GATHER,
   F_GETITEM,

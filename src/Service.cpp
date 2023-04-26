@@ -50,7 +50,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
 
   DeferredService(Op op = SERVICE_LAST) : _a(), _op(op) {}
   DeferredService(Op op, const tensor_i::future_type &a)
-      : _a(a.id()), _op(op) {}
+      : _a(a.guid()), _op(op) {}
 
   void run() {
     switch (_op) {
@@ -95,7 +95,7 @@ struct DeferredReplicate : public Deferred {
   id_type _a;
 
   DeferredReplicate() : _a() {}
-  DeferredReplicate(const tensor_i::future_type &a) : _a(a.id()) {}
+  DeferredReplicate(const tensor_i::future_type &a) : _a(a.guid()) {}
 
   void run() {
     const auto a = std::move(Registry::get(_a).get());

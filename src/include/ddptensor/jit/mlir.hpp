@@ -97,7 +97,7 @@ inline ::imex::ptensor::DType getPTDType(DTypeId dt) {
 using SetResFunc = std::function<void(
     Transceiver *transceiver, uint64_t rank, void *allocated, void *aligned,
     intptr_t offset, const intptr_t *sizes, const intptr_t *strides,
-    uint64_t *gs_allocated, uint64_t *gs_aligned, uint64_t *lo_allocated,
+    int64_t *gs_allocated, int64_t *gs_aligned, uint64_t *lo_allocated,
     uint64_t *lo_aligned, uint64_t balanced)>;
 using ReadyFunc = std::function<void(id_type guid)>;
 
@@ -144,9 +144,6 @@ public:
   /// devlier promise after execution
   void deliver(std::vector<intptr_t> &, uint64_t);
 
-  /// @return total size of all input arguments in number of intptr_t
-  uint64_t arg_size();
-
   /// store all inputs into given buffer
   /// This must be called before handleResults()
   std::vector<void *> store_inputs();
@@ -171,7 +168,8 @@ public:
 
   ::mlir::MLIRContext _context;
   ::mlir::PassManager _pm;
-  bool _verbose, _useCache;
+  int _verbose;
+  bool _useCache;
   const char *_sharedLibPaths;
 };
 

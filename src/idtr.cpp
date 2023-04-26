@@ -371,7 +371,7 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
 
   // send our send sizes to others and receive theirs
   std::vector<int> rszs(N);
-  getTransceiver()->alltoall(sszs.data(), 1, INT32, rszs.data());
+  tc->alltoall(sszs.data(), 1, INT32, rszs.data());
 
   // compute receive-displacements
   std::vector<int> roffs(N);
@@ -387,11 +387,11 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
     Buffer buff(totSSz * sizeof_dtype(ddpttype), 2);
     bufferize(lDataPtr, ddpttype, lShapePtr, lStridesPtr, tStarts.data(),
               tSizes.data(), rank, N, buff.data());
-    getTransceiver()->alltoall(buff.data(), sszs.data(), soffs.data(), ddpttype,
-                               outPtr, rszs.data(), roffs.data());
+    tc->alltoall(buff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
+                 rszs.data(), roffs.data());
   } else {
-    getTransceiver()->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype,
-                               outPtr, rszs.data(), roffs.data());
+    tc->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr,
+                 rszs.data(), roffs.data());
   }
 }
 

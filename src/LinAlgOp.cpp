@@ -125,7 +125,7 @@ struct DeferredLinAlgOp : public Deferred {
   DeferredLinAlgOp() = default;
   DeferredLinAlgOp(const tensor_i::future_type &a,
                    const tensor_i::future_type &b, int axis)
-      : _a(a.id()), _b(b.id()), _axis(axis) {}
+      : _a(a.guid()), _b(b.guid()), _axis(axis) {}
 
   void run() {
     // const auto a = std::move(Registry::get(_a).get());

@@ -89,6 +89,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 //#include "llvm/ADT/StringRef.h"
 //#include "llvm/IR/Module.h"
@@ -114,8 +115,8 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
 }
 
 // convert ddpt's DTYpeId into MLIR type
-static ::mlir::Type getDTType(::mlir::OpBuilder &builder, DTypeId dtype,
-                              int rank, bool balanced) {
+static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
+                             int rank, uint64_t team, bool balanced) {
   ::mlir::Type etyp;
 
   switch (dtype) {
@@ -149,8 +150,12 @@ static ::mlir::Type getDTType(::mlir::OpBuilder &builder, DTypeId dtype,
   };
 
   ::mlir::SmallVector<int64_t> shape(rank, ::mlir::ShapedType::kDynamic);
-  return ::imex::dist::DistTensorType::get(
-      builder.getContext(), ::imex::ptensor::PTensorType::get(shape, etyp));
+  auto pttype = ::imex::ptensor::PTensorType::get(shape, etyp);
+  if (team) {
+    return ::imex::dist::DistTensorType::get(builder.getContext(), pttype);
+  } else {
+    return pttype;
+  }
 }
 
 ::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
@@ -160,7 +165,8 @@ static ::mlir::Type getDTType(::mlir::OpBuilder &builder, DTypeId dtype,
     // Not found -> this must be an input argument to the jit function
     auto idx = _args.size();
     auto fut = Registry::get(guid);
-    auto typ = getDTType(builder, fut.dtype(), fut.rank(), fut.balanced());
+    auto typ =
+        getTType(builder, fut.dtype(), fut.rank(), fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, fut.rank()});
@@ -169,14 +175,6 @@ static ::mlir::Type getDTType(::mlir::OpBuilder &builder, DTypeId dtype,
   } else {
     return d->second;
   }
-}
-
-uint64_t DepManager::arg_size() {
-  uint64_t sz = 0;
-  for (auto a : _args) {
-    sz += dtensor_sz(a.second);
-  }
-  return sz;
 }
 
 std::vector<void *> DepManager::store_inputs() {
@@ -235,10 +233,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
       retDtTyp = ::imex::dist::DistTensorType::get(
           builder.getContext(),
           valPtTyp); // FIXME balanced needs to be reported back
-      value =
-          builder
-              .create<::mlir::UnrealizedConversionCastOp>(loc, retDtTyp, value)
-              .getResult(0);
+      value = builder.create<::imex::dist::CastOp>(loc, value);
     }
     ret_values[idx] = value;
     _func.insertResult(idx, value.getType(), {});
@@ -285,8 +280,8 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
       pos += 1;
       if (rank > 0) {
         // third extract global shape
-        uint64_t *gs_allocated = reinterpret_cast<uint64_t *>(output[pos]);
-        uint64_t *gs_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
+        int64_t *gs_allocated = reinterpret_cast<int64_t *>(output[pos]);
+        int64_t *gs_aligned = reinterpret_cast<int64_t *>(output[pos + 1]);
         intptr_t gs_offset = output[pos + 2];
         // no sizes/stride needed
         pos += memref_sz(1);
@@ -327,8 +322,8 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
 std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
                                const std::string &fname,
                                std::vector<void *> &inp, size_t osz) {
+  ::mlir::ModuleOp cached;
   if (_useCache) {
-    ::mlir::ModuleOp cached;
     static std::vector<
         std::pair<std::array<unsigned char, 20>, ::mlir::ModuleOp>>
         cache;
@@ -347,6 +342,8 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     } else {
       // std::cerr << "compiling..." << std::endl;
       cache.push_back(std::make_pair(cksm, module));
+      if (_verbose > 1)
+        module.dump();
     }
   }
 
@@ -367,7 +364,7 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
   if (::mlir::failed(_pm.run(module)))
     throw std::runtime_error("failed to run pass manager");
 
-  if (_verbose)
+  if (_verbose > 2 && !cached)
     module.dump();
 
   auto maybeEngine = ::mlir::ExecutionEngine::create(module, opts);
@@ -399,19 +396,19 @@ static const char *pass_pipeline =
     getenv("DDPT_PASSES")
         ? getenv("DDPT_PASSES")
         : "func.func(ptensor-dist,dist-coalesce),convert-dist-to-standard,"
-          "convert-ptensor-to-linalg,canonicalize,convert-shape-to-std,arith-"
-          "expand,func.func(tosa-to-linalg,canonicalize,linalg-fuse-"
-          "elementwise-ops,empty-tensor-to-alloc-tensor),memref-expand,arith-"
-          "bufferize,func-bufferize,func.func(scf-bufferize,tensor-bufferize,"
-          "linalg-bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
+          "convert-ptensor-to-linalg,func.func(tosa-to-linalg,tosa-to-tensor),"
+          "canonicalize,linalg-fuse-elementwise-ops,convert-shape-to-std,arith-"
+          "expand,memref-expand,arith-bufferize,func-bufferize,func.func(empty-"
+          "tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
+          "bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
           "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
           "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
           "math-to-funcs,lower-affine,convert-scf-to-cf,finalize-memref-to-"
-          "llvm,convert-math-to-llvm,convert-math-to-libm,convert-func-to-"
-          "llvm,reconcile-unrealized-casts";
+          "llvm,convert-math-to-llvm,convert-math-to-libm,convert-func-to-llvm,"
+          "reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
-      _verbose(false) {
+      _verbose(0) {
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
   ::mlir::registerLLVMDialectTranslation(_context);
@@ -429,16 +426,16 @@ JIT::JIT()
 
   const char *v_ = getenv("DDPT_VERBOSE");
   if (v_) {
-    std::string v(v_);
-    if (v == "1" || v == "y" || v == "Y" || v == "on" || v == "ON")
-      _verbose = true;
+    _verbose = std::stoi(v_);
   }
-  _pm.enableTiming();
   // some verbosity
   if (_verbose) {
-    _pm.enableStatistics();
-    _pm.enableIRPrinting();
-    _pm.dump();
+    // _pm.enableStatistics();
+    _pm.enableTiming();
+    // if(_verbose > 1)
+    //   _pm.dump();
+    if (_verbose > 3)
+      _pm.enableIRPrinting();
   }
 
   const char *envptr = getenv("DDPT_USE_CACHE");
@@ -470,6 +467,7 @@ void init() {
   ::mlir::tensor::registerTensorPasses();
   ::mlir::registerLinalgPasses();
   ::mlir::registerTosaToLinalg();
+  ::mlir::registerTosaToTensor();
   ::mlir::registerConvertMathToFuncs();
   ::mlir::registerConvertMathToLibm();
   ::mlir::registerConvertMathToLLVMPass();

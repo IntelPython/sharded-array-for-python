@@ -14,10 +14,17 @@ void bufferize(DDPTensorImpl::ptr_type a_ptr, void *outPtr) {
   });
 }
 
-// @param outPtr touched only if on root and/or root==REPLICATED
+// @param outPtr touched only if on root and/or root==REPLICATED or if not
+// distributed
 void gather_tensor(DDPTensorImpl::ptr_type a_ptr, rank_type root,
                    void *outPtr) {
-  auto trscvr = getTransceiver();
+  auto trscvr = a_ptr->transceiver();
+
+  if (!trscvr) {
+    bufferize(a_ptr, outPtr);
+    return;
+  }
+
   auto nranks = trscvr->nranks();
   auto myrank = trscvr->rank();
   bool sendonly = root != REPLICATED && root != myrank;

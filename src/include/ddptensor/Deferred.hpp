@@ -50,6 +50,8 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 
   DeferredT() = default;
   DeferredT(const DeferredT<P, F> &) = delete;
+  DeferredT(id_type guid, DTypeId dt, int rank, uint64_t team, bool balanced)
+      : P(guid, dt, rank, team, balanced), Runable() {}
 };
 
 /// Deferred operation returning/producing a tensor
@@ -59,33 +61,24 @@ class Deferred
 public:
   using ptr_type = std::unique_ptr<Deferred>;
 
-  Deferred(DTypeId dt, int rank, bool balanced)
-      : _guid(Registry::NOGUID), // might be set later
-        _dtype(dt), _rank(rank), _balanced(balanced) {}
-  Deferred(id_type guid, DTypeId dt, int rank, bool balanced)
-      : _guid(guid), _dtype(dt), _rank(rank), _balanced(balanced) {}
+  Deferred(DTypeId dt, int rank, uint64_t team, bool balanced)
+      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
+            Registry::NOGUID, // might be set later
+            dt, rank, team, balanced) {}
+  Deferred(id_type guid, DTypeId dt, int rank, uint64_t team, bool balanced)
+      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
+            guid, dt, rank, team, balanced) {}
   // FIXME we should not allow default values for dtype and rank
   // we should need this only while we are gradually moving to mlir
   Deferred()
-      : _guid(Registry::NOGUID), _dtype(DTYPE_LAST), _rank(-1),
-        _balanced(true) {}
-
-  id_type guid() const { return _guid; }
-  DTypeId dtype() const { return _dtype; }
-  int rank() const { return _rank; }
-  int balanced() const { return _balanced; }
-
-  void set_guid(id_type guid) { _guid = guid; }
+      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
+            Registry::NOGUID, DTYPE_LAST, -1, 0, true) {}
+  Deferred(const Deferred &) = delete;
+  Deferred(Deferred &&) = delete;
 
   future_type get_future();
   // from Runable
   void defer(Runable::ptr_type &&);
-
-protected:
-  id_type _guid;
-  DTypeId _dtype;
-  int _rank;
-  bool _balanced;
 };
 
 extern void _dist(const Runable *p);

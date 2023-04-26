@@ -122,7 +122,6 @@ def main():
     # but it will have no impact on performance.
     t0 = timer()
     W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float64)
-    A = np.empty((n, n), dtype=np.float64)
     B = np.zeros((n, n), dtype=np.float64)
 
     if pattern == "star":
@@ -145,6 +144,7 @@ def main():
             W[r + j, r + j] = +1.0 / (4 * j * r)
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
+    # A = np.empty((n, n), dtype=np.float64)
     A = np.numpy.fromfunction(lambda i, j: i + j, (n, n), dtype=np.float64)
 
     for k in range(iterations + 1):

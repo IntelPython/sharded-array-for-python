@@ -194,14 +194,13 @@ static ::imex::ptensor::EWUnyOpId ddpt2mlir(const EWUnyOpId uop) {
   }
 }
 
-
 struct DeferredEWUnyOp : public Deferred {
   id_type _a;
   EWUnyOpId _op;
 
   DeferredEWUnyOp() = default;
   DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
-      : Deferred(a.dtype(), a.rank(), true), _a(a.id()), _op(op) {}
+      : Deferred(a.dtype(), a.rank(), a.team(), true), _a(a.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
@@ -217,8 +216,8 @@ struct DeferredEWUnyOp : public Deferred {
     dm.addVal(this->guid(), uop,
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
                      uint64_t *lo_aligned, uint64_t balanced) {
                 this->set_value(std::move(
                     mk_tnsr(transceiver, _dtype, rank, allocated, aligned,

@@ -38,7 +38,7 @@ struct DeferredManipOp : public Deferred {
 
   DeferredManipOp() = default;
   DeferredManipOp(const tensor_i::future_type &a, const shape_type &shape)
-      : _a(a.id()), _shape(shape) {}
+      : _a(a.guid()), _shape(shape) {}
 
   void run() {
     // const auto a = std::move(Registry::get(_a).get());

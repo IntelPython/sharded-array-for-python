@@ -18,9 +18,9 @@ public:
   ddptensor(tensor_i::future_type &&f)
       : _ftx(std::forward<tensor_i::future_type>(f)) {}
   ddptensor(std::shared_future<tensor_i::ptr_type> &&f, id_type id, DTypeId dt,
-            int rank, bool balanced)
+            int rank, uint64_t team, bool balanced)
       : _ftx(std::forward<std::shared_future<tensor_i::ptr_type>>(f), id, dt,
-             rank, balanced) {}
+             rank, team, balanced) {}
 
   ~ddptensor() { Service::drop(*this); }
 

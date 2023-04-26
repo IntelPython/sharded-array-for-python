@@ -13,8 +13,8 @@
 DDPTensorImpl::DDPTensorImpl(Transceiver *transceiver, DTypeId dtype,
                              uint64_t ndims, void *allocated, void *aligned,
                              intptr_t offset, const intptr_t *sizes,
-                             const intptr_t *strides, uint64_t *gs_allocated,
-                             uint64_t *gs_aligned, uint64_t *lo_allocated,
+                             const intptr_t *strides, int64_t *gs_allocated,
+                             int64_t *gs_aligned, uint64_t *lo_allocated,
                              uint64_t *lo_aligned, uint64_t balanced,
                              rank_type owner)
     : _transceiver(transceiver), _owner(owner), _allocated(allocated),
@@ -30,6 +30,7 @@ DDPTensorImpl::DDPTensorImpl(Transceiver *transceiver, DTypeId dtype,
     _owner = REPLICATED;
     assert(_aligned);
   }
+  assert(!_transceiver || _transceiver == getTransceiver());
 }
 
 DDPTensorImpl::DDPTensorImpl(DTypeId dtype, const shape_type &shp,
@@ -45,6 +46,14 @@ DDPTensorImpl::DDPTensorImpl(DTypeId dtype, const shape_type &shp,
     _strides[ndims - i - 1] = stride;
     stride *= shp[i];
   }
+  assert(!_transceiver || _transceiver == getTransceiver());
+}
+
+// incomplete, useful for computing meta information
+DDPTensorImpl::DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner)
+    : _owner(owner), _ndims(N) {
+  assert(_ndims <= 1);
+  assert(!_transceiver || _transceiver == getTransceiver());
 }
 
 DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
@@ -107,7 +116,8 @@ std::string DDPTensorImpl::__repr__() const {
   oss << "), str=(";
   for (auto i = 0; i < nd; ++i)
     oss << _strides[i] << (i == nd - 1 ? "" : ", ");
-  oss << "), p=" << _allocated << ", poff=" << _offset << "}\n";
+  oss << "), p=" << _allocated << ", poff=" << _offset
+      << ", team=" << _transceiver << "}\n";
 
   dispatch(_dtype, _aligned, [this, nd, &oss](auto *ptr) {
     auto cptr = ptr + this->_offset;
@@ -163,28 +173,30 @@ void DDPTensorImpl::add_to_args(std::vector<void *> &args, int ndims) {
   memcpy(buff + 3, _sizes, ndims * sizeof(intptr_t));
   memcpy(buff + 3 + ndims, _strides, ndims * sizeof(intptr_t));
   args.push_back(buff);
-  // second the transceiver
-  args.push_back(&_transceiver);
-  // balanced third
-  args.push_back(&_balanced);
-  if (ndims > 0) {
-    // global shape next
-    buff = new intptr_t[dtensor_sz(1)];
-    buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
-    buff[2] = 0;
-    buff[3] = ndims;
-    buff[4] = 1;
-    args.push_back(buff);
-    assert(5 == memref_sz(1));
-    // local offsets last
-    buff = new intptr_t[dtensor_sz(1)];
-    buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
-    buff[2] = 0;
-    buff[3] = ndims;
-    buff[4] = 1;
-    args.push_back(buff);
+  if (_transceiver) {
+    // second the transceiver
+    args.push_back(_transceiver);
+    // balanced third
+    args.push_back(&_balanced);
+    if (ndims > 0) {
+      // global shape next
+      buff = new intptr_t[dtensor_sz(1)];
+      buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
+      buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
+      buff[2] = 0;
+      buff[3] = ndims;
+      buff[4] = 1;
+      args.push_back(buff);
+      assert(5 == memref_sz(1));
+      // local offsets last
+      buff = new intptr_t[dtensor_sz(1)];
+      buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
+      buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
+      buff[2] = 0;
+      buff[3] = ndims;
+      buff[4] = 1;
+      args.push_back(buff);
+    }
   }
 }
 

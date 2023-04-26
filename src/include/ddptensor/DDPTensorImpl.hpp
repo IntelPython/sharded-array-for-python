@@ -22,13 +22,13 @@ class Transceiver;
 /// also holds information needed for distributed operation.
 class DDPTensorImpl : public tensor_i {
   mutable rank_type _owner;
-  Transceiver *_transceiver;
+  Transceiver *_transceiver = nullptr;
   void *_allocated = nullptr;
   void *_aligned = nullptr;
   intptr_t *_sizes = nullptr;
   intptr_t *_strides = nullptr;
-  uint64_t *_gs_allocated = nullptr;
-  uint64_t *_gs_aligned = nullptr;
+  int64_t *_gs_allocated = nullptr;
+  int64_t *_gs_aligned = nullptr;
   uint64_t *_lo_allocated = nullptr;
   uint64_t *_lo_aligned = nullptr;
   uint64_t _offset = 0;
@@ -47,7 +47,7 @@ public:
   DDPTensorImpl(Transceiver *transceiver, DTypeId dtype, uint64_t ndims,
                 void *allocated, void *aligned, intptr_t offset,
                 const intptr_t *sizes, const intptr_t *strides,
-                uint64_t *gs_allocated, uint64_t *gs_aligned,
+                int64_t *gs_allocated, int64_t *gs_aligned,
                 uint64_t *lo_allocated, uint64_t *lo_aligned, uint64_t balanced,
                 rank_type owner = NOOWNER);
 
@@ -55,10 +55,7 @@ public:
                 rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
-  DDPTensorImpl(const uint64_t *shape, uint64_t N, rank_type owner = NOOWNER)
-      : _owner(owner), _ndims(N) {
-    assert(_ndims <= 1);
-  }
+  DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
   DDPTensorImpl() : _owner(REPLICATED) { assert(_ndims <= 1); }
@@ -91,7 +88,9 @@ public:
   virtual DTypeId dtype() const override { return _dtype; }
 
   /// @return tensor's shape
-  virtual const uint64_t *shape() const override { return _gs_aligned; }
+  virtual const int64_t *shape() const override {
+    return _transceiver ? _gs_aligned : local_shape();
+  }
 
   /// @returnnumber of dimensions of tensor
   virtual int ndims() const override { return _ndims; }

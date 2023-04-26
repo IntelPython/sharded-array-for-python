@@ -39,7 +39,11 @@ void _dist(const Runable *p) {
 
 // create a enriched future
 Deferred::future_type Deferred::get_future() {
-  return {std::move(promise_type::get_future().share()), _guid, _dtype, _rank,
+  return {std::move(promise_type::get_future().share()),
+          _guid,
+          _dtype,
+          _rank,
+          _team,
           _balanced};
 }
 

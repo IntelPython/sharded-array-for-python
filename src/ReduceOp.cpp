@@ -105,8 +105,8 @@ struct DeferredReduceOp : public Deferred {
   DeferredReduceOp() = default;
   DeferredReduceOp(ReduceOpId op, const tensor_i::future_type &a,
                    const dim_vec_type &dim)
-      : Deferred(a.dtype(), 0, true), // FIXME rank
-        _a(a.id()), _dim(dim), _op(op) {}
+      : Deferred(a.dtype(), 0, a.team(), true), // FIXME rank
+        _a(a.guid()), _dim(dim), _op(op) {}
 
   void run() {
 #if 0
@@ -133,8 +133,8 @@ struct DeferredReduceOp : public Deferred {
         builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
         [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                void *aligned, intptr_t offset, const intptr_t *sizes,
-               const intptr_t *strides, uint64_t *gs_allocated,
-               uint64_t *gs_aligned, uint64_t *lo_allocated,
+               const intptr_t *strides, int64_t *gs_allocated,
+               int64_t *gs_aligned, uint64_t *lo_allocated,
                uint64_t *lo_aligned, uint64_t balanced) {
           this->set_value(std::move(
               mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset,

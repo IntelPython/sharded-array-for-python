@@ -18,90 +18,11 @@
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 
-#if 0
-namespace x {
-
-    template<typename T>
-    class Creator
-    {
-    public:
-        using ptr_type = typename tensor_i::ptr_type;
-        using typed_ptr_type = typename DPTensorX<T>::typed_ptr_type;
-
-        static ptr_type op(CreatorId c, const shape_type & shp)
-        {
-            PVSlice pvslice(shp);
-            shape_type shape(std::move(pvslice.tile_shape()));
-            switch(c) {
-            case EMPTY:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::empty<T>(std::move(shape))));
-            case ONES:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::ones<T>(std::move(shape))));
-            case ZEROS:
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(xt::zeros<T>(std::move(shape))));
-            default:
-                throw std::runtime_error("Unknown creator");
-            };
-        };
-
-        static ptr_type op(CreatorId c, const shape_type & shp, PyScalar v)
-        {
-            T val;
-            if constexpr (std::is_integral<T>::value) val = static_cast<T>(v._int);
-            else if constexpr (std::is_floating_point<T>::value) val = static_cast<T>(v._float);
-            if(c == FULL) {
-                if(VPROD(shp) <= 1) {
-                    return operatorx<T>::mk_tx(val, REPLICATED);
-                }
-                PVSlice pvslice(shp);
-                shape_type shape(std::move(pvslice.tile_shape()));
-                auto a = xt::empty<T>(std::move(shape));
-                a.fill(val);
-                return operatorx<T>::mk_tx(std::move(pvslice), std::move(a));
-            }
-            throw std::runtime_error("Unknown creator");
-        }
-
-        static ptr_type op(uint64_t start, uint64_t end, uint64_t step)
-        {
-            PVSlice pvslice({static_cast<uint64_t>(Slice(start, end, step).size())});
-            auto lslc = pvslice.local_slice();
-            const auto & l1dslc = lslc.dim(0);
-
-            auto a = xt::arange<T>(start + l1dslc._start*step, start + l1dslc._end * step, l1dslc._step);
-            auto r = operatorx<T>::mk_tx(std::move(pvslice), std::move(a));
-
-            return r;
-        }
-    }; // class creatorx
-} // namespace x
-#endif // if 0
-
-struct DeferredFromShape : public Deferred {
-  shape_type _shape;
-  CreatorId _op;
-
-  DeferredFromShape() = default;
-  DeferredFromShape(CreatorId op, const shape_type &shape, DTypeId dtype)
-      : Deferred(dtype, shape.size(), true), _shape(shape), _op(op) {}
-
-  void run() {
-    // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _op, _shape)));
+inline uint64_t mkTeam(uint64_t team) {
+  if (team && getTransceiver()->nranks() > 1) {
+    return 1;
   }
-
-  // FIXME mlir
-
-  FactoryId factory() const { return F_FROMSHAPE; }
-
-  template <typename S> void serialize(S &ser) {
-    ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
-    ser.template value<sizeof(_op)>(_op);
-  }
-};
-
-ddptensor *Creator::create_from_shape(CreatorId op, const shape_type &shape,
-                                      DTypeId dtype) {
-  return new ddptensor(defer<DeferredFromShape>(op, shape, dtype));
+  return 0;
 }
 
 struct DeferredFull : public Deferred {
@@ -109,8 +30,9 @@ struct DeferredFull : public Deferred {
   PyScalar _val;
 
   DeferredFull() = default;
-  DeferredFull(const shape_type &shape, PyScalar val, DTypeId dtype)
-      : Deferred(dtype, shape.size(), true), _shape(shape), _val(val) {}
+  DeferredFull(const shape_type &shape, PyScalar val, DTypeId dtype,
+               uint64_t team)
+      : Deferred(dtype, shape.size(), team, true), _shape(shape), _val(val) {}
 
   void run() {
     // auto op = FULL;
@@ -146,19 +68,19 @@ struct DeferredFull : public Deferred {
     ::imex::ptensor::DType dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
 
-    auto team = /*getTransceiver()->nranks() <= 1
-                  ? ::mlir::Value()
-                  :*/
-        ::imex::createIndex(loc, builder,
-                            reinterpret_cast<uint64_t>(getTransceiver()));
+    auto team =
+        _team == 0
+            ? ::mlir::Value()
+            : ::imex::createIndex(loc, builder,
+                                  reinterpret_cast<uint64_t>(getTransceiver()));
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val,
                                                         nullptr, team),
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
                      uint64_t *lo_aligned, uint64_t balanced) {
                 assert(rank == this->_shape.size());
                 this->set_value(std::move(
@@ -179,21 +101,20 @@ struct DeferredFull : public Deferred {
 };
 
 ddptensor *Creator::full(const shape_type &shape, const py::object &val,
-                         DTypeId dtype) {
+                         DTypeId dtype, uint64_t team) {
   auto v = mk_scalar(val, dtype);
-  return new ddptensor(defer<DeferredFull>(shape, v, dtype));
+  return new ddptensor(defer<DeferredFull>(shape, v, dtype, mkTeam(team)));
 }
 
 // ***************************************************************************
 
 struct DeferredArange : public Deferred {
-  uint64_t _start, _end, _step, _team;
+  uint64_t _start, _end, _step;
 
   DeferredArange() = default;
   DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype,
-                 uint64_t team = 0)
-      : Deferred(dtype, 1, true), _start(start), _end(end), _step(step),
-        _team(team) {}
+                 uint64_t team)
+      : Deferred(dtype, 1, team, true), _start(start), _end(end), _step(step) {}
 
   void run() override{
       // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end,
@@ -203,11 +124,11 @@ struct DeferredArange : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
-    auto team = /*getTransceiver()->nranks() <= 1
-                ? ::mlir::Value()
-                :*/
-        ::imex::createIndex(loc, builder,
-                            reinterpret_cast<uint64_t>(getTransceiver()));
+    auto team =
+        _team == 0
+            ? ::mlir::Value()
+            : ::imex::createIndex(loc, builder,
+                                  reinterpret_cast<uint64_t>(getTransceiver()));
 
     auto _num = (_end - _start + _step + (_step < 0 ? 1 : -1)) / _step;
 
@@ -223,8 +144,8 @@ struct DeferredArange : public Deferred {
                   loc, rTyp, start, stop, num, false, nullptr, team),
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
                      uint64_t *lo_aligned, uint64_t balanced) {
                 assert(rank == 1);
                 assert(strides[0] == 1);
@@ -247,21 +168,22 @@ struct DeferredArange : public Deferred {
 
 ddptensor *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
                            DTypeId dtype, uint64_t team) {
-  return new ddptensor(defer<DeferredArange>(start, end, step, dtype, team));
+  return new ddptensor(
+      defer<DeferredArange>(start, end, step, dtype, mkTeam(team)));
 }
 
 // ***************************************************************************
 
 struct DeferredLinspace : public Deferred {
   double _start, _end;
-  uint64_t _num, _team;
+  uint64_t _num;
   bool _endpoint;
 
   DeferredLinspace() = default;
   DeferredLinspace(double start, double end, uint64_t num, bool endpoint,
-                   DTypeId dtype, uint64_t team = 0)
-      : Deferred(dtype, 1, true), _start(start), _end(end), _num(num),
-        _team(team), _endpoint(endpoint) {}
+                   DTypeId dtype, uint64_t team)
+      : Deferred(dtype, 1, team, true), _start(start), _end(end), _num(num),
+        _endpoint(endpoint) {}
 
   void run() override{
       // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end,
@@ -271,11 +193,11 @@ struct DeferredLinspace : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
-    auto team = /*getTransceiver()->nranks() <= 1
-                ? ::mlir::Value()
-                :*/
-        ::imex::createIndex(loc, builder,
-                            reinterpret_cast<uint64_t>(getTransceiver()));
+    auto team =
+        _team == 0
+            ? ::mlir::Value()
+            : ::imex::createIndex(loc, builder,
+                                  reinterpret_cast<uint64_t>(getTransceiver()));
 
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _end);
@@ -289,8 +211,8 @@ struct DeferredLinspace : public Deferred {
                   loc, rTyp, start, stop, num, _endpoint, nullptr, team),
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
                      uint64_t *lo_aligned, uint64_t balanced) {
                 assert(rank == 1);
                 assert(strides[0] == 1);
@@ -315,24 +237,24 @@ struct DeferredLinspace : public Deferred {
 ddptensor *Creator::linspace(double start, double end, uint64_t num,
                              bool endpoint, DTypeId dtype, uint64_t team) {
   return new ddptensor(
-      defer<DeferredLinspace>(start, end, num, endpoint, dtype, team));
+      defer<DeferredLinspace>(start, end, num, endpoint, dtype, mkTeam(team)));
 }
 
 // ***************************************************************************
 
-std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b) {
+std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
+                                                uint64_t team) {
   if (py::isinstance<ddptensor>(b)) {
     return {b.cast<ddptensor *>(), false};
   } else if (py::isinstance<py::float_>(b)) {
-    return {Creator::full({}, b, FLOAT64), true};
+    return {Creator::full({}, b, FLOAT64, team), true};
   } else if (py::isinstance<py::int_>(b)) {
-    return {Creator::full({}, b, INT64), true};
+    return {Creator::full({}, b, INT64, team), true};
   }
   throw std::runtime_error(
       "Invalid right operand to elementwise binary operation");
 };
 
-FACTORY_INIT(DeferredFromShape, F_FROMSHAPE);
 FACTORY_INIT(DeferredFull, F_FULL);
 FACTORY_INIT(DeferredArange, F_ARANGE);
 FACTORY_INIT(DeferredLinspace, F_LINSPACE);

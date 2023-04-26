@@ -58,8 +58,8 @@ struct DeferredIEWBinOp : public Deferred {
   DeferredIEWBinOp() = default;
   DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
                    const tensor_i::future_type &b)
-      : Deferred(a.dtype(), a.rank(), a.balanced()), _a(a.id()), _b(b.id()),
-        _op(op) {}
+      : Deferred(a.dtype(), a.rank(), a.team(), a.balanced()), _a(a.guid()),
+        _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
@@ -87,8 +87,8 @@ struct DeferredIEWBinOp : public Deferred {
     dm.addVal(this->guid(), av,
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, uint64_t *gs_allocated,
-                     uint64_t *gs_aligned, uint64_t *lo_allocated,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
                      uint64_t *lo_aligned, uint64_t balanced) {
                 this->set_value(Registry::get(this->_a).get());
               });
@@ -105,7 +105,7 @@ struct DeferredIEWBinOp : public Deferred {
 };
 
 ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
-  auto bb = Creator::mk_future(b);
+  auto bb = Creator::mk_future(b, a.get().team());
   auto res =
       new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
   if (bb.second)

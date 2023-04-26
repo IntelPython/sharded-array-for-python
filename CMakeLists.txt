@@ -204,6 +204,7 @@ target_link_libraries(_ddpt_rt PRIVATE
     MLIRShapeToStandard
     MLIRTosaDialect
     MLIRTosaToLinalg
+    MLIRTosaToTensor
     MLIRTensorTransforms
 )
     # LLVM${LLVM_NATIVE_ARCH}CodeGen
