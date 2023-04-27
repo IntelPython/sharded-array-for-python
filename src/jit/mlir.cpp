@@ -403,11 +403,11 @@ static const char *pass_pipeline =
           "expand,memref-expand,arith-bufferize,func-bufferize,func.func(empty-"
           "tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
           "bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
-          "bufferize,finalizing-bufferize,convert-linalg-to-parallel-loops),"
-          "canonicalize,fold-memref-alias-ops,expand-strided-metadata,convert-"
-          "math-to-funcs,lower-affine,convert-scf-to-cf,finalize-memref-to-"
-          "llvm,convert-math-to-llvm,convert-math-to-libm,convert-func-to-llvm,"
-          "reconcile-unrealized-casts";
+          "bufferize,finalizing-bufferize,buffer-deallocation,convert-linalg-"
+          "to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-"
+          "strided-metadata,convert-math-to-funcs,lower-affine,convert-scf-"
+          "to-cf,finalize-memref-to-llvm,convert-math-to-llvm,convert-math-to-"
+          "libm,convert-func-to-llvm,reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
       _verbose(0) {
