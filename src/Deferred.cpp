@@ -89,7 +89,7 @@ void process_promises() {
   bool done = false;
   jit::JIT jit;
   do {
-    ::mlir::OpBuilder builder(&jit._context);
+    ::mlir::OpBuilder builder(&jit.context());
     auto loc = builder.getUnknownLoc();
 
     // Create a MLIR module
@@ -146,7 +146,8 @@ void process_promises() {
       // also request generation of c-wrapper function
       function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(),
                         builder.getUnitAttr());
-      function.getFunctionType().dump();
+      if (jit.verbose())
+        function.getFunctionType().dump();
       // add the function to the module
       module.push_back(function);
 
@@ -159,7 +160,8 @@ void process_promises() {
         // push results to deliver promises
         dm.deliver(output, osz);
       } else {
-        std::cerr << "\tskipping\n";
+        if (jit.verbose())
+          std::cerr << "\tskipping\n";
       }
     } // no else needed
 

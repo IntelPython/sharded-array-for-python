@@ -106,7 +106,7 @@ public:
   // store tensor information in form of corresponding
   // jit::JIT::DistMemRefDescriptor
   // @return stored size in number of intptr_t
-  virtual void add_to_args(std::vector<void *> &args, int ndims) = 0;
+  virtual void add_to_args(std::vector<void *> &args) = 0;
 };
 
 #if 0

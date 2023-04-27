@@ -56,6 +56,16 @@ DDPTensorImpl::DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner)
   assert(!_transceiver || _transceiver == getTransceiver());
 }
 
+DDPTensorImpl::~DDPTensorImpl() {
+  if (!_base) {
+    delete[] reinterpret_cast<char *>(_allocated);
+  }
+  delete[] _gs_allocated;
+  delete[] _lo_allocated;
+  delete[] _sizes;
+  delete[] _strides;
+}
+
 DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
   // FIXME memory leak
   auto nd = ndims();
@@ -163,8 +173,8 @@ int64_t DDPTensorImpl::__int__() const {
   return res;
 }
 
-void DDPTensorImpl::add_to_args(std::vector<void *> &args, int ndims) {
-  assert(ndims == this->ndims());
+void DDPTensorImpl::add_to_args(std::vector<void *> &args) {
+  int ndims = this->ndims();
   // local tensor first
   intptr_t *buff = new intptr_t[dtensor_sz(ndims)];
   buff[0] = reinterpret_cast<intptr_t>(_allocated);

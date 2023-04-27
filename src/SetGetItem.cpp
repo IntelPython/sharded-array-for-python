@@ -292,18 +292,22 @@ struct DeferredGetItem : public Deferred {
     // now we can create the PTensor op using the above Values
     auto res = builder.create<::imex::ptensor::SubviewOp>(
         loc, outTyp, av, offsV, sizesV, stridesV);
-    dm.addVal(this->guid(), res,
-              [this, dtype](Transceiver *transceiver, uint64_t rank,
-                            void *allocated, void *aligned, intptr_t offset,
-                            const intptr_t *sizes, const intptr_t *strides,
-                            int64_t *gs_allocated, int64_t *gs_aligned,
-                            uint64_t *lo_allocated, uint64_t *lo_aligned,
-                            uint64_t balanced) {
-                this->set_value(std::move(
-                    mk_tnsr(transceiver, dtype, rank, allocated, aligned,
-                            offset, sizes, strides, gs_allocated, gs_aligned,
-                            lo_allocated, lo_aligned, balanced)));
-              });
+
+    auto future_a = Registry::get(_a);
+
+    dm.addVal(
+        this->guid(), res,
+        [this, dtype, future_a](
+            Transceiver *transceiver, uint64_t rank, void *allocated,
+            void *aligned, intptr_t offset, const intptr_t *sizes,
+            const intptr_t *strides, int64_t *gs_allocated, int64_t *gs_aligned,
+            uint64_t *lo_allocated, uint64_t *lo_aligned, uint64_t balanced) {
+          auto t = mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset,
+                           sizes, strides, gs_allocated, gs_aligned,
+                           lo_allocated, lo_aligned, balanced);
+          t->set_base(future_a.get());
+          this->set_value(std::move(t));
+        });
     return false;
   }
 

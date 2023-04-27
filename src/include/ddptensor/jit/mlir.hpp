@@ -3,6 +3,7 @@
 #pragma once
 
 #include <ddptensor/CppTypes.hpp>
+#include <ddptensor/tensor_i.hpp>
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Conversion/LLVMCommon/MemRefBuilder.h>
@@ -104,14 +105,15 @@ using ReadyFunc = std::function<void(id_type guid)>;
 // initialize jit
 void init();
 
-/// Manages iput/output (tensor) dependences
+/// Manages iput/output (tensor) dependencies
 class DepManager {
 private:
   using IdValueMap = std::map<id_type, ::mlir::Value>;
   using IdCallbackMap = std::map<id_type, SetResFunc>;
   using IdReadyMap = std::map<id_type, std::vector<ReadyFunc>>;
   using IdRankMap = std::map<id_type, int>;
-  using ArgList = std::vector<std::pair<id_type, int>>;
+  // here we store the future (and not the guid) to keep it alive long enough
+  using ArgList = std::vector<std::pair<id_type, tensor_i::future_type>>;
 
   ::mlir::func::FuncOp &_func; // MLIR function to which ops are added
   IdValueMap _ivm;             // guid -> mlir::Value
@@ -166,6 +168,10 @@ public:
   std::vector<intptr_t> run(::mlir::ModuleOp &, const std::string &,
                             std::vector<void *> &, size_t);
 
+  int verbose() { return _verbose; };
+  ::mlir::MLIRContext &context() { return _context; };
+
+private:
   ::mlir::MLIRContext _context;
   ::mlir::PassManager _pm;
   int _verbose;

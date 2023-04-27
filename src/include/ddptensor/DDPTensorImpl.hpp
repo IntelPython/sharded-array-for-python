@@ -35,6 +35,7 @@ class DDPTensorImpl : public tensor_i {
   uint64_t _ndims = 0;
   uint64_t _balanced = 1;
   DTypeId _dtype = DTYPE_LAST;
+  tensor_i::ptr_type _base;
 
 public:
   using ptr_type = std::shared_ptr<DDPTensorImpl>;
@@ -66,11 +67,10 @@ public:
   // helper
   void alloc(bool all = true);
 
-  // FIXME proper lifetime management for tensor data
-  ~DDPTensorImpl() {
-    delete[] _sizes;
-    delete[] _strides;
-  }
+  // set the base tensor
+  void set_base(const tensor_i::ptr_type &base) { _base = base; }
+
+  virtual ~DDPTensorImpl();
 
   // @return pointer to raw data
   void *data();
@@ -158,7 +158,7 @@ public:
 
   /// add tensor to list of args in the format expected by MLIR
   /// assuming tensor has ndims dims.
-  virtual void add_to_args(std::vector<void *> &args, int ndims) override;
+  virtual void add_to_args(std::vector<void *> &args) override;
 
   /// @return local offsets into global tensor
   const uint64_t *local_offsets() const { return _lo_aligned; }

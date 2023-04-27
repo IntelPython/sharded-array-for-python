@@ -169,7 +169,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
         getTType(builder, fut.dtype(), fut.rank(), fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
-    _args.push_back({guid, fut.rank()});
+    _args.push_back({guid, std::move(fut)});
     _ivm[guid] = val;
     return val;
   } else {
@@ -180,8 +180,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
 std::vector<void *> DepManager::store_inputs() {
   std::vector<void *> res;
   for (auto a : _args) {
-    auto f = Registry::get(a.first);
-    f.get().get()->add_to_args(res, a.second);
+    a.second.get().get()->add_to_args(res);
     _ivm.erase(a.first); // inputs need no delivery
     _icm.erase(a.first);
   }
@@ -202,7 +201,7 @@ void DepManager::drop(id_type guid) {
   _ivm.erase(guid);
   _icm.erase(guid);
   _icr.erase(guid);
-  // Registry::del(guid);
+  Registry::del(guid);
   // FIXME create delete op
 }
 
@@ -338,9 +337,11 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     }
     if (cached) {
       module = cached;
-      // std::cerr << "using cached module" << std::endl;
+      if (_verbose)
+        std::cerr << "cached..." << std::endl;
     } else {
-      // std::cerr << "compiling..." << std::endl;
+      if (_verbose)
+        std::cerr << "compiling..." << std::endl;
       cache.push_back(std::make_pair(cksm, module));
       if (_verbose > 1)
         module.dump();
@@ -432,6 +433,7 @@ JIT::JIT()
   }
   // some verbosity
   if (_verbose) {
+    std::cerr << "pass pipeline: " << pass_pipeline << std::endl;
     // _pm.enableStatistics();
     _pm.enableTiming();
     // if(_verbose > 1)
