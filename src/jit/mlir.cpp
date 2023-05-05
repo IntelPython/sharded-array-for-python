@@ -91,14 +91,14 @@
 #include <iostream>
 #include <string>
 
-//#include "llvm/ADT/StringRef.h"
-//#include "llvm/IR/Module.h"
-//#include "llvm/Support/CommandLine.h"
-//#include "llvm/Support/ErrorOr.h"
-//#include "llvm/Support/MemoryBuffer.h"
-//#include "llvm/Support/SourceMgr.h"
+// #include "llvm/ADT/StringRef.h"
+// #include "llvm/IR/Module.h"
+// #include "llvm/Support/CommandLine.h"
+// #include "llvm/Support/ErrorOr.h"
+// #include "llvm/Support/MemoryBuffer.h"
+// #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
-//#include "llvm/Support/raw_ostream.h"
+// #include "llvm/Support/raw_ostream.h"
 
 namespace jit {
 
@@ -396,19 +396,42 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
 }
 
 static const char *pass_pipeline =
-    getenv("DDPT_PASSES")
-        ? getenv("DDPT_PASSES")
-        : "func.func(ptensor-dist,dist-coalesce),convert-dist-to-standard,"
-          "convert-ptensor-to-linalg,func.func(tosa-to-linalg,tosa-to-tensor),"
-          "canonicalize,linalg-fuse-elementwise-ops,convert-shape-to-std,arith-"
-          "expand,memref-expand,arith-bufferize,func-bufferize,func.func(empty-"
-          "tensor-to-alloc-tensor,scf-bufferize,tensor-bufferize,linalg-"
-          "bufferize,bufferization-bufferize,linalg-detensorize,tensor-"
-          "bufferize,finalizing-bufferize,buffer-deallocation,convert-linalg-"
-          "to-parallel-loops),canonicalize,fold-memref-alias-ops,expand-"
-          "strided-metadata,convert-math-to-funcs,lower-affine,convert-scf-"
-          "to-cf,finalize-memref-to-llvm,convert-math-to-llvm,convert-math-to-"
-          "libm,convert-func-to-llvm,reconcile-unrealized-casts";
+    getenv("DDPT_PASSES") ? getenv("DDPT_PASSES")
+                          : "func.func(ptensor-dist),"
+                            "func.func(dist-coalesce),"
+                            "convert-dist-to-standard,"
+                            "convert-ptensor-to-linalg,"
+                            "func.func(tosa-to-linalg),"
+                            "func.func(tosa-to-tensor),"
+                            "canonicalize,"
+                            "linalg-fuse-elementwise-ops,"
+                            "convert-shape-to-std,"
+                            "arith-expand,"
+                            "memref-expand,"
+                            "arith-bufferize,"
+                            "func-bufferize,"
+                            "func.func(empty-tensor-to-alloc-tensor),"
+                            "func.func(scf-bufferize),"
+                            "func.func(tensor-bufferize),"
+                            "func.func(linalg-bufferize),"
+                            "func.func(bufferization-bufferize),"
+                            "func.func(linalg-detensorize),"
+                            "func.func(tensor-bufferize),"
+                            "func.func(finalizing-bufferize),"
+                            "func.func(buffer-deallocation),"
+                            "func.func(convert-linalg-to-parallel-loops),"
+                            "func.func(scf-parallel-loop-fusion),"
+                            "canonicalize,"
+                            "fold-memref-alias-ops,"
+                            "expand-strided-metadata,"
+                            "convert-math-to-funcs,"
+                            "lower-affine,"
+                            "convert-scf-to-cf,"
+                            "finalize-memref-to-llvm,"
+                            "convert-math-to-llvm,"
+                            "convert-math-to-libm,"
+                            "convert-func-to-llvm,"
+                            "reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
       _verbose(0) {
