@@ -36,11 +36,6 @@ struct DeferredFull : public Deferred {
                uint64_t team)
       : Deferred(dtype, shape.size(), team, true), _shape(shape), _val(val) {}
 
-  void run() {
-    // auto op = FULL;
-    // set_value(std::move(TypeDispatch<x::Creator>(_dtype, op, _shape, _val)));
-  }
-
   template <typename T> struct ValAndDType {
     static ::mlir::Value op(::mlir::OpBuilder &builder, ::mlir::Location loc,
                             const PyScalar &val, ::imex::ptensor::DType &dtyp) {
@@ -118,11 +113,6 @@ struct DeferredArange : public Deferred {
                  uint64_t team)
       : Deferred(dtype, 1, team, true), _start(start), _end(end), _step(step) {}
 
-  void run() override{
-      // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end,
-      // _step)));
-  };
-
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
@@ -186,11 +176,6 @@ struct DeferredLinspace : public Deferred {
                    DTypeId dtype, uint64_t team)
       : Deferred(dtype, 1, team, true), _start(start), _end(end), _num(num),
         _endpoint(endpoint) {}
-
-  void run() override{
-      // set_value(std::move(TypeDispatch<x::Creator>(_dtype, _start, _end,
-      // _num)));
-  };
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {

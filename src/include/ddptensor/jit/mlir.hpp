@@ -176,7 +176,7 @@ private:
   ::mlir::PassManager _pm;
   int _verbose;
   bool _useCache;
-  const char *_sharedLibPaths;
+  ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
 };
 
 // size of memreftype in number of intptr_t's

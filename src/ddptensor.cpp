@@ -119,22 +119,7 @@ void sync_promises() {
 
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
-  // Factory::init<F_UNYOP>();
-  Factory::init<F_ARANGE>();
-  Factory::init<F_EWBINOP>();
-  Factory::init<F_EWUNYOP>();
-  Factory::init<F_FULL>();
-  Factory::init<F_GETITEM>();
-  Factory::init<F_IEWBINOP>();
-  Factory::init<F_LINALGOP>();
-  Factory::init<F_LINSPACE>();
-  Factory::init<F_MANIPOP>();
-  Factory::init<F_RANDOM>();
-  Factory::init<F_REDUCEOP>();
-  Factory::init<F_SERVICE>();
-  Factory::init<F_SETITEM>();
-  Factory::init<F_GATHER>();
-  Factory::init<F_GETITEM>();
+  initFactories();
 
   jit::init();
 

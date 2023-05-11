@@ -49,6 +49,13 @@ template <typename D, FactoryId fid> struct FactoryImpl : public Factory {
   }
 };
 
+template <FactoryId FID = FACTORY_LAST> void initFactories() {
+  if constexpr (FID >= 0 && FID < FACTORY_LAST)
+    Factory::init<FID>();
+  if constexpr (FID > 0)
+    initFactories<static_cast<FactoryId>(FID - 1)>();
+}
+
 /// Initialize factory for given type/id
 /// type/id pairs are currently maintained "manually"
 #define FACTORY_INIT(_D, _ID)                                                  \

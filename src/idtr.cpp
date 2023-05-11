@@ -213,6 +213,66 @@ void bufferize(void *cptr, DTypeId dtype, const int64_t *sizes,
       });
 }
 
+template <typename T>
+void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
+           const int64_t *strides, const uint64_t *chunks, uint64_t nd,
+           uint64_t start, uint64_t end, T *&out) {
+  auto stride = strides[d];
+  auto sz = sizes[d];
+  auto chunk = chunks[d];
+  uint64_t first = 0;
+  if (pos < start) {
+    first = (start - pos) / chunk;
+    pos += first;
+    cptr += first * stride;
+    assert(pos <= start && pos < end);
+  }
+  if (d == nd - 1) {
+    auto n = std::min(sz - first, end - pos);
+    if (stride == 1) {
+      memcpy(out, cptr, n * sizeof(T));
+    } else {
+      for (auto i = 0; i < n; ++i) {
+        out[i] = cptr[i * stride];
+      }
+    }
+    pos += n;
+    out += n;
+  } else {
+    for (auto i = first; i < sz; ++i) {
+      copy_<T>(d + 1, pos, cptr, sizes, strides, chunks, nd, start, end, out);
+      if (pos >= end)
+        return;
+      cptr += stride;
+    }
+  }
+}
+
+/// copy a number of tensor elements into a contiguous block of data
+void bufferizeN(void *cptr, DTypeId dtype, const int64_t *sizes,
+                const int64_t *strides, const int64_t *tStarts,
+                const int64_t *tEnds, uint64_t nd, uint64_t N, void *out) {
+  std::vector<uint64_t> chunks(nd);
+  chunks[nd - 1] = 1;
+  for (uint64_t i = 1; i < nd; ++i) {
+    auto j = nd - i;
+    chunks[j - 1] = chunks[j] * sizes[j];
+  }
+  dispatch(dtype, cptr,
+           [sizes, strides, tStarts, tEnds, nd, N, out, &chunks](auto *ptr) {
+             auto buff = static_cast<decltype(ptr)>(out);
+             for (auto i = 0; i < N; ++i) {
+               auto start = tStarts[i];
+               auto end = tEnds[i];
+               if (end > start) {
+                 uint64_t pos = 0;
+                 copy_(0, pos, ptr, sizes, strides, chunks.data(), nd, start,
+                       end, buff);
+               }
+             }
+           });
+}
+
 extern "C" {
 // Elementwise inplace allreduce
 void idtr_reduce_all(void *inout, DTypeId dtype, uint64_t N, ReduceOpId op) {
@@ -228,54 +288,109 @@ void _idtr_reduce_all(uint64_t rank, void *data, const int64_t *sizes,
                   mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
-#if 0
-void _idtr_rebalance(uint64_t rank, const int64_t * gShape, const int64_t * lOffs,
-                     void * data, const int64_t * sizes, const int64_t * strides, int dtype,
-                     uint64_t outRank, void * out, const int64_t * outSizes, const int64_t * outStrides)
-{
-    assert(rank);
-    is_contiguous(outSizes, outStrides, outRank);
-    auto N = (int64_t)getTransceiver()->nranks();
-    auto myOff = lOffs[0];
-    auto mySz = sizes[0];
-    auto myEnd = myOff + mySz;
-    auto tSz = gShape[0];
-    auto sz = (tSz + N - 1) / N;
-    auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
-    auto nSz = std::accumulate(&sizes[1], &sizes[rank], 1, std::multiplies<int64_t>());
-    std::vector<int> soffs(N);
-    std::vector<int> sszs(N, 0);
-    for(auto i=0; i<N; ++i) {
-        auto tOff = i * sz;
-        auto tEnd = std::min(tSz, tOff + sz);
-        if(tEnd > myOff && tOff < myEnd) {
-            // We have a target partition which is inside my local data
-            // we now compute what data goes to this target partition
-            auto start = std::max(myOff, tOff);
-            auto end = std::min(myEnd, tEnd);
-            soffs[i] = (int)(start - myOff) * nSz;
-            sszs[i] = (int)(end - start) * nSz;
-        } else {
-            soffs[i] = i ? soffs[i-1] + sszs[i-1] : 0;
-        }
-    }
-    // we now send our send sizes to others and receiver theirs
-    std::vector<int> rszs(N);
-    getTransceiver()->alltoall(sszs.data(), 1, INT32, rszs.data());
-    // For the actual alltoall we need the receive-displacements
-    std::vector<int> roffs(N);
-    roffs[0] = 0;
-    for(auto i=1; i<N; ++i) {
-        // compute for all i > 0
-        roffs[i] = roffs[i-1] + rszs[i-1];
-    }
-    // create send buffer (might be strided!)
-    Buffer buff(nSz * mySz * sizeof_dtype(ddpttype));
-    auto ptr = bufferize(data, ddpttype, sizes, strides, rank, buff.data());
-    // Finally communicate elements
-    getTransceiver()->alltoall(ptr, sszs.data(), soffs.data(), ddpttype, out, rszs.data(), roffs.data());
-}
+/// @brief reshape tensor
+/// We assume tensor is partitioned along the first dimension (only) and
+/// partitions are ordered by ranks
+/// @param rank
+/// @param gShapePtr
+/// @param dtype
+/// @param lDataPtr
+/// @param lOffsPtr
+/// @param lShapePtr
+/// @param lStridesPtr
+/// @param oRank
+/// @param oGShapePtr
+/// @param oOffsPtr
+/// @param oShapePtr
+/// @param outPtr
+/// @param tc
+void _idtr_reshape(int64_t rank, int64_t *gShapePtr, int dtype, void *lDataPtr,
+                   int64_t *lOffsPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
+                   int64_t oRank, int64_t *oGShapePtr, int64_t *oOffsPtr,
+                   int64_t *oShapePtr, void *outPtr, Transceiver *tc) {
+#ifdef NO_TRANSCEIVER
+  initMPIRuntime();
+  tc = getTransceiver();
 #endif
+
+  assert(std::accumulate(&gShapePtr[0], &gShapePtr[rank], 1,
+                         std::multiplies<int64_t>()) ==
+         std::accumulate(&oGShapePtr[0], &oGShapePtr[oRank], 1,
+                         std::multiplies<int64_t>()));
+  assert(std::accumulate(&oOffsPtr[1], &oOffsPtr[oRank], 0,
+                         std::plus<int64_t>()) == 0);
+
+  auto N = tc->nranks();
+  auto me = tc->rank();
+  auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
+
+  int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1,
+                                std::multiplies<int64_t>());
+  int64_t mySz = cSz * lShapePtr[0];
+  int64_t myOff = lOffsPtr[0] * cSz;
+  int64_t myEnd = myOff + mySz;
+  int64_t tCSz = std::accumulate(&oShapePtr[1], &oShapePtr[oRank], 1,
+                                 std::multiplies<int64_t>());
+  int64_t myTSz = tCSz * oShapePtr[0];
+  int64_t myTOff = oOffsPtr[0] * tCSz;
+  int64_t myTEnd = myTOff + myTSz;
+
+  // First we allgather the current and target partitioning
+
+  ::std::vector<int64_t> buff(4 * N);
+  buff[me * 4 + 0] = myOff;
+  buff[me * 4 + 1] = mySz;
+  buff[me * 4 + 2] = myTOff;
+  buff[me * 4 + 3] = myTSz;
+  ::std::vector<int> counts(N, 4);
+  ::std::vector<int> dspl(N);
+  for (auto i = 0; i < N; ++i) {
+    dspl[i] = 4 * i;
+  }
+  tc->gather(buff.data(), counts.data(), dspl.data(), ddpttype, REPLICATED);
+
+  // compute overlaps of current parts with requested parts
+  // and store meta for alltoall
+
+  std::vector<int> soffs(N, 0);
+  std::vector<int> sszs(N, 0);
+  std::vector<int> roffs(N, 0);
+  std::vector<int> rszs(N, 0);
+  std::vector<int64_t> lsOffs(N, 0);
+  std::vector<int64_t> lsEnds(N, 0);
+  int64_t totSSz = 0;
+
+  for (auto i = 0; i < N; ++i) {
+    int64_t *curr = &buff[i * 4];
+    auto xOff = curr[0];
+    auto xEnd = xOff + curr[1];
+    auto tOff = curr[2];
+    auto tEnd = tOff + curr[3];
+
+    // first check if this target part overlaps with my local part
+    if (tEnd > myOff && tOff < myEnd) {
+      auto sOff = std::max(tOff, myOff);
+      sszs[i] = std::min(tEnd, myEnd) - sOff;
+      soffs[i] = i ? soffs[i - 1] + sszs[i - 1] : 0;
+      lsOffs[i] = sOff - myOff;
+      lsEnds[i] = lsOffs[i] + sszs[i];
+      totSSz += sszs[i];
+    }
+
+    // then check if my target part overlaps with the remote local part
+    if (myTEnd > xOff && myTOff < xEnd) {
+      auto rOff = std::max(xOff, myTOff);
+      rszs[i] = std::min(xEnd, myTEnd) - rOff;
+      roffs[i] = i ? roffs[i - 1] + rszs[i - 1] : 0;
+    }
+  }
+
+  Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
+  bufferizeN(lDataPtr, ddpttype, lShapePtr, lStridesPtr, lsOffs.data(),
+             lsEnds.data(), rank, N, outbuff.data());
+  tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
+               rszs.data(), roffs.data());
+}
 
 /// @brief repartition tensor
 /// We assume tensor is partitioned along the first dimension (only) and

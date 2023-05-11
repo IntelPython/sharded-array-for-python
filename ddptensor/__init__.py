@@ -98,7 +98,7 @@ for func in api.api_categories["ManipOp"]:
     FUNC = func.upper()
     if func == "reshape":
         exec(
-            f"{func} = lambda this, shape: dtensor(_cdt.ManipOp.reshape(this._t, shape))"
+            f"{func} = lambda this, /, shape, *, copy=None: dtensor(_cdt.ManipOp.reshape(this._t, shape, copy))"
         )
 
 for func in api.api_categories["LinAlgOp"]:

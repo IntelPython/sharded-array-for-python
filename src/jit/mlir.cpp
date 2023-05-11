@@ -358,7 +358,7 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
   // JIT-compiles the module.
   ::mlir::ExecutionEngineOptions opts;
   opts.transformer = optPipeline;
-  opts.sharedLibPaths = {_sharedLibPaths};
+  opts.sharedLibPaths = _sharedLibPaths;
   opts.enableObjectDump = _useCache;
 
   // lower to LLVM
@@ -413,8 +413,8 @@ static const char *pass_pipeline =
                             "func.func(empty-tensor-to-alloc-tensor),"
                             "func.func(scf-bufferize),"
                             "func.func(tensor-bufferize),"
-                            "func.func(linalg-bufferize),"
                             "func.func(bufferization-bufferize),"
+                            "func.func(linalg-bufferize),"
                             "func.func(linalg-detensorize),"
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
@@ -473,11 +473,11 @@ JIT::JIT()
     std::cerr << "enableObjectDump=" << _useCache << std::endl;
   }
 
-  // const char * crunner = getenv("DDPT_CRUNNER_SO");
-  // crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
-  envptr = getenv("DDPT_IDTR_SO");
-  _sharedLibPaths = envptr ? envptr : "libidtr.so";
-  // ::llvm::ArrayRef<::llvm::StringRef> shlibs = {crunner, envptr};
+  const char *crunner = getenv("DDPT_CRUNNER_SO");
+  crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
+  const char *idtr = getenv("DDPT_IDTR_SO");
+  idtr = idtr ? idtr : "libidtr.so";
+  _sharedLibPaths = {idtr, crunner};
 }
 
 // register dialects and passes
