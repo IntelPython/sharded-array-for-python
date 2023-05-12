@@ -155,14 +155,6 @@ public:
 // Just a stub for now, will need to be extended with paramters and maybe more.
 class JIT {
 public:
-  template <typename T, size_t N> struct MemRefDescriptor {
-    T *allocated = nullptr;
-    T *aligned = nullptr;
-    intptr_t offset = 0;
-    intptr_t sizes[N] = {0};
-    intptr_t strides[N] = {0};
-  };
-
   JIT();
   // run
   std::vector<intptr_t> run(::mlir::ModuleOp &, const std::string &,

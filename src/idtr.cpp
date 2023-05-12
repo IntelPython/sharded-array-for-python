@@ -4,10 +4,10 @@
     Intel Distributed Runtime for MLIR
 */
 
-#include <ddptensor/idtr.hpp>
-// #include <ddptensor/jit/mlir.hpp>
 #include <ddptensor/DDPTensorImpl.hpp>
 #include <ddptensor/MPITransceiver.hpp>
+#include <ddptensor/MemRefType.hpp>
+#include <ddptensor/idtr.hpp>
 
 #include <imex/Dialect/PTensor/IR/PTensorDefs.h>
 
@@ -392,24 +392,34 @@ void _idtr_reshape(int64_t rank, int64_t *gShapePtr, int dtype, void *lDataPtr,
                rszs.data(), roffs.data());
 }
 
+using MRIdx1d = Unranked1DMemRefType<uint64_t>;
+
 /// @brief repartition tensor
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
 /// @param rank
-/// @param gShapePtr
+/// @param gShapeRank
+/// @param gShapeDesc
 /// @param dtype
 /// @param lDataPtr
-/// @param lOffsPtr
-/// @param lShapePtr
-/// @param lStridesPtr
-/// @param offsPtr
-/// @param szsPtr
+/// @param lOffsRank
+/// @param lOffsDesc
+/// @param lShapeRank
+/// @param lShapeDesc
+/// @param lStridesRank
+/// @param lStridesDesc
+/// @param offsRank
+/// @param offsDesc
+/// @param szsRank
+/// @param szsDesc
 /// @param outPtr
 /// @param tc
-void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
-                       void *lDataPtr, int64_t *lOffsPtr, int64_t *lShapePtr,
-                       int64_t *lStridesPtr, int64_t *offsPtr, int64_t *szsPtr,
-                       void *outPtr, Transceiver *tc) {
+void _idtr_repartition(int64_t rank, int64_t gShapeRank, void *gShapeDesc,
+                       int dtype, void *lDataPtr, int64_t lOffsRank,
+                       void *lOffsDesc, int64_t lShapeRank, void *lShapeDesc,
+                       int64_t lStridesRank, void *lStridesDesc,
+                       int64_t offsRank, void *offsDesc, int64_t szsRank,
+                       void *szsDesc, void *outPtr, Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = getTransceiver();
@@ -418,14 +428,25 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
   auto me = tc->rank();
   auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
 
+  // Construct unranked memrefs for metadata
+  MRIdx1d gShapeMR(gShapeRank, gShapeDesc);
+  MRIdx1d lOffsMR(lOffsRank, lOffsDesc);
+  MRIdx1d lShapeMR(lShapeRank, lShapeDesc);
+  MRIdx1d lStridesMR(lStridesRank, lStridesDesc);
+  MRIdx1d offsMR(offsRank, offsDesc);
+  MRIdx1d szsMR(szsRank, szsDesc);
+
+  auto lShapePtr = reinterpret_cast<int64_t *>(lShapeMR.data());
+  auto lStridesPtr = reinterpret_cast<int64_t *>(lStridesMR.data());
+
   // First we allgather the requested target partitioning
 
   auto myBOff = 2 * rank * me;
   ::std::vector<int64_t> buff(2 * rank * N);
   for (int64_t i = 0; i < rank; ++i) {
-    // assert(offsPtr[i] - lOffsPtr[i] + szsPtr[i] <= gShapePtr[i]);
-    buff[myBOff + i] = offsPtr[i];
-    buff[myBOff + i + rank] = szsPtr[i];
+    // assert(offsPtr[i] - lOffs[i] + szsPtr[i] <= gShape[i]);
+    buff[myBOff + i] = offsMR[i];
+    buff[myBOff + i + rank] = szsMR[i];
   }
   ::std::vector<int> counts(N, rank * 2);
   ::std::vector<int> dspl(N);
@@ -436,8 +457,8 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
 
   // compute overlap of my local data with each requested part
 
-  auto myOff = lOffsPtr[0];
-  auto mySz = lShapePtr[0];
+  auto myOff = static_cast<int64_t>(lOffsMR[0]);
+  auto mySz = static_cast<int64_t>(lShapeMR[0]);
   auto myEnd = myOff + mySz;
   auto myTileSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1,
                                   std::multiplies<int64_t>());
@@ -480,7 +501,7 @@ void _idtr_repartition(int64_t rank, int64_t *gShapePtr, int dtype,
     for (auto r = 1; r < rank; ++r) {
       tStarts[i * rank + r] = buff[2 * rank * i + r];
       tSizes[i * rank + r] = buff[2 * rank * i + rank + r];
-      // assert(tSizes[i*rank+r] <= lShapePtr[r]);
+      // assert(tSizes[i*rank+r] <= lShapeMR[r]);
     }
   }
 
