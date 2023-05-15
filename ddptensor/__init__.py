@@ -37,7 +37,7 @@ from os import getenv
 from . import array_api as api
 from . import spmd
 
-_ddpt_cw = _bool(int(getenv("DDPT_CW", True)))
+_ddpt_cw = _bool(int(getenv("DDPT_CW", False)))
 
 
 def init(cw=None):
@@ -91,7 +91,7 @@ for func in api.api_categories["Creator"]:
 for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()
     exec(
-        f"{func} = lambda this, dim: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim))"
+        f"{func} = lambda this, dim=None: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim if dim else []))"
     )
 
 for func in api.api_categories["ManipOp"]:

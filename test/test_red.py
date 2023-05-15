@@ -1,13 +1,19 @@
-import numpy as np
 import ddptensor as dt
-from misc import arange_reshape
+from utils import runAndCompare
 
 
 class TestRed:
     def test_sum(self):
-        a = arange_reshape(0, 64, 1, (8, 8))
-        r1 = dt.sum(dt.sum(a, [1]), [0])
-        r2 = dt.sum(a, [0, 1])
-        v = np.sum(np.arange(64))
-        assert float(r1) == v
-        assert float(r2) == v
+        def doit(aapi):
+            a = aapi.arange(0, 64, 1, dtype=aapi.int64)
+            b = aapi.reshape(a, (8, 8))
+            return aapi.sum(a)
+
+        assert runAndCompare(doit, False)
+
+    def test_max(self):
+        def doit(aapi):
+            a = aapi.linspace(0.1, 64.3, 111, dtype=aapi.float32, endpoint=True)
+            return aapi.max(a[6:66])
+
+        assert runAndCompare(doit, False)

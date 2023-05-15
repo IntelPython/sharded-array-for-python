@@ -33,6 +33,7 @@ class build_ext(build_ext_orig):
             "-DCMAKE_BUILD_TYPE=" + config,
             "-DCMAKE_VERBOSE_MAKEFILE=ON",
             "-G=Ninja",
+            "-DLLVM_ENABLE_LLD=ON"
         ]
 
         # example of build args

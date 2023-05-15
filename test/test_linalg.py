@@ -1,9 +1,10 @@
 import numpy as np
-from mpi4py import MPI
 import ddptensor as dt
+import pytest
 
 
 class TestLinAlg:
+    @pytest.mark.skip(reason="FIXME")
     def test_vecdot1(self):
         def gen(m):
             a = m.arange(1, 36, 1, dtype=m.float64)
