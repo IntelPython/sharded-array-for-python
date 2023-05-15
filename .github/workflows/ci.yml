@@ -22,8 +22,6 @@ jobs:
           echo 'IMEX_SHA<<EOF' >> $GITHUB_ENV
           cat imex_version.txt >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
-      - name: Echo IMEX SHA
-        run: echo ${{ env.IMEX_SHA }}
       - name: Checkout IMEX
         uses: actions/checkout@v3
         with:
@@ -31,14 +29,16 @@ jobs:
           token: ${{ secrets.PATIMEX }}
           path: third_party/imex
           ref: ${{ env.IMEX_SHA }}
-      - name: Setup LLVM Cache Vars
-        run: |
-          echo 'LLVM_SHA<<EOF' >> $GITHUB_ENV
-          cat third_party/imex/build_tools/llvm_version.txt >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
-      - name: Echo LLVM SHA
-        run: echo ${{ env.LLVM_SHA }}
+      - name: Cache miniconda
+        id: cache-miniconda
+        uses: actions/cache@v3
+        env:
+          MINICONDA_CACHE_NUMBER: 1  # Increase to reset cache
+        with:
+          path: third_party/install/miniconda/**
+          key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.yml') }}
       - name: Miniconda
+        if: steps.cache-miniconda.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$GITHUB_WORKSPACE"/third_party/install
           cd "$GITHUB_WORKSPACE"/third_party
@@ -49,10 +49,21 @@ jobs:
           export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate
-          which conda
-          which python
-          conda create -q -n ddpt -c intel -c defaults pybind11 numpy cmake ninja impi-devel libstdcxx-ng mpi4py pytest scipy tbb-devel
           cd -
+          conda env create -f conda-env.yml
+          conda clean -a -y
+          # conda create -q -n ddpt -c intel -c defaults pybind11 numpy cmake ninja impi-devel libstdcxx-ng mpi4py pytest scipy tbb-devel
+      - name: Setup miniconda
+        if: steps.cache-miniconda.outputs.cache-hit == 'true'
+        run: |
+          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/bin" >> $GITHUB_PATH
+          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/condabin" >> $GITHUB_PATH
+          export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
+      - name: Setup LLVM Cache Var
+        run: |
+          echo 'LLVM_SHA<<EOF' >> $GITHUB_ENV
+          cat third_party/imex/build_tools/llvm_version.txt >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
       - name: Cache LLVM-MLIR
         id: cache-llvm-mlir
         uses: actions/cache@v3
@@ -87,9 +98,6 @@ jobs:
           cp bin/count $GITHUB_WORKSPACE/third_party/install/llvm-mlir/bin/
           cp bin/not $GITHUB_WORKSPACE/third_party/install/llvm-mlir/bin/
           popd
-          ls $GITHUB_WORKSPACE/third_party/install/llvm-mlir/
-          ls third_party/install/llvm-mlir/
-
       - name: Cache IMEX
         id: cache-imex-mlir
         uses: actions/cache@v3
@@ -101,7 +109,6 @@ jobs:
       - name: Build IMEX
         if: steps.cache-imex-mlir.outputs.cache-hit != 'true'
         run: |
-          which python
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
           mkdir -p third_party/build/imex
@@ -110,7 +117,18 @@ jobs:
           cmake --build . -j ${np} || exit 1
           cmake --install . --prefix=$GITHUB_WORKSPACE/third_party/install/imex || exit 1
           popd
-          ls $GITHUB_WORKSPACE/third_party/install/imex
-          ls third_party/install/imex
+      - name: Build DDPT
+        run: |
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python setup.py install
+      - name: Test DDPT (pytest)
+        run: |
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          export DDPT_IDTR_SO=build/lib.linux-x86_64-cpython-*/ddptensor/libidtr.so
+          export DDPT_CRUNNER_SO="$GITHUB_WORKSPACE"/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so
+          pytest test
+          # DDPT_FORCE_DIST=1 pytest test
       - run: |
           echo "This job's status is ${{ job.status }}."
