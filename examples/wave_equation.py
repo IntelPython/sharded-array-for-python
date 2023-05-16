@@ -29,22 +29,43 @@ import time as time_mod
 import argparse
 
 
-def run(n, backend, benchmark_mode):
+def run(n, backend, benchmark_mode, correctness_test):
     if backend == "ddpt":
         import ddptensor as np
         from ddptensor.numpy import fromfunction
         from ddptensor import init, fini, sync
+
         all_axes = [0, 1]
+        init(False)
+
+        try:
+            import mpi4py
+
+            mpi4py.rc.finalize = False
+            from mpi4py import MPI
+
+            comm_rank = MPI.COMM_WORLD.Get_rank()
+        except ImportError:
+            comm_rank = 0
+
     elif backend == "numpy":
         import numpy as np
         from numpy import fromfunction
-        init = fini = sync = lambda x = None: None
+
+        fini = sync = lambda x=None: None
         all_axes = None
+        comm_rank = 0
     else:
         raise ValueError(f'Unknown backend: "{backend}"')
 
-    print(f'Using backend: {backend}')
-    init(False)
+    def info(s):
+        if comm_rank == 0:
+            print(s)
+
+    info(f"Using backend: {backend}")
+
+    if correctness_test:
+        n = 10
 
     # constants
     h = 1.0
@@ -63,8 +84,8 @@ def run(n, backend, benchmark_mode):
     nx = n
     ny = n
     # grid spacing
-    dx = lx/nx
-    dy = lx/ny
+    dx = lx / nx
+    dy = lx / ny
 
     # export interval
     t_export = 0.02
@@ -72,22 +93,24 @@ def run(n, backend, benchmark_mode):
 
     # coordinate arrays
     x_t_2d = fromfunction(
-        lambda i, j: xmin + i*dx + dx/2, (nx, ny), dtype=np.float64)
+        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=np.float64
+    )
     y_t_2d = fromfunction(
-        lambda i, j: ymin + j*dy + dy/2, (nx, ny), dtype=np.float64)
+        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=np.float64
+    )
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
-    V_shape = (nx, ny+1)
+    V_shape = (nx, ny + 1)
 
     dofs_T = int(numpy.prod(numpy.asarray(T_shape)))
     dofs_U = int(numpy.prod(numpy.asarray(U_shape)))
     dofs_V = int(numpy.prod(numpy.asarray(V_shape)))
 
-    print(f'Grid size: {nx} x {ny}')
-    print(f'Elevation DOFs: {dofs_T}')
-    print(f'Velocity  DOFs: {dofs_U + dofs_V}')
-    print(f'Total     DOFs: {dofs_T + dofs_U + dofs_V}')
+    info(f"Grid size: {nx} x {ny}")
+    info(f"Elevation DOFs: {dofs_T}")
+    info(f"Velocity  DOFs: {dofs_U + dofs_V}")
+    info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
     e = np.full(T_shape, 0.0, np.float64)
@@ -115,7 +138,7 @@ def run(n, backend, benchmark_mode):
         sol_x = np.cos(2 * n * math.pi * x_t_2d / lx)
         m = 1
         sol_y = np.cos(2 * m * math.pi * y_t_2d / ly)
-        omega = c * math.pi * ((n/lx)**2 + (m/ly)**2)**0.5
+        omega = c * math.pi * ((n / lx) ** 2 + (m / ly) ** 2) ** 0.5
         # NOTE ddpt fails with scalar computation
         sol_t = numpy.cos(2 * omega * t)
         return amp * sol_x * sol_y * sol_t
@@ -132,10 +155,14 @@ def run(n, backend, benchmark_mode):
     if benchmark_mode:
         dt = 1e-5
         nt = 100
-        t_export = dt*25
+        t_export = dt * 25
+    if correctness_test:
+        dt = 0.02
+        nt = 10
+        t_export = dt * 2
 
-    print(f'Time step: {dt} s')
-    print(f'Total run time: {t_end} s, {nt} time steps')
+    info(f"Time step: {dt} s")
+    info(f"Total run time: {t_end} s, {nt} time steps")
 
     sync()
 
@@ -146,12 +173,14 @@ def run(n, backend, benchmark_mode):
         # sign convention: positive on rhs
 
         # pressure gradient -g grad(elev)
-        dudt = -g * (e[1:nx, 0:ny] - e[0:nx-1, 0:ny]) / dx
-        dvdt = -g * (e[0:nx, 1:ny] - e[0:nx, 0:ny-1]) / dy
+        dudt = -g * (e[1:nx, 0:ny] - e[0 : nx - 1, 0:ny]) / dx
+        dvdt = -g * (e[0:nx, 1:ny] - e[0:nx, 0 : ny - 1]) / dy
 
         # velocity divergence -h div(u)
-        dedt = -h * ((u[1:nx+1, 0:ny] - u[0:nx, 0:ny]) / dx +
-                     (v[0:nx, 1:ny+1] - v[0:nx, 0:ny]) / dy)
+        dedt = -h * (
+            (u[1 : nx + 1, 0:ny] - u[0:nx, 0:ny]) / dx
+            + (v[0:nx, 1 : ny + 1] - v[0:nx, 0:ny]) / dy
+        )
 
         return dudt, dvdt, dedt
 
@@ -165,23 +194,23 @@ def run(n, backend, benchmark_mode):
         e1[0:nx, 0:ny] = e[0:nx, 0:ny] + dt * dedt
 
         dudt, dvdt, dedt = rhs(u1, v1, e1)
-        u2[1:nx, 0:ny] = 0.75*u[1:nx, 0:ny] + 0.25*(u1[1:nx, 0:ny] + dt*dudt)
-        v2[0:nx, 1:ny] = 0.75*v[0:nx, 1:ny] + 0.25*(v1[0:nx, 1:ny] + dt*dvdt)
-        e2[0:nx, 0:ny] = 0.75*e[0:nx, 0:ny] + 0.25*(e1[0:nx, 0:ny] + dt*dedt)
+        u2[1:nx, 0:ny] = 0.75 * u[1:nx, 0:ny] + 0.25 * (u1[1:nx, 0:ny] + dt * dudt)
+        v2[0:nx, 1:ny] = 0.75 * v[0:nx, 1:ny] + 0.25 * (v1[0:nx, 1:ny] + dt * dvdt)
+        e2[0:nx, 0:ny] = 0.75 * e[0:nx, 0:ny] + 0.25 * (e1[0:nx, 0:ny] + dt * dedt)
 
         dudt, dvdt, dedt = rhs(u2, v2, e2)
-        u[1:nx, 0:ny] = u[1:nx, 0:ny]/3.0 + 2.0/3.0*(u2[1:nx, 0:ny] + dt*dudt)
-        v[0:nx, 1:ny] = v[0:nx, 1:ny]/3.0 + 2.0/3.0*(v2[0:nx, 1:ny] + dt*dvdt)
-        e[0:nx, 0:ny] = e[0:nx, 0:ny]/3.0 + 2.0/3.0*(e2[0:nx, 0:ny] + dt*dedt)
+        u[1:nx, 0:ny] = u[1:nx, 0:ny] / 3.0 + 2.0 / 3.0 * (u2[1:nx, 0:ny] + dt * dudt)
+        v[0:nx, 1:ny] = v[0:nx, 1:ny] / 3.0 + 2.0 / 3.0 * (v2[0:nx, 1:ny] + dt * dvdt)
+        e[0:nx, 0:ny] = e[0:nx, 0:ny] / 3.0 + 2.0 / 3.0 * (e2[0:nx, 0:ny] + dt * dedt)
 
     t = 0
     i_export = 0
     next_t_export = 0
     initial_v = None
     tic = time_mod.perf_counter()
-    for i in range(nt+1):
+    for i in range(nt + 1):
         sync()
-        t = i*dt
+        t = i * dt
 
         if t >= next_t_export - 1e-8:
             elev_max = float(np.max(e, all_axes))
@@ -192,10 +221,12 @@ def run(n, backend, benchmark_mode):
                 initial_v = total_v
             diff_v = total_v - initial_v
 
-            print(f'{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} '
-                  f'u={u_max:7.5f} dV={diff_v: 6.3e}')
+            info(
+                f"{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} "
+                f"u={u_max:7.5f} dV={diff_v: 6.3e}"
+            )
             if elev_max > 1e3 or not math.isfinite(elev_max):
-                print(f'Invalid elevation value: {elev_max}')
+                info(f"Invalid elevation value: {elev_max}")
                 break
             i_export += 1
             next_t_export = i_export * t_export
@@ -206,31 +237,55 @@ def run(n, backend, benchmark_mode):
     sync()
 
     duration = time_mod.perf_counter() - tic
-    print(f'Duration: {duration:.2f} s')
+    info(f"Duration: {duration:.2f} s")
 
     e_exact = exact_elev(t, x_t_2d, y_t_2d, lx, ly)
     err2 = (e_exact - e) * (e_exact - e) * dx * dy / lx / ly
     err_L2 = math.sqrt(float(np.sum(err2, all_axes)))
-    print(f'L2 error: {err_L2:7.5e}')
+    info(f"L2 error: {err_L2:7.5e}")
 
     if nx == 128 and ny == 128 and not benchmark_mode:
-        assert numpy.allclose(err_L2, 7.22407e-03)
-        print('SUCCESS')
+        assert numpy.allclose(err_L2, 7.224068445111e-03)
+        info("SUCCESS")
+
+    if correctness_test:
+        assert numpy.allclose(err_L2, 1.317066179876e-02)
+        info("SUCCESS")
 
     fini()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Run wave equation benchmark',
+        description="Run wave equation benchmark",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument('-n', '--resolution', type=int, default=128,
-                        help='Number of grid cells in x and y direction.')
-    parser.add_argument('-t', '--benchmark-mode', action='store_true',
-                        help='Run a fixed number of time steps.')
-    parser.add_argument('-b', '--backend', type=str, default='ddpt',
-                        choices=['ddpt', 'numpy'],
-                        help='Backend to use.')
+    parser.add_argument(
+        "-n",
+        "--resolution",
+        type=int,
+        default=128,
+        help="Number of grid cells in x and y direction.",
+    )
+    parser.add_argument(
+        "-t",
+        "--benchmark-mode",
+        action="store_true",
+        help="Run a fixed number of time steps.",
+    )
+    parser.add_argument(
+        "-ct",
+        "--correctness-test",
+        action="store_true",
+        help="Run a minimal correctness test.",
+    )
+    parser.add_argument(
+        "-b",
+        "--backend",
+        type=str,
+        default="ddpt",
+        choices=["ddpt", "numpy"],
+        help="Backend to use.",
+    )
     args = parser.parse_args()
-    run(args.resolution, args.backend, args.benchmark_mode)
+    run(args.resolution, args.backend, args.benchmark_mode, args.correctness_test)
