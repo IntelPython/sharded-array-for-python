@@ -12,11 +12,10 @@ template <typename T, size_t N> struct MemRefDescriptor {
 };
 
 template <typename T> struct Unranked1DMemRefType {
-  int64_t rank;
   MemRefDescriptor<T, 1> *descriptor;
 
-  Unranked1DMemRefType(int64_t _rank, void *p)
-      : rank(_rank), descriptor(static_cast<MemRefDescriptor<T, 1> *>(p)) {
+  Unranked1DMemRefType(int64_t rank, void *p)
+      : descriptor(static_cast<MemRefDescriptor<T, 1> *>(p)) {
     assert(rank == 1);
   };
 
@@ -25,4 +24,5 @@ template <typename T> struct Unranked1DMemRefType {
     return *(d->aligned + d->offset + idx * d->strides[0]);
   };
   T *data() { return descriptor->aligned; };
+  int64_t size() { return descriptor->sizes[0]; };
 };

@@ -113,9 +113,12 @@ struct DeferredGather
     py::object res;
     if (!sendonly || !trscvr) {
       auto tmp = a_ptr->shape();
-      res = dispatch<mk_array>(a_ptr->dtype(),
-                               std::vector<ssize_t>(tmp, &tmp[a_ptr->ndims()]),
-                               outPtr);
+      std::vector<ssize_t> tmpv(tmp, &tmp[a_ptr->ndims()]);
+      // numpy treats 0d arrays as empty arrays, not as a scalar as we do
+      if (tmpv.empty()) {
+        tmpv.emplace_back(1);
+      }
+      res = dispatch<mk_array>(a_ptr->dtype(), std::move(tmpv), outPtr);
     }
 
     gather_tensor(a_ptr, _root, outPtr);
@@ -293,19 +296,19 @@ struct DeferredGetItem : public Deferred {
     auto res = builder.create<::imex::ptensor::SubviewOp>(
         loc, outTyp, av, offsV, sizesV, stridesV);
 
-    auto future_a = Registry::get(_a);
-
     dm.addVal(
         this->guid(), res,
-        [this, dtype, future_a](
-            Transceiver *transceiver, uint64_t rank, void *allocated,
-            void *aligned, intptr_t offset, const intptr_t *sizes,
-            const intptr_t *strides, int64_t *gs_allocated, int64_t *gs_aligned,
-            uint64_t *lo_allocated, uint64_t *lo_aligned, uint64_t balanced) {
+        [this, dtype](Transceiver *transceiver, uint64_t rank, void *allocated,
+                      void *aligned, intptr_t offset, const intptr_t *sizes,
+                      const intptr_t *strides, int64_t *gs_allocated,
+                      int64_t *gs_aligned, uint64_t *lo_allocated,
+                      uint64_t *lo_aligned, uint64_t balanced) {
           auto t = mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset,
                            sizes, strides, gs_allocated, gs_aligned,
                            lo_allocated, lo_aligned, balanced);
-          t->set_base(future_a.get());
+          if (Registry::has(_a)) {
+            t->set_base(Registry::get(_a).get());
+          } // else _a is a temporary and was dropped
           this->set_value(std::move(t));
         });
     return false;

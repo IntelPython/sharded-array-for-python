@@ -5,12 +5,16 @@
 void bufferize(DDPTensorImpl::ptr_type a_ptr, void *outPtr) {
   dispatch(a_ptr->dtype(), a_ptr->data(), [&a_ptr, outPtr](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(outPtr);
-
-    forall(0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), a_ptr->ndims(),
-           [&buff](const auto *in) {
-             *buff = *in;
-             ++buff;
-           });
+    auto shp = a_ptr->local_shape();
+    if (shp) {
+      forall(0, ptr, shp, a_ptr->local_strides(), a_ptr->ndims(),
+             [&buff](const auto *in) {
+               *buff = *in;
+               ++buff;
+             });
+    } else {
+      buff[0] = ptr[0];
+    }
   });
 }
 
@@ -20,7 +24,7 @@ void gather_tensor(DDPTensorImpl::ptr_type a_ptr, rank_type root,
                    void *outPtr) {
   auto trscvr = a_ptr->transceiver();
 
-  if (!trscvr) {
+  if (!trscvr || a_ptr->owner() == REPLICATED) {
     bufferize(a_ptr, outPtr);
     return;
   }

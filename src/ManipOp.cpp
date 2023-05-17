@@ -44,22 +44,21 @@ struct DeferredReshape : public Deferred {
     auto op =
         builder.create<::imex::ptensor::ReshapeOp>(loc, outTyp, av, shp, copyA);
 
-    auto future_a = Registry::get(_a);
-
     dm.addVal(this->guid(), op,
-              [this, future_a](Transceiver *transceiver, uint64_t rank,
-                               void *allocated, void *aligned, intptr_t offset,
-                               const intptr_t *sizes, const intptr_t *strides,
-                               int64_t *gs_allocated, int64_t *gs_aligned,
-                               uint64_t *lo_allocated, uint64_t *lo_aligned,
-                               uint64_t balanced) {
+              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
+                     void *aligned, intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, int64_t *gs_allocated,
+                     int64_t *gs_aligned, uint64_t *lo_allocated,
+                     uint64_t *lo_aligned, uint64_t balanced) {
                 auto t =
                     mk_tnsr(transceiver, _dtype, rank, allocated, aligned,
                             offset, sizes, strides, gs_allocated, gs_aligned,
                             lo_allocated, lo_aligned, balanced);
                 if (_copy != COPY_ALWAYS) {
                   assert(!"copy-free reshape not supported");
-                  t->set_base(future_a.get());
+                  if (Registry::has(_a)) {
+                    t->set_base(Registry::get(_a).get());
+                  } // else _a is a temporary and was dropped
                 }
                 this->set_value(std::move(t));
               });

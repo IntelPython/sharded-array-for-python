@@ -273,6 +273,8 @@ void bufferizeN(void *cptr, DTypeId dtype, const int64_t *sizes,
            });
 }
 
+using MRIdx1d = Unranked1DMemRefType<uint64_t>;
+
 extern "C" {
 // Elementwise inplace allreduce
 void idtr_reduce_all(void *inout, DTypeId dtype, uint64_t N, ReduceOpId op) {
@@ -280,38 +282,74 @@ void idtr_reduce_all(void *inout, DTypeId dtype, uint64_t N, ReduceOpId op) {
 }
 
 // FIXME hard-coded for contiguous layout
-void _idtr_reduce_all(uint64_t rank, void *data, const int64_t *sizes,
-                      const int64_t *strides, int dtype, int op) {
-  assert(rank == 0 || strides[rank - 1] == 1);
+void _idtr_reduce_all(void *data, int64_t sizesRank, int64_t *sizesDesc,
+                      int64_t stridesRank, int64_t *stridesDesc, int dtype,
+                      int op) {
+  MRIdx1d sizesMR(sizesRank, sizesDesc);
+  MRIdx1d stridesMR(stridesRank, stridesDesc);
+  auto sizes = reinterpret_cast<int64_t *>(sizesMR.data());
+  auto strides = reinterpret_cast<int64_t *>(stridesMR.data());
+  auto rank = sizesMR.size();
+  assert(rank == 0 || (rank == 1 && strides[0] == 1));
   idtr_reduce_all(data, mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype)),
-                  rank ? rank : 1,
+                  rank ? sizes[0] : 1,
                   mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
 /// @brief reshape tensor
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-/// @param rank
-/// @param gShapePtr
+/// @param gShapeRank
+/// @param gShapeDesc
 /// @param dtype
 /// @param lDataPtr
-/// @param lOffsPtr
-/// @param lShapePtr
-/// @param lStridesPtr
-/// @param oRank
-/// @param oGShapePtr
-/// @param oOffsPtr
-/// @param oShapePtr
+/// @param lOffsRank
+/// @param lOffsDesc
+/// @param lShapeRank
+/// @param lShapeDesc
+/// @param lStridesRank
+/// @param lStridesDesc
+/// @param oGShapeRank
+/// @param oGShapeDesc
+/// @param oOffsRank
+/// @param oOffsDesc
+/// @param oShapeRank
+/// @param oShapeDesc
 /// @param outPtr
 /// @param tc
-void _idtr_reshape(int64_t rank, int64_t *gShapePtr, int dtype, void *lDataPtr,
-                   int64_t *lOffsPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
-                   int64_t oRank, int64_t *oGShapePtr, int64_t *oOffsPtr,
-                   int64_t *oShapePtr, void *outPtr, Transceiver *tc) {
+void _idtr_reshape(int64_t gShapeRank, int64_t *gShapeDesc, int dtype,
+                   void *lDataPtr, int64_t lOffsRank, int64_t *lOffsDesc,
+                   int64_t lShapeRank, int64_t *lShapeDesc,
+                   int64_t lStridesRank, int64_t *lStridesDesc,
+                   int64_t oGShapeRank, int64_t *oGShapeDesc, int64_t oOffsRank,
+                   int64_t *oOffsDesc, int64_t oShapeRank, int64_t *oShapeDesc,
+                   void *outPtr, Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = getTransceiver();
 #endif
+
+  assert(1 == gShapeRank && 1 == lOffsRank && 1 == lShapeRank &&
+         1 == lStridesRank && 1 == oGShapeRank && 1 == oOffsRank &&
+         1 == oShapeRank);
+
+  MRIdx1d gShapeUMR(gShapeRank, gShapeDesc);
+  MRIdx1d oGShapeUMR(oGShapeRank, oGShapeDesc);
+  auto rank = gShapeUMR.size();
+  auto oRank = oGShapeUMR.size();
+
+  auto gShapePtr = reinterpret_cast<int64_t *>(gShapeUMR.data());
+  auto lOffsPtr =
+      reinterpret_cast<int64_t *>(MRIdx1d(lOffsRank, lOffsDesc).data());
+  auto lShapePtr =
+      reinterpret_cast<int64_t *>(MRIdx1d(lShapeRank, lShapeDesc).data());
+  auto lStridesPtr =
+      reinterpret_cast<int64_t *>(MRIdx1d(lStridesRank, lStridesDesc).data());
+  auto oGShapePtr = reinterpret_cast<int64_t *>(oGShapeUMR.data());
+  auto oOffsPtr =
+      reinterpret_cast<int64_t *>(MRIdx1d(oOffsRank, oOffsDesc).data());
+  auto oShapePtr =
+      reinterpret_cast<int64_t *>(MRIdx1d(oShapeRank, oShapeDesc).data());
 
   assert(std::accumulate(&gShapePtr[0], &gShapePtr[rank], 1,
                          std::multiplies<int64_t>()) ==
@@ -392,12 +430,9 @@ void _idtr_reshape(int64_t rank, int64_t *gShapePtr, int dtype, void *lDataPtr,
                rszs.data(), roffs.data());
 }
 
-using MRIdx1d = Unranked1DMemRefType<uint64_t>;
-
 /// @brief repartition tensor
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-/// @param rank
 /// @param gShapeRank
 /// @param gShapeDesc
 /// @param dtype
@@ -414,9 +449,9 @@ using MRIdx1d = Unranked1DMemRefType<uint64_t>;
 /// @param szsDesc
 /// @param outPtr
 /// @param tc
-void _idtr_repartition(int64_t rank, int64_t gShapeRank, void *gShapeDesc,
-                       int dtype, void *lDataPtr, int64_t lOffsRank,
-                       void *lOffsDesc, int64_t lShapeRank, void *lShapeDesc,
+void _idtr_repartition(int64_t gShapeRank, void *gShapeDesc, int dtype,
+                       void *lDataPtr, int64_t lOffsRank, void *lOffsDesc,
+                       int64_t lShapeRank, void *lShapeDesc,
                        int64_t lStridesRank, void *lStridesDesc,
                        int64_t offsRank, void *offsDesc, int64_t szsRank,
                        void *szsDesc, void *outPtr, Transceiver *tc) {
@@ -436,6 +471,7 @@ void _idtr_repartition(int64_t rank, int64_t gShapeRank, void *gShapeDesc,
   MRIdx1d offsMR(offsRank, offsDesc);
   MRIdx1d szsMR(szsRank, szsDesc);
 
+  int64_t rank = gShapeMR.size();
   auto lShapePtr = reinterpret_cast<int64_t *>(lShapeMR.data());
   auto lStridesPtr = reinterpret_cast<int64_t *>(lStridesMR.data());
 
@@ -520,10 +556,11 @@ void _idtr_repartition(int64_t rank, int64_t gShapeRank, void *gShapeDesc,
   // Finally communicate elements
   if (needsBufferize) {
     // create send buffer if strided
-    Buffer buff(totSSz * sizeof_dtype(ddpttype), 2);
+    Buffer tmpbuff;
+    tmpbuff.resize(totSSz * sizeof_dtype(ddpttype));
     bufferize(lDataPtr, ddpttype, lShapePtr, lStridesPtr, tStarts.data(),
-              tSizes.data(), rank, N, buff.data());
-    tc->alltoall(buff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
+              tSizes.data(), rank, N, tmpbuff.data());
+    tc->alltoall(tmpbuff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
                  rszs.data(), roffs.data());
   } else {
     tc->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr,

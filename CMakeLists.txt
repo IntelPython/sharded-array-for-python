@@ -39,6 +39,10 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Expected LLVM SHA
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/imex_version.txt EXPECTED_IMEX_SHA)
+message(STATUS "Expected IMEX sha: \"${EXPECTED_IMEX_SHA}\"")
+
 # Common installation directories
 #include(GNUInstallDirs)
 
