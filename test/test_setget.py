@@ -1,7 +1,19 @@
 from utils import runAndCompare
+import pytest
 
 
 class TestSetGet:
+    @pytest.mark.skip(reason="FIXME")
+    def test_get_item(self):
+        for i in range(1, 5):
+            N = (10**i) * 16
+            print(N, N // 4, (N // 4) * 3)
+            doit = lambda aapi: aapi.ones((N, N), aapi.float64)[
+                0:N:2, N // 4 : (N // 4) * 3 : 2
+            ]
+
+            assert runAndCompare(doit)
+
     def test_setitem1(self):
         def doit(aapi):
             a = aapi.ones((16, 16), aapi.float64)

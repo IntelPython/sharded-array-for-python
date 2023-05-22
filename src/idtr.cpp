@@ -7,13 +7,14 @@
 #include <ddptensor/DDPTensorImpl.hpp>
 #include <ddptensor/MPITransceiver.hpp>
 #include <ddptensor/MemRefType.hpp>
-#include <ddptensor/idtr.hpp>
 
 #include <imex/Dialect/PTensor/IR/PTensorDefs.h>
 
 #include <cassert>
 #include <iostream>
 #include <memory>
+
+constexpr id_t UNKNOWN_GUID = -1;
 
 using container_type =
     std::unordered_map<id_type, std::unique_ptr<DDPTensorImpl>>;
@@ -273,85 +274,52 @@ void bufferizeN(void *cptr, DTypeId dtype, const int64_t *sizes,
            });
 }
 
-using MRIdx1d = Unranked1DMemRefType<uint64_t>;
-
-extern "C" {
-// Elementwise inplace allreduce
-void idtr_reduce_all(void *inout, DTypeId dtype, uint64_t N, ReduceOpId op) {
-  getTransceiver()->reduce_all(inout, dtype, N, op);
-}
+using MRIdx1d = Unranked1DMemRefType<int64_t>;
 
 // FIXME hard-coded for contiguous layout
-void _idtr_reduce_all(void *data, int64_t sizesRank, int64_t *sizesDesc,
-                      int64_t stridesRank, int64_t *stridesDesc, int dtype,
-                      int op) {
-  MRIdx1d sizesMR(sizesRank, sizesDesc);
-  MRIdx1d stridesMR(stridesRank, stridesDesc);
-  auto sizes = reinterpret_cast<int64_t *>(sizesMR.data());
-  auto strides = reinterpret_cast<int64_t *>(stridesMR.data());
-  auto rank = sizesMR.size();
-  assert(rank == 0 || (rank == 1 && strides[0] == 1));
-  idtr_reduce_all(data, mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype)),
-                  rank ? sizes[0] : 1,
-                  mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
+template <typename T>
+void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
+  UnrankedMemRefType<T> data(dataRank, dataDescr);
+  auto inout = data.data();
+  auto sizes = data.sizes();
+  auto strides = data.strides();
+  assert(dataRank == 0 || (dataRank == 1 && strides[0] == 1));
+  getTransceiver()->reduce_all(
+      inout, DTYPE<T>::value, dataRank ? sizes[0] : 1,
+      mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
+
+extern "C" {
+
+#define TYPED_REDUCEALL(_sfx, _typ)                                            \
+  void _idtr_reduce_all_##_sfx(int64_t dataRank, void *dataDescr, int op) {    \
+    _idtr_reduce_all<_typ>(dataRank, dataDescr, op);                           \
+  }
+
+TYPED_REDUCEALL(f64, double);
+TYPED_REDUCEALL(f32, float);
+TYPED_REDUCEALL(i64, int64_t);
+TYPED_REDUCEALL(i32, int32_t);
+TYPED_REDUCEALL(i16, int16_t);
+TYPED_REDUCEALL(i8, int8_t);
+TYPED_REDUCEALL(i1, bool);
+
+} // extern "C"
 
 /// @brief reshape tensor
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-/// @param gShapeRank
-/// @param gShapeDesc
-/// @param dtype
-/// @param lDataPtr
-/// @param lOffsRank
-/// @param lOffsDesc
-/// @param lShapeRank
-/// @param lShapeDesc
-/// @param lStridesRank
-/// @param lStridesDesc
-/// @param oGShapeRank
-/// @param oGShapeDesc
-/// @param oOffsRank
-/// @param oOffsDesc
-/// @param oShapeRank
-/// @param oShapeDesc
-/// @param outPtr
-/// @param tc
-void _idtr_reshape(int64_t gShapeRank, int64_t *gShapeDesc, int dtype,
-                   void *lDataPtr, int64_t lOffsRank, int64_t *lOffsDesc,
-                   int64_t lShapeRank, int64_t *lShapeDesc,
-                   int64_t lStridesRank, int64_t *lStridesDesc,
-                   int64_t oGShapeRank, int64_t *oGShapeDesc, int64_t oOffsRank,
-                   int64_t *oOffsDesc, int64_t oShapeRank, int64_t *oShapeDesc,
-                   void *outPtr, Transceiver *tc) {
+void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
+                   void *lDataPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
+                   int64_t *lOffsPtr, int64_t oRank, int64_t *oGShapePtr,
+                   void *oDataPtr, int64_t *oShapePtr, int64_t *oOffsPtr,
+                   Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = getTransceiver();
 #endif
 
-  assert(1 == gShapeRank && 1 == lOffsRank && 1 == lShapeRank &&
-         1 == lStridesRank && 1 == oGShapeRank && 1 == oOffsRank &&
-         1 == oShapeRank);
-
-  MRIdx1d gShapeUMR(gShapeRank, gShapeDesc);
-  MRIdx1d oGShapeUMR(oGShapeRank, oGShapeDesc);
-  auto rank = gShapeUMR.size();
-  auto oRank = oGShapeUMR.size();
-
-  auto gShapePtr = reinterpret_cast<int64_t *>(gShapeUMR.data());
-  auto lOffsPtr =
-      reinterpret_cast<int64_t *>(MRIdx1d(lOffsRank, lOffsDesc).data());
-  auto lShapePtr =
-      reinterpret_cast<int64_t *>(MRIdx1d(lShapeRank, lShapeDesc).data());
-  auto lStridesPtr =
-      reinterpret_cast<int64_t *>(MRIdx1d(lStridesRank, lStridesDesc).data());
-  auto oGShapePtr = reinterpret_cast<int64_t *>(oGShapeUMR.data());
-  auto oOffsPtr =
-      reinterpret_cast<int64_t *>(MRIdx1d(oOffsRank, oOffsDesc).data());
-  auto oShapePtr =
-      reinterpret_cast<int64_t *>(MRIdx1d(oShapeRank, oShapeDesc).data());
-
-  assert(std::accumulate(&gShapePtr[0], &gShapePtr[rank], 1,
+  assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
                          std::multiplies<int64_t>()) ==
          std::accumulate(&oGShapePtr[0], &oGShapePtr[oRank], 1,
                          std::multiplies<int64_t>()));
@@ -360,9 +328,8 @@ void _idtr_reshape(int64_t gShapeRank, int64_t *gShapeDesc, int dtype,
 
   auto N = tc->nranks();
   auto me = tc->rank();
-  auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
 
-  int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1,
+  int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[lRank], 1,
                                 std::multiplies<int64_t>());
   int64_t mySz = cSz * lShapePtr[0];
   int64_t myOff = lOffsPtr[0] * cSz;
@@ -425,64 +392,76 @@ void _idtr_reshape(int64_t gShapeRank, int64_t *gShapeDesc, int dtype,
 
   Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
   bufferizeN(lDataPtr, ddpttype, lShapePtr, lStridesPtr, lsOffs.data(),
-             lsEnds.data(), rank, N, outbuff.data());
-  tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
+             lsEnds.data(), lRank, N, outbuff.data());
+  tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype, oDataPtr,
                rszs.data(), roffs.data());
 }
 
-/// @brief repartition tensor
+/// @brief reshape tensor
+template <typename T>
+void _idtr_reshape(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
+                   void *lOffsDescr, int64_t lRank, void *lDescr,
+                   int64_t oGShapeRank, void *oGShapeDescr, int64_t oOffsRank,
+                   void *oOffsDescr, int64_t oRank, void *oDescr,
+                   Transceiver *tc) {
+
+  auto ddpttype = DTYPE<T>::value;
+
+  UnrankedMemRefType<T> lData(lRank, lDescr);
+  UnrankedMemRefType<T> oData(oRank, oDescr);
+
+  _idtr_reshape(ddpttype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
+                lData.data(), lData.sizes(), lData.strides(),
+                MRIdx1d(oOffsRank, oOffsDescr).data(), oRank,
+                MRIdx1d(oGShapeRank, oGShapeDescr).data(), oData.data(),
+                oData.sizes(), MRIdx1d(oOffsRank, oOffsDescr).data(), tc);
+}
+
+extern "C" {
+
+#define TYPED_RESHAPE(_sfx, _typ)                                              \
+  void _idtr_reshape_##_sfx(                                                   \
+      int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
+      void *lOffsDescr, int64_t rank, void *lDescr, int64_t oGShapeRank,       \
+      void *oGShapeDescr, int64_t oOffsRank, void *oOffsDescr, int64_t oRank,  \
+      void *oDescr, Transceiver *tc) {                                         \
+    _idtr_reshape<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr, rank,  \
+                        lDescr, oGShapeRank, oGShapeDescr, oOffsRank,          \
+                        oOffsDescr, oRank, oDescr, tc);                        \
+  }
+
+TYPED_RESHAPE(f64, double);
+TYPED_RESHAPE(f32, float);
+TYPED_RESHAPE(i64, int64_t);
+TYPED_RESHAPE(i32, int32_t);
+TYPED_RESHAPE(i16, int16_t);
+TYPED_RESHAPE(i8, int8_t);
+TYPED_RESHAPE(i1, bool);
+
+} // extern "C"
+
+/// @brief repartition tensor using generic and raw pointers
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-/// @param gShapeRank
-/// @param gShapeDesc
-/// @param dtype
-/// @param lDataPtr
-/// @param lOffsRank
-/// @param lOffsDesc
-/// @param lShapeRank
-/// @param lShapeDesc
-/// @param lStridesRank
-/// @param lStridesDesc
-/// @param offsRank
-/// @param offsDesc
-/// @param szsRank
-/// @param szsDesc
-/// @param outPtr
-/// @param tc
-void _idtr_repartition(int64_t gShapeRank, void *gShapeDesc, int dtype,
-                       void *lDataPtr, int64_t lOffsRank, void *lOffsDesc,
-                       int64_t lShapeRank, void *lShapeDesc,
-                       int64_t lStridesRank, void *lStridesDesc,
-                       int64_t offsRank, void *offsDesc, int64_t szsRank,
-                       void *szsDesc, void *outPtr, Transceiver *tc) {
+void _idtr_repartition(DTypeId ddpttype, int64_t rank, void *lDataPtr,
+                       int64_t *lShapePtr, int64_t *lStridesPtr,
+                       int64_t *lOffsPtr, void *outPtr, int64_t *oShapePtr,
+                       int64_t *oOffsPtr, Transceiver *tc) {
+
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = getTransceiver();
 #endif
   auto N = tc->nranks();
   auto me = tc->rank();
-  auto ddpttype = mlir2ddpt(static_cast<::imex::ptensor::DType>(dtype));
-
-  // Construct unranked memrefs for metadata
-  MRIdx1d gShapeMR(gShapeRank, gShapeDesc);
-  MRIdx1d lOffsMR(lOffsRank, lOffsDesc);
-  MRIdx1d lShapeMR(lShapeRank, lShapeDesc);
-  MRIdx1d lStridesMR(lStridesRank, lStridesDesc);
-  MRIdx1d offsMR(offsRank, offsDesc);
-  MRIdx1d szsMR(szsRank, szsDesc);
-
-  int64_t rank = gShapeMR.size();
-  auto lShapePtr = reinterpret_cast<int64_t *>(lShapeMR.data());
-  auto lStridesPtr = reinterpret_cast<int64_t *>(lStridesMR.data());
 
   // First we allgather the requested target partitioning
 
   auto myBOff = 2 * rank * me;
   ::std::vector<int64_t> buff(2 * rank * N);
   for (int64_t i = 0; i < rank; ++i) {
-    // assert(offsPtr[i] - lOffs[i] + szsPtr[i] <= gShape[i]);
-    buff[myBOff + i] = offsMR[i];
-    buff[myBOff + i + rank] = szsMR[i];
+    buff[myBOff + i] = oOffsPtr[i];
+    buff[myBOff + i + rank] = oShapePtr[i];
   }
   ::std::vector<int> counts(N, rank * 2);
   ::std::vector<int> dspl(N);
@@ -493,8 +472,8 @@ void _idtr_repartition(int64_t gShapeRank, void *gShapeDesc, int dtype,
 
   // compute overlap of my local data with each requested part
 
-  auto myOff = static_cast<int64_t>(lOffsMR[0]);
-  auto mySz = static_cast<int64_t>(lShapeMR[0]);
+  auto myOff = static_cast<int64_t>(lOffsPtr[0]);
+  auto mySz = static_cast<int64_t>(lShapePtr[0]);
   auto myEnd = myOff + mySz;
   auto myTileSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1,
                                   std::multiplies<int64_t>());
@@ -537,7 +516,7 @@ void _idtr_repartition(int64_t gShapeRank, void *gShapeDesc, int dtype,
     for (auto r = 1; r < rank; ++r) {
       tStarts[i * rank + r] = buff[2 * rank * i + r];
       tSizes[i * rank + r] = buff[2 * rank * i + rank + r];
-      // assert(tSizes[i*rank+r] <= lShapeMR[r]);
+      // assert(tSizes[i*rank+r] <= lShapePtr[r]);
     }
   }
 
@@ -568,6 +547,47 @@ void _idtr_repartition(int64_t gShapeRank, void *gShapeDesc, int dtype,
   }
 }
 
+/// @brief templated wrapper for typed function versions calling
+/// _idtr_repartition
+template <typename T>
+void _idtr_repartition(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
+                       void *lOffsDescr, int64_t lRank, void *lDescr,
+                       int64_t oOffsRank, void *oOffsDescr, int64_t oRank,
+                       void *oDescr, Transceiver *tc) {
+
+  auto ddpttype = DTYPE<T>::value;
+
+  // Construct unranked memrefs for metadata
+  UnrankedMemRefType<T> lData(lRank, lDescr);
+  UnrankedMemRefType<T> oData(oRank, oDescr);
+
+  _idtr_repartition(ddpttype, lRank, lData.data(), lData.sizes(),
+                    lData.strides(), MRIdx1d(lOffsRank, lOffsDescr).data(),
+                    oData.data(), oData.sizes(),
+                    MRIdx1d(oOffsRank, oOffsDescr).data(), tc);
+}
+
+extern "C" {
+#define TYPED_REPARTITON(_sfx, _typ)                                           \
+  void _idtr_repartition_##_sfx(                                               \
+      int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
+      void *lOffsDescr, int64_t rank, void *lDescr, int64_t oOffsRank,         \
+      void *oOffsDescr, int64_t oRank, void *oDescr, Transceiver *tc) {        \
+    _idtr_repartition<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr,    \
+                            rank, lDescr, oOffsRank, oOffsDescr, oRank,        \
+                            oDescr, tc);                                       \
+  }
+
+TYPED_REPARTITON(f64, double);
+TYPED_REPARTITON(f32, float);
+TYPED_REPARTITON(i64, int64_t);
+TYPED_REPARTITON(i32, int32_t);
+TYPED_REPARTITON(i16, int16_t);
+TYPED_REPARTITON(i8, int8_t);
+TYPED_REPARTITON(i1, bool);
+
+} // extern "C"
+
 // debug helper
 void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
                         int64_t *slcStrides, int64_t *tOffs, int64_t *tSizes,
@@ -595,5 +615,6 @@ void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
               << std::endl;
 }
 
+extern "C" {
 void _debugFunc() { std::cerr << "_debugfunc\n"; }
 } // extern "C"

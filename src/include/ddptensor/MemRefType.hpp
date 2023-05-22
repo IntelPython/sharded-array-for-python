@@ -11,6 +11,23 @@ template <typename T, size_t N> struct MemRefDescriptor {
   intptr_t strides[N] = {0};
 };
 
+// Use with care.
+template <typename T> class UnrankedMemRefType {
+  int64_t _rank;
+  intptr_t *_descriptor;
+
+public:
+  UnrankedMemRefType(int64_t rank, void *p)
+      : _rank(rank), _descriptor(reinterpret_cast<intptr_t *>(p)){};
+
+  T *data() { return reinterpret_cast<T *>(_descriptor[1]); };
+  int64_t rank() const { return _rank; }
+  int64_t *sizes() { return reinterpret_cast<int64_t *>(&_descriptor[3]); };
+  int64_t *strides() {
+    return reinterpret_cast<int64_t *>(&_descriptor[3 + _rank]);
+  };
+};
+
 template <typename T> struct Unranked1DMemRefType {
   MemRefDescriptor<T, 1> *descriptor;
 

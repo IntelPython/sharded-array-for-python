@@ -126,9 +126,10 @@ jobs:
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
-          export DDPT_IDTR_SO=build/lib.linux-x86_64-cpython-*/ddptensor/libidtr.so
+          DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
+          export DDPT_IDTR_SO=${DDPT_ROOT}/ddptensor/libidtr.so
           export DDPT_CRUNNER_SO="$GITHUB_WORKSPACE"/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so
           pytest test
-          # DDPT_FORCE_DIST=1 pytest test
+          DDPT_FORCE_DIST=1 pytest test
       - run: |
           echo "This job's status is ${{ job.status }}."
