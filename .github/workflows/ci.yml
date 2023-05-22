@@ -131,5 +131,9 @@ jobs:
           export DDPT_CRUNNER_SO="$GITHUB_WORKSPACE"/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so
           pytest test
           DDPT_FORCE_DIST=1 pytest test
+      - name: Cleanup
+        run: |
+          pip list
+          pip uninstall -y ddptensor
       - run: |
           echo "This job's status is ${{ job.status }}."

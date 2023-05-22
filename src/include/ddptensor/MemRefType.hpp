@@ -20,11 +20,14 @@ public:
   UnrankedMemRefType(int64_t rank, void *p)
       : _rank(rank), _descriptor(reinterpret_cast<intptr_t *>(p)){};
 
-  T *data() { return reinterpret_cast<T *>(_descriptor[1]); };
+  T *data() { return &reinterpret_cast<T *>(_descriptor[1])[_descriptor[2]]; };
   int64_t rank() const { return _rank; }
-  int64_t *sizes() { return reinterpret_cast<int64_t *>(&_descriptor[3]); };
+  int64_t *sizes() {
+    return _rank ? reinterpret_cast<int64_t *>(&_descriptor[3]) : nullptr;
+  };
   int64_t *strides() {
-    return reinterpret_cast<int64_t *>(&_descriptor[3 + _rank]);
+    return _rank ? reinterpret_cast<int64_t *>(&_descriptor[3 + _rank])
+                 : nullptr;
   };
 };
 

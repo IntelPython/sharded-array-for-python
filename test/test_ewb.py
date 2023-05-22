@@ -68,3 +68,21 @@ class TestEWB:
         r = dt.sum(c, [0, 1])
         v = 16 * 16 * 2 * 2
         assert float(r) == v
+
+    def test_pow(self):
+        for dtyp in [dt.int64, dt.float64]:
+            a = dt.full((6, 6), 3, dtype=dtyp)
+            b = dt.full((6, 6), 2, dtype=dtyp)
+            c = a**b
+            r1 = dt.sum(c, [0, 1])
+            v = 6 * 6 * 9
+            assert float(r1) == v
+
+    def test_bitwise_and(self):
+        for dtyp in mpi_idtypes:
+            a = dt.full((6, 6), 3, dtype=dtyp)
+            b = dt.full((6, 6), 2, dtype=dtyp)
+            c = a & b
+            r1 = dt.sum(c, [0, 1])
+            v = 6 * 6 * 2
+            assert float(r1) == v

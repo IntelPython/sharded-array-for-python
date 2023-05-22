@@ -280,12 +280,9 @@ using MRIdx1d = Unranked1DMemRefType<int64_t>;
 template <typename T>
 void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
   UnrankedMemRefType<T> data(dataRank, dataDescr);
-  auto inout = data.data();
-  auto sizes = data.sizes();
-  auto strides = data.strides();
-  assert(dataRank == 0 || (dataRank == 1 && strides[0] == 1));
+  assert(dataRank == 0 || (dataRank == 1 && data.strides()[0] == 1));
   getTransceiver()->reduce_all(
-      inout, DTYPE<T>::value, dataRank ? sizes[0] : 1,
+      data.data(), DTYPE<T>::value, dataRank ? data.sizes()[0] : 1,
       mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
 }
 
