@@ -33,7 +33,7 @@ class build_ext(build_ext_orig):
             "-DCMAKE_BUILD_TYPE=" + config,
             "-DCMAKE_VERBOSE_MAKEFILE=ON",
             "-G=Ninja",
-            "-DLLVM_ENABLE_LLD=ON"
+            "-DLLVM_ENABLE_LLD=ON",
         ]
 
         # example of build args
@@ -56,7 +56,7 @@ setup(
     name="ddptensor",
     version="0.1",
     description="Distributed Tensor and more",
-    packages=["ddptensor"],  # , "ddptensor.numpy", "ddptensor.torch"],
+    packages=["ddptensor", "ddptensor.numpy"],  # "ddptensor.torch"],
     ext_modules=[CMakeExtension("ddptensor/_ddptensor")],
     cmdclass=dict(
         # Enable the CMakeExtension entries defined above

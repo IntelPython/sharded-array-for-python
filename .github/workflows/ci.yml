@@ -122,18 +122,28 @@ jobs:
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
           MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python setup.py install
+          DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
+          echo "DDPT_IDTR_SO=${DDPT_ROOT}/ddptensor/libidtr.so" >> $GITHUB_ENV
+          echo "DDPT_CRUNNER_SO=${GITHUB_WORKSPACE}/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so" >> $GITHUB_ENV
       - name: Test DDPT (pytest)
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
-          DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
-          export DDPT_IDTR_SO=${DDPT_ROOT}/ddptensor/libidtr.so
-          export DDPT_CRUNNER_SO="$GITHUB_WORKSPACE"/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so
-          pytest test
-          DDPT_FORCE_DIST=1 pytest test
+          cd test
+          pytest .
+          DDPT_FORCE_DIST=1 pytest .
+          cd -
+      - name: Run examples
+        run: |
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          cd examples
+          python -u ./stencil-2d.py 5 1024 star 4
+          DDPT_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
+          python -u ./wave_equation.py -ct
+          DDPT_FORCE_DIST=1 python -u ./wave_equation.py -ct
+          cd -
       - name: Cleanup
         run: |
           pip list
           pip uninstall -y ddptensor
-      - run: |
-          echo "This job's status is ${{ job.status }}."

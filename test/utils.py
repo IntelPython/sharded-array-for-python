@@ -7,9 +7,6 @@ def runAndCompare(func, do_gather=True):
     a = ddptensor.spmd.gather(aa) if do_gather else aa
     b = func(numpy)
     if isinstance(b, numpy.ndarray):
-        print(aa)
-        print(a)
-        print(b)
         return a.shape == b.shape and numpy.allclose(a, b, rtol=1e-8, atol=1e-8)
     return float(a) == float(b)
 

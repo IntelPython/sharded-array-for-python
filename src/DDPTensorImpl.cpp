@@ -58,10 +58,10 @@ DDPTensorImpl::DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner)
 
 DDPTensorImpl::~DDPTensorImpl() {
   if (!_base) {
-    delete[] reinterpret_cast<char *>(_allocated);
+    free(_allocated); // delete[] reinterpret_cast<char *>(_allocated);
   }
-  delete[] _gs_allocated;
-  delete[] _lo_allocated;
+  free(_gs_allocated);
+  free(_lo_allocated);
   delete[] _sizes;
   delete[] _strides;
 }
@@ -72,7 +72,8 @@ DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
   auto sz = size();
   auto esz = sizeof_dtype(dtype());
   auto bsz = sz * esz;
-  auto allocated = new (std::align_val_t(esz)) char[bsz];
+  auto allocated =
+      aligned_alloc(esz, bsz); // new (std::align_val_t(esz)) char[bsz];
   auto aligned = allocated;
   if (copy)
     memcpy(aligned, _aligned, bsz);
@@ -82,7 +83,8 @@ DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
   // auto gs_aligned = gs_allocated;
   auto gs_allocated = _gs_allocated;
   auto gs_aligned = _gs_aligned;
-  auto lo_allocated = new uint64_t[nd];
+  auto lo_allocated =
+      (uint64_t *)aligned_alloc(sizeof(uint64_t), nd * sizeof(uint64_t));
   auto lo_aligned = lo_allocated;
   memcpy(lo_aligned, _lo_aligned, nd * sizeof(*lo_aligned));
 
@@ -94,7 +96,9 @@ DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
 
 void DDPTensorImpl::alloc(bool all) {
   auto esz = sizeof_dtype(_dtype);
-  _allocated = new (std::align_val_t(esz)) char[esz * local_size()];
+  _allocated =
+      aligned_alloc(esz, esz * local_size()); // new (std::align_val_t(esz))
+                                              // char[esz * local_size()];
   _aligned = _allocated;
   _offset = 0;
   if (all) {
