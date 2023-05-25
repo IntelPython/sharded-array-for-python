@@ -349,7 +349,7 @@ void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
   for (auto i = 0; i < N; ++i) {
     dspl[i] = 4 * i;
   }
-  tc->gather(buff.data(), counts.data(), dspl.data(), ddpttype, REPLICATED);
+  tc->gather(buff.data(), counts.data(), dspl.data(), INT64, REPLICATED);
 
   // compute overlaps of current parts with requested parts
   // and store meta for alltoall
@@ -409,7 +409,7 @@ void _idtr_reshape(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
 
   _idtr_reshape(ddpttype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
                 lData.data(), lData.sizes(), lData.strides(),
-                MRIdx1d(oOffsRank, oOffsDescr).data(), oRank,
+                MRIdx1d(lOffsRank, lOffsDescr).data(), oRank,
                 MRIdx1d(oGShapeRank, oGShapeDescr).data(), oData.data(),
                 oData.sizes(), MRIdx1d(oOffsRank, oOffsDescr).data(), tc);
 }
@@ -465,7 +465,7 @@ void _idtr_repartition(DTypeId ddpttype, int64_t rank, void *lDataPtr,
   for (auto i = 0; i < N; ++i) {
     dspl[i] = 2 * rank * i;
   }
-  tc->gather(buff.data(), counts.data(), dspl.data(), ddpttype, REPLICATED);
+  tc->gather(buff.data(), counts.data(), dspl.data(), INT64, REPLICATED);
 
   // compute overlap of my local data with each requested part
 

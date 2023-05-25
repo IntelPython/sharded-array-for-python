@@ -76,10 +76,7 @@ public:
   void *data();
 
   /// @return true if tensor is a sliced
-  bool is_sliced() const {
-    assert(!"Not implemented");
-    return false;
-  }
+  bool is_sliced() const;
 
   /// python object's __repr__
   virtual std::string __repr__() const override;

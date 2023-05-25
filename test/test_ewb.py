@@ -18,7 +18,7 @@ class TestEWB:
             a = dt.ones((6, 6), dtype=dtyp)
             b = dt.ones((6, 6), dtype=dtyp)
             c = a + b
-            r1 = dt.sum(c, [0, 1])
+            r1 = dt.sum(c)
             v = 6 * 6 * 2
             assert float(r1) == v
 

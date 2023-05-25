@@ -126,8 +126,7 @@ template <typename T> T to_native(const py::object &o) { return o.cast<T>(); }
 inline void compute_slice(const py::slice &slc, uint64_t &offset,
                           uint64_t &size, uint64_t &stride) {
   uint64_t dmy = 0;
-  slc.compute(std::numeric_limits<int64_t>::max(), &offset, &dmy, &stride,
-              &size);
+  slc.compute(ALL_SIZE, &offset, &dmy, &stride, &size);
 }
 
 #if 0

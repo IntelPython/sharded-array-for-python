@@ -152,6 +152,9 @@ inline RedOpType red_op(const char *op) {
   throw std::logic_error("unsupported reduction operation");
 }
 
+/// denotes the full dimension, like when using '[:]' in array subscription
+constexpr auto ALL_SIZE = std::numeric_limits<int64_t>::max();
+
 inline shape_type reduce_shape(const shape_type &shape,
                                const dim_vec_type &dims) {
   auto ssz = shape.size();

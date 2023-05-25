@@ -12,5 +12,5 @@
 
 GetItem::py_future_type IO::to_numpy(const ddptensor &a) {
   assert(!getTransceiver()->is_cw() || getTransceiver()->rank() == 0);
-  return GetItem::gather(a, 0);
+  return GetItem::gather(a, getTransceiver()->is_cw() ? 0 : REPLICATED);
 }

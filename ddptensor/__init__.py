@@ -39,6 +39,8 @@ from . import spmd
 
 _ddpt_cw = _bool(int(getenv("DDPT_CW", False)))
 
+pi = 3.1415926535897932384626433
+
 
 def init(cw=None):
     cw = _ddpt_cw if cw is None else cw

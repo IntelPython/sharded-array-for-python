@@ -132,6 +132,7 @@ jobs:
           cd test
           pytest .
           DDPT_FORCE_DIST=1 pytest .
+          mpirun -n 2 pytest .
           cd -
       - name: Run examples
         run: |

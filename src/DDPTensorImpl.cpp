@@ -115,6 +115,23 @@ void *DDPTensorImpl::data() {
   return ret;
 }
 
+bool DDPTensorImpl::is_sliced() const {
+  if (ndims() == 0)
+    return false;
+  auto d = ndims() - 1;
+  intptr_t tsz = _strides[d];
+  if (tsz == 1) {
+    for (; d > 0; --d) {
+      tsz *= _sizes[d];
+      if (tsz <= 0)
+        break;
+      if (_strides[d - 1] > tsz)
+        return true;
+    }
+  }
+  return false;
+}
+
 std::string DDPTensorImpl::__repr__() const {
   const auto nd = ndims();
   std::ostringstream oss;
