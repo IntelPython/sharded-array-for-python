@@ -13,6 +13,14 @@ mpi_idtypes = [  # FIXME
 
 
 class TestEWB:
+    def test_add0(self):
+        for dtyp in mpi_dtypes:
+            a = dt.ones((6, 6), dtype=dtyp)
+            c = a + a
+            r1 = dt.sum(c)
+            v = 6 * 6 * 2
+            assert float(r1) == v
+
     def test_add1(self):
         for dtyp in mpi_dtypes:
             a = dt.ones((6, 6), dtype=dtyp)

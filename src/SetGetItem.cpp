@@ -19,6 +19,7 @@
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
+#include <mlir/Dialect/Linalg/Utils/Utils.h>
 #include <mlir/IR/Builders.h>
 
 #include <pybind11/numpy.h>
@@ -168,7 +169,12 @@ struct DeferredSetItem : public Deferred {
     std::vector<::mlir::Value> stridesV(nd);
     for (auto i = 0; i < nd; ++i) {
       offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-      sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+      if (sizes[i] == ALL_SIZE) {
+        sizesV[i] =
+            builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
+      } else {
+        sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+      }
       stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
     }
     // insertsliceop has no return value, so we just create the op...
@@ -280,7 +286,12 @@ struct DeferredGetItem : public Deferred {
         sizesV[i] = builder.getIndexAttr(sizes[i]);
         shape[i] = sizes[i];
       } else {
-        sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+        if (sizes[i] == ALL_SIZE) {
+          sizesV[i] =
+              builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
+        } else {
+          sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
+        }
       }
     }
 

@@ -1,3 +1,4 @@
+import ddptensor as dt
 from utils import runAndCompare
 import pytest
 
@@ -39,3 +40,10 @@ class TestSetGet:
             return a
 
         assert runAndCompare(doit)
+
+    def test_colon(self):
+        a = dt.ones((16, 16), dt.float64)
+        b = dt.zeros((16, 16), dt.float64)
+        a[:, :] = b[:, :]
+        r1 = dt.sum(a)
+        assert float(r1) == 0
