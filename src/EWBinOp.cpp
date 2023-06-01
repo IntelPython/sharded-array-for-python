@@ -103,6 +103,9 @@ struct DeferredEWBinOp : public Deferred {
 
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
+    // auto bop =
+    //     builder.create<::imex::ptensor::EWBinOp>(loc, ddpt2mlir(_op), av,
+    //     bv);
     dm.addVal(this->guid(), bop,
               [this](Transceiver *transceiver, uint64_t rank, void *allocated,
                      void *aligned, intptr_t offset, const intptr_t *sizes,

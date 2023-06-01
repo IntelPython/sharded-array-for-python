@@ -34,6 +34,7 @@
 */
 
 #include "ddptensor/jit/mlir.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Registry.hpp"
 
 #include "mlir/IR/MLIRContext.h"
@@ -116,7 +117,8 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
 
 // convert ddpt's DTYpeId into MLIR type
 static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
-                             int rank, uint64_t team, bool balanced) {
+                             ::mlir::SmallVector<int64_t> &shape, uint64_t team,
+                             bool balanced) {
   ::mlir::Type etyp;
 
   switch (dtype) {
@@ -149,7 +151,6 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     throw std::runtime_error("unknown dtype");
   };
 
-  ::mlir::SmallVector<int64_t> shape(rank, ::mlir::ShapedType::kDynamic);
   auto pttype = ::imex::ptensor::PTensorType::get(shape, etyp);
   if (team) {
     return ::imex::dist::DistTensorType::get(builder.getContext(), pttype);
@@ -165,8 +166,15 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     // Not found -> this must be an input argument to the jit function
     auto idx = _args.size();
     auto fut = Registry::get(guid);
+    auto impl = std::dynamic_pointer_cast<DDPTensorImpl>(fut.get());
+    auto rank = impl->ndims();
+    const int64_t *shape_ptr = impl->local_shape();
+    ::mlir::SmallVector<int64_t> shape(rank);
+    for (size_t i = 0; i < rank; i++) {
+      shape[i] = shape_ptr[i];
+    }
     auto typ =
-        getTType(builder, fut.dtype(), fut.rank(), fut.team(), fut.balanced());
+        getTType(builder, fut.dtype(), shape, fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, std::move(fut)});

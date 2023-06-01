@@ -144,7 +144,7 @@ def run(n, backend, benchmark_mode, correctness_test):
         return amp * sol_x * sol_y * sol_t
 
     # inital elevation
-    e[0:nx, 0:ny] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
+    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
 
     # compute time step
     alpha = 0.5
@@ -173,13 +173,12 @@ def run(n, backend, benchmark_mode, correctness_test):
         # sign convention: positive on rhs
 
         # pressure gradient -g grad(elev)
-        dudt = -g * (e[1:nx, 0:ny] - e[0 : nx - 1, 0:ny]) / dx
-        dvdt = -g * (e[0:nx, 1:ny] - e[0:nx, 0 : ny - 1]) / dy
+        dudt = -g * (e[1:nx, :] - e[0 : nx - 1, :]) / dx
+        dvdt = -g * (e[:, 1:ny] - e[:, 0 : ny - 1]) / dy
 
         # velocity divergence -h div(u)
         dedt = -h * (
-            (u[1 : nx + 1, 0:ny] - u[0:nx, 0:ny]) / dx
-            + (v[0:nx, 1 : ny + 1] - v[0:nx, 0:ny]) / dy
+            (u[1 : nx + 1, :] - u[0:nx, :]) / dx + (v[:, 1 : ny + 1] - v[:, 0:ny]) / dy
         )
 
         return dudt, dvdt, dedt
@@ -189,19 +188,19 @@ def run(n, backend, benchmark_mode, correctness_test):
         Execute one SSPRK(3,3) time step
         """
         dudt, dvdt, dedt = rhs(u, v, e)
-        u1[1:nx, 0:ny] = u[1:nx, 0:ny] + dt * dudt
-        v1[0:nx, 1:ny] = v[0:nx, 1:ny] + dt * dvdt
-        e1[0:nx, 0:ny] = e[0:nx, 0:ny] + dt * dedt
+        u1[1:nx, :] = u[1:nx, :] + dt * dudt
+        v1[:, 1:ny] = v[:, 1:ny] + dt * dvdt
+        e1[:, :] = e[:, :] + dt * dedt
 
         dudt, dvdt, dedt = rhs(u1, v1, e1)
-        u2[1:nx, 0:ny] = 0.75 * u[1:nx, 0:ny] + 0.25 * (u1[1:nx, 0:ny] + dt * dudt)
-        v2[0:nx, 1:ny] = 0.75 * v[0:nx, 1:ny] + 0.25 * (v1[0:nx, 1:ny] + dt * dvdt)
-        e2[0:nx, 0:ny] = 0.75 * e[0:nx, 0:ny] + 0.25 * (e1[0:nx, 0:ny] + dt * dedt)
+        u2[1:nx, :] = 0.75 * u[1:nx, :] + 0.25 * (u1[1:nx, :] + dt * dudt)
+        v2[:, 1:ny] = 0.75 * v[:, 1:ny] + 0.25 * (v1[:, 1:ny] + dt * dvdt)
+        e2[:, :] = 0.75 * e[:, :] + 0.25 * (e1[:, :] + dt * dedt)
 
         dudt, dvdt, dedt = rhs(u2, v2, e2)
-        u[1:nx, 0:ny] = u[1:nx, 0:ny] / 3.0 + 2.0 / 3.0 * (u2[1:nx, 0:ny] + dt * dudt)
-        v[0:nx, 1:ny] = v[0:nx, 1:ny] / 3.0 + 2.0 / 3.0 * (v2[0:nx, 1:ny] + dt * dvdt)
-        e[0:nx, 0:ny] = e[0:nx, 0:ny] / 3.0 + 2.0 / 3.0 * (e2[0:nx, 0:ny] + dt * dedt)
+        u[1:nx, :] = u[1:nx, :] / 3.0 + 2.0 / 3.0 * (u2[1:nx, :] + dt * dudt)
+        v[:, 1:ny] = v[:, 1:ny] / 3.0 + 2.0 / 3.0 * (v2[:, 1:ny] + dt * dvdt)
+        e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
 
     t = 0
     i_export = 0
