@@ -122,17 +122,24 @@ jobs:
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
           MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python setup.py install
-          DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
-          echo "DDPT_IDTR_SO=${DDPT_ROOT}/ddptensor/libidtr.so" >> $GITHUB_ENV
+          # DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
+          # for some reason we cannot use the idtr from the install, not even a copy works
+          libidtr=`ls ${PWD}/build/lib.linux-x86_64-cpython-*/ddptensor/libidtr.so`
+          echo "DDPT_IDTR_SO=${libidtr}" >> $GITHUB_ENV
           echo "DDPT_CRUNNER_SO=${GITHUB_WORKSPACE}/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so" >> $GITHUB_ENV
+          echo $DDPT_IDTR_SO
       - name: Test DDPT (pytest)
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
           cd test
-          pytest .
-          DDPT_FORCE_DIST=1 pytest .
-          mpirun -n 2 pytest .
+          echo $DDPT_IDTR_SO
+          ldd $DDPT_IDTR_SO
+          pytest . -v -s
+          DDPT_FORCE_DIST=1 pytest . -v -s
+          mpirun -n 2 pytest . -v -s
+          mpirun -n 3 pytest . -v -s
+          mpirun -n 4 pytest . -v -s
           cd -
       - name: Run examples
         run: |

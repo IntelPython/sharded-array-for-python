@@ -224,7 +224,7 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
   uint64_t first = 0;
   if (pos < start) {
     first = (start - pos) / chunk;
-    pos += first;
+    pos += first * chunk;
     cptr += first * stride;
     assert(pos <= start && pos < end);
   }
@@ -281,9 +281,11 @@ template <typename T>
 void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
   UnrankedMemRefType<T> data(dataRank, dataDescr);
   assert(dataRank == 0 || (dataRank == 1 && data.strides()[0] == 1));
-  getTransceiver()->reduce_all(
-      data.data(), DTYPE<T>::value, dataRank ? data.sizes()[0] : 1,
-      mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op)));
+  auto d = data.data();
+  auto t = DTYPE<T>::value;
+  auto r = dataRank ? data.sizes()[0] : 1;
+  auto o = mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op));
+  getTransceiver()->reduce_all(d, t, r, o);
 }
 
 extern "C" {
