@@ -427,6 +427,7 @@ static const char *pass_pipeline =
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
                             "func.func(buffer-deallocation),"
+                            "imex-remove-temporaries,"
                             "func.func(convert-linalg-to-parallel-loops),"
                             "func.func(scf-parallel-loop-fusion),"
                             "canonicalize,"
@@ -527,6 +528,8 @@ void init() {
   ::imex::registerDistPasses();
   ::imex::registerConvertDistToStandard();
   ::imex::registerConvertPTensorToLinalg();
+
+  ::imex::registerRemoveTemporariesPass();
 
   // ::mlir::DialectRegistry registry;
   // ::mlir::registerAllDialects(registry);
