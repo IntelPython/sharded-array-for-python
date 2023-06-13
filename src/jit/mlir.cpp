@@ -329,57 +329,41 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
 std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
                                const std::string &fname,
                                std::vector<void *> &inp, size_t osz) {
-  ::mlir::ModuleOp cached;
+
+  ::mlir::ExecutionEngine *enginePtr;
+  std::unique_ptr<::mlir::ExecutionEngine> tmpEngine;
+
   if (_useCache) {
-    static std::vector<
-        std::pair<std::array<unsigned char, 20>, ::mlir::ModuleOp>>
-        cache;
-    llvm::raw_sha1_ostream xxx;
-    module->print(xxx);
-    auto cksm = xxx.sha1();
-    for (auto x : cache) {
-      if (x.first == cksm) {
-        cached = x.second;
-        break;
-      }
-    }
-    if (cached) {
-      module = cached;
-      if (_verbose)
-        std::cerr << "cached..." << std::endl;
+    static std::map<std::array<unsigned char, 20>,
+                    std::unique_ptr<::mlir::ExecutionEngine>>
+        engineCache;
+
+    llvm::raw_sha1_ostream shaOS;
+    module->print(shaOS);
+    auto cksm = shaOS.sha1();
+
+    if (auto search = engineCache.find(cksm); search == engineCache.end()) {
+      engineCache[cksm] = createExecutionEngine(module);
     } else {
       if (_verbose)
-        std::cerr << "compiling..." << std::endl;
-      cache.push_back(std::make_pair(cksm, module));
-      if (_verbose > 1)
-        module.dump();
+        std::cerr << "cached..." << std::endl;
     }
+    enginePtr = engineCache[cksm].get();
+  } else {
+    tmpEngine = createExecutionEngine(module);
+    enginePtr = tmpEngine.get();
   }
 
-  // An optimization pipeline to use within the execution engine.
-  auto optPipeline =
-      ::mlir::makeOptimizingTransformer(/*optLevel=*/0,
-                                        /*sizeLevel=*/0,
-                                        /*targetMachine=*/nullptr);
+  auto expectedFPtr =
+      enginePtr->lookupPacked(std::string("_mlir_ciface_") + fname);
+  if (auto err = expectedFPtr.takeError()) {
+    ::llvm::errs() << "JIT invocation failed: " << toString(std::move(err))
+                   << "\n";
+    throw std::runtime_error("JIT invocation failed");
+  }
+  auto jittedFuncPtr = *expectedFPtr;
 
-  // Create an ::mlir execution engine. The execution engine eagerly
-  // JIT-compiles the module.
-  ::mlir::ExecutionEngineOptions opts;
-  opts.transformer = optPipeline;
-  opts.sharedLibPaths = _sharedLibPaths;
-  opts.enableObjectDump = _useCache;
-
-  // lower to LLVM
-  if (::mlir::failed(_pm.run(module)))
-    throw std::runtime_error("failed to run pass manager");
-
-  if (_verbose > 2 && !cached)
-    module.dump();
-
-  auto maybeEngine = ::mlir::ExecutionEngine::create(module, opts);
-  assert(maybeEngine && "failed to construct an execution engine");
-  auto &engine = maybeEngine.get();
-
+  // pack function arguments
   llvm::SmallVector<void *> args;
   std::vector<intptr_t> out(osz);
   auto tmp = out.data();
@@ -393,14 +377,37 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     args.push_back(&arg);
   }
 
-  // Invoke the JIT-compiled function.
-  if (engine->invokePacked(std::string("_mlir_ciface_") + fname.c_str(),
-                           args)) {
-    ::llvm::errs() << "JIT invocation failed\n";
-    throw std::runtime_error("JIT invocation failed");
-  }
+  // call function
+  (*jittedFuncPtr)(args.data());
 
   return out;
+}
+
+std::unique_ptr<::mlir::ExecutionEngine>
+JIT::createExecutionEngine(::mlir::ModuleOp &module) {
+  if (_verbose)
+    std::cerr << "compiling..." << std::endl;
+  if (_verbose > 1)
+    module.dump();
+
+  // Create an ::mlir execution engine. The execution engine eagerly
+  // JIT-compiles the module.
+  ::mlir::ExecutionEngineOptions opts;
+  opts.transformer = _optPipeline;
+  opts.jitCodeGenOptLevel = llvm::CodeGenOpt::getLevel(_jit_opt_level);
+  opts.sharedLibPaths = _sharedLibPaths;
+  opts.enableObjectDump = true;
+
+  // lower to LLVM
+  if (::mlir::failed(_pm.run(module)))
+    throw std::runtime_error("failed to run pass manager");
+
+  if (_verbose > 2)
+    module.dump();
+
+  auto maybeEngine = ::mlir::ExecutionEngine::create(module, opts);
+  assert(maybeEngine && "failed to construct an execution engine");
+  return std::move(maybeEngine.get());
 }
 
 static const char *pass_pipeline =
@@ -443,7 +450,7 @@ static const char *pass_pipeline =
                             "reconcile-unrealized-casts";
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
-      _verbose(0) {
+      _verbose(0), _jit_opt_level(3) {
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
   ::mlir::registerLLVMDialectTranslation(_context);
@@ -481,12 +488,39 @@ JIT::JIT()
     _useCache = c == "1" || c == "y" || c == "Y" || c == "on" || c == "ON";
     std::cerr << "enableObjectDump=" << _useCache << std::endl;
   }
+  const char *ol_ = getenv("DDPT_OPT_LEVEL");
+  if (ol_) {
+    _jit_opt_level = std::stoi(ol_);
+    if (_jit_opt_level < 0 || _jit_opt_level > 3) {
+      throw std::runtime_error(std::string("Bad optimization level: ") + ol_);
+    }
+  }
 
   const char *crunner = getenv("DDPT_CRUNNER_SO");
   crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
   const char *idtr = getenv("DDPT_IDTR_SO");
   idtr = idtr ? idtr : "libidtr.so";
   _sharedLibPaths = {idtr, crunner};
+
+  // detect target architecture
+  auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!tmBuilderOrError) {
+    throw std::runtime_error(
+        "Failed to create a JITTargetMachineBuilder for the host\n");
+  }
+
+  // build TargetMachine
+  auto tmOrError = tmBuilderOrError->createTargetMachine();
+  if (!tmOrError) {
+    throw std::runtime_error("Failed to create a TargetMachine for the host\n");
+  }
+  _tm = std::move(tmOrError.get());
+
+  // build optimizing pipeline
+  _optPipeline = ::mlir::makeOptimizingTransformer(
+      /*optLevel=*/_jit_opt_level,
+      /*sizeLevel=*/0,
+      /*targetMachine=*/_tm.get());
 }
 
 // register dialects and passes

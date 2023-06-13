@@ -14,6 +14,7 @@
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
+#include <mlir/ExecutionEngine/ExecutionEngine.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
@@ -164,10 +165,15 @@ public:
   ::mlir::MLIRContext &context() { return _context; };
 
 private:
+  std::unique_ptr<::mlir::ExecutionEngine>
+  createExecutionEngine(::mlir::ModuleOp &module);
   ::mlir::MLIRContext _context;
   ::mlir::PassManager _pm;
+  std::unique_ptr<llvm::TargetMachine> _tm;
+  std::function<::llvm::Error(::llvm::Module *)> _optPipeline;
   int _verbose;
   bool _useCache;
+  int _jit_opt_level;
   ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
 };
 
