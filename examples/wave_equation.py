@@ -220,13 +220,18 @@ def run(n, backend, benchmark_mode, correctness_test):
             u_max = float(np.max(u, all_axes))
 
             total_v = float(np.sum(e + h, all_axes)) * dx * dy
-            if initial_v is None:
+            if i_export == 0:
                 initial_v = total_v
+                tcpu_str = ""
+            else:
+                block_duration = time_mod.perf_counter() - block_tic
+                tcpu_str = f"Tcpu={block_duration:.3} s"
+
             diff_v = total_v - initial_v
 
             info(
                 f"{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} "
-                f"u={u_max:7.5f} dV={diff_v: 6.3e}"
+                f"u={u_max:7.5f} dV={diff_v: 6.3e} " + tcpu_str
             )
             if elev_max > 1e3 or not math.isfinite(elev_max):
                 info(f"Invalid elevation value: {elev_max}")
@@ -234,6 +239,7 @@ def run(n, backend, benchmark_mode, correctness_test):
             i_export += 1
             next_t_export = i_export * t_export
             sync()
+            block_tic = time_mod.perf_counter()
 
         step(u, v, e, u1, v1, e1, u2, v2, e2)
 
