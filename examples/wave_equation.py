@@ -202,10 +202,6 @@ def run(n, backend, benchmark_mode, correctness_test):
         v[:, 1:ny] = v[:, 1:ny] / 3.0 + 2.0 / 3.0 * (v2[:, 1:ny] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
 
-        del dudt
-        del dvdt
-        del dedt
-
     t = 0
     i_export = 0
     next_t_export = 0
