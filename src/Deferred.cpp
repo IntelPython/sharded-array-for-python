@@ -42,7 +42,7 @@ Deferred::future_type Deferred::get_future() {
   return {std::move(promise_type::get_future().share()),
           _guid,
           _dtype,
-          _rank,
+          _shape,
           _team,
           _balanced};
 }

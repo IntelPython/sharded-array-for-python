@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "MemRefType.hpp"
 #include "TypeDispatch.hpp"
 #include "p2c_ids.hpp"
 #include "tensor_i.hpp"
@@ -20,20 +21,18 @@ class Transceiver;
 /// interface. It holds the tensor data and some meta information. The member
 /// attributes are mostly inspired by the needs of interacting with MLIR. It
 /// also holds information needed for distributed operation.
+/// Besides the local data it alos holds data haloed from other processes.
+/// Here, the halos are never used for anything except for interchanging with
+/// MLIR.
 class DDPTensorImpl : public tensor_i {
   mutable rank_type _owner;
   Transceiver *_transceiver = nullptr;
-  void *_allocated = nullptr;
-  void *_aligned = nullptr;
-  intptr_t *_sizes = nullptr;
-  intptr_t *_strides = nullptr;
-  int64_t *_gs_allocated = nullptr;
-  int64_t *_gs_aligned = nullptr;
+  shape_type _gShape = {};
   uint64_t *_lo_allocated = nullptr;
   uint64_t *_lo_aligned = nullptr;
-  uint64_t _offset = 0;
-  uint64_t _ndims = 0;
-  uint64_t _balanced = 1;
+  DynMemRef _lhsHalo;
+  DynMemRef _lData;
+  DynMemRef _rhsHalo;
   DTypeId _dtype = DTYPE_LAST;
   tensor_i::ptr_type _base;
 
@@ -45,11 +44,14 @@ public:
   DDPTensorImpl(DDPTensorImpl &&) = default;
 
   // construct from a and MLIR-jitted execution
-  DDPTensorImpl(Transceiver *transceiver, DTypeId dtype, uint64_t ndims,
-                void *allocated, void *aligned, intptr_t offset,
-                const intptr_t *sizes, const intptr_t *strides,
-                int64_t *gs_allocated, int64_t *gs_aligned,
-                uint64_t *lo_allocated, uint64_t *lo_aligned, uint64_t balanced,
+  DDPTensorImpl(Transceiver *transceiver, DTypeId dtype, shape_type gShape,
+                void *l_allocated, void *l_aligned, intptr_t l_offset,
+                const intptr_t *l_sizes, const intptr_t *l_strides,
+                void *o_allocated, void *o_aligned, intptr_t o_offset,
+                const intptr_t *o_sizes, const intptr_t *o_strides,
+                void *r_allocated, void *r_aligned, intptr_t r_offset,
+                const intptr_t *r_sizes, const intptr_t *r_strides,
+                uint64_t *lo_allocated, uint64_t *lo_aligned,
                 rank_type owner = NOOWNER);
 
   DDPTensorImpl(DTypeId dtype, const shape_type &shp,
@@ -59,13 +61,7 @@ public:
   DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
-  DDPTensorImpl() : _owner(REPLICATED) { assert(_ndims <= 1); }
-
-  // @return a clone
-  DDPTensorImpl::ptr_type clone(bool copy = true);
-
-  // helper
-  void alloc(bool all = true);
+  DDPTensorImpl() : _owner(REPLICATED) { assert(ndims() <= 1); }
 
   // set the base tensor
   void set_base(const tensor_i::ptr_type &base) { _base = base; }
@@ -86,11 +82,11 @@ public:
 
   /// @return tensor's shape
   virtual const int64_t *shape() const override {
-    return _transceiver ? _gs_aligned : local_shape();
+    return _transceiver ? _gShape.data() : local_shape();
   }
 
   /// @returnnumber of dimensions of tensor
-  virtual int ndims() const override { return _ndims; }
+  virtual int ndims() const override { return _gShape.size(); }
 
   /// @return global number of elements in tensor
   virtual uint64_t size() const override {
@@ -98,9 +94,9 @@ public:
     case 0:
       return 1;
     case 1:
-      return *_gs_aligned;
+      return _gShape.front();
     default:
-      return std::accumulate(_gs_aligned, _gs_aligned + ndims(), 1,
+      return std::accumulate(_gShape.begin(), _gShape.end(), 1,
                              std::multiplies<intptr_t>());
     }
   }
@@ -111,9 +107,9 @@ public:
     case 0:
       return 1;
     case 1:
-      return *_sizes;
+      return *_lData._sizes;
     default:
-      return std::accumulate(_sizes, _sizes + ndims(), 1,
+      return std::accumulate(_lData._sizes, _lData._sizes + ndims(), 1,
                              std::multiplies<intptr_t>());
     }
   }
@@ -129,7 +125,7 @@ public:
 
   /// @return global number of elements in first dimension
   virtual uint64_t __len__() const override {
-    return ndims() ? *_gs_aligned : 1;
+    return ndims() ? _gShape.front() : 1;
   }
 
   /// @return true if tensor has a unique owner
@@ -144,9 +140,6 @@ public:
   /// @return Transceiver linked to this tensor
   Transceiver *transceiver() const { return _transceiver; }
 
-  /// @return true if tensor's partitions are balanced
-  uint64_t balanced() const { return _balanced; }
-
   /// @return true if tensor is replicated across all process ranks
   bool is_replicated() const { return _owner == REPLICATED; }
 
@@ -160,16 +153,20 @@ public:
   /// @return local offsets into global tensor
   const uint64_t *local_offsets() const { return _lo_aligned; }
   /// @return shape of local data
-  const int64_t *local_shape() const { return _sizes; }
+  const int64_t *local_shape() const { return _lData._sizes; }
   /// @return strides of local data
-  const int64_t *local_strides() const { return _strides; }
+  const int64_t *local_strides() const { return _lData._strides; }
+  /// @return shape of left halo
+  const int64_t *lh_shape() const { return _lhsHalo._sizes; }
+  /// @return shape of right halo
+  const int64_t *rh_shape() const { return _rhsHalo._sizes; }
 
   // helper function for __repr__; simple recursive printing of
   // tensor content
   template <typename T>
   void printit(std::ostringstream &oss, uint64_t d, T *cptr) const {
-    auto stride = _strides[d];
-    auto sz = _sizes[d];
+    auto stride = _lData._strides[d];
+    auto sz = _lData._sizes[d];
     if (d == ndims() - 1) {
       oss << "[";
       for (auto i = 0; i < sz; ++i) {

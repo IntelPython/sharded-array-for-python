@@ -105,7 +105,7 @@ struct DeferredReduceOp : public Deferred {
   DeferredReduceOp() = default;
   DeferredReduceOp(ReduceOpId op, const tensor_i::future_type &a,
                    const dim_vec_type &dim)
-      : Deferred(a.dtype(), 0, a.team(), true), // FIXME rank
+      : Deferred(a.dtype(), {}, a.team(), true), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
   void run() {
@@ -119,11 +119,9 @@ struct DeferredReduceOp : public Deferred {
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, _a);
-    auto aPtTyp = ::imex::dist::getPTensorType(av);
-    assert(aPtTyp);
-    ::mlir::Type dtype = aPtTyp.getElementType();
+    ::mlir::Type dtype = ::imex::dist::getElementType(av);
     // return type 0d with same dtype as input
-    auto retPtTyp = ::imex::ptensor::PTensorType::get({}, dtype);
+    auto retPtTyp = ::imex::ptensor::PTensorType::get(shape(), dtype);
     // reduction op
     auto mop = ddpt2mlir(_op);
     auto op =
@@ -131,15 +129,19 @@ struct DeferredReduceOp : public Deferred {
     dm.addVal(
         this->guid(),
         builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
-        [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-               void *aligned, intptr_t offset, const intptr_t *sizes,
-               const intptr_t *strides, int64_t *gs_allocated,
-               int64_t *gs_aligned, uint64_t *lo_allocated,
-               uint64_t *lo_aligned, uint64_t balanced) {
-          this->set_value(std::move(
-              mk_tnsr(transceiver, _dtype, rank, allocated, aligned, offset,
-                      sizes, strides, gs_allocated, gs_aligned, lo_allocated,
-                      lo_aligned, balanced)));
+        [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
+               void *l_aligned, intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, uint64_t *lo_allocated,
+               uint64_t *lo_aligned) {
+          this->set_value(std::move(mk_tnsr(
+              transceiver, _dtype, this->shape(), l_allocated, l_aligned,
+              l_offset, l_sizes, l_strides, o_allocated, o_aligned, o_offset,
+              o_sizes, o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+              r_strides, lo_allocated, lo_aligned)));
         });
     return false;
   }

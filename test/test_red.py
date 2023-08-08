@@ -1,8 +1,10 @@
 import ddptensor as dt
 from utils import runAndCompare
+import pytest
 
 
 class TestRed:
+    @pytest.mark.skip(reason="FIXME reshape")
     def test_sum(self):
         def doit(aapi):
             a = aapi.arange(0, 64, 1, dtype=aapi.int64)

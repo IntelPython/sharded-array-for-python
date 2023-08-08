@@ -43,6 +43,8 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/Sorting.hpp"
 #include "ddptensor/jit/mlir.hpp"
 
+#include <iostream>
+
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
 

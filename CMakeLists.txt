@@ -174,6 +174,7 @@ target_link_libraries(_ddpt_rt PRIVATE
     IMEXDistDialect
     IMEXDistTransforms
     IMEXDistToStandard
+    IMEXUtil
     IMEXTransforms
 	  MLIROptLib
     MLIRExecutionEngine

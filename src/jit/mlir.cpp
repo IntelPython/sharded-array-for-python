@@ -117,8 +117,10 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
 
 // convert ddpt's DTYpeId into MLIR type
 static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
-                             ::mlir::SmallVector<int64_t> &shape, uint64_t team,
-                             bool balanced) {
+                             ::mlir::SmallVector<int64_t> &lhShape,
+                             ::mlir::SmallVector<int64_t> &ownShape,
+                             ::mlir::SmallVector<int64_t> &rhShape,
+                             uint64_t team, bool balanced) {
   ::mlir::Type etyp;
 
   switch (dtype) {
@@ -151,11 +153,18 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     throw std::runtime_error("unknown dtype");
   };
 
-  auto pttype = ::imex::ptensor::PTensorType::get(shape, etyp);
   if (team) {
-    return ::imex::dist::DistTensorType::get(builder.getContext(), pttype);
+    if (ownShape.size()) {
+      auto gShape = ownShape;
+      gShape[0] += lhShape[0] + rhShape[0];
+      return ::imex::dist::DistTensorType::get(gShape, etyp,
+                                               {lhShape, ownShape, rhShape});
+    } else {
+      auto eShp = ::mlir::SmallVector<int64_t>();
+      return ::imex::dist::DistTensorType::get(eShp, etyp, {eShp});
+    }
   } else {
-    return pttype;
+    return ::imex::ptensor::PTensorType::get(ownShape, etyp);
   }
 }
 
@@ -168,13 +177,14 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     auto fut = Registry::get(guid);
     auto impl = std::dynamic_pointer_cast<DDPTensorImpl>(fut.get());
     auto rank = impl->ndims();
-    const int64_t *shape_ptr = impl->local_shape();
-    ::mlir::SmallVector<int64_t> shape(rank);
+    ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
     for (size_t i = 0; i < rank; i++) {
-      shape[i] = shape_ptr[i];
+      lhShape[i] = impl->lh_shape()[i];
+      ownShape[i] = impl->local_shape()[i];
+      rhShape[i] = impl->rh_shape()[i];
     }
-    auto typ =
-        getTType(builder, fut.dtype(), shape, fut.team(), fut.balanced());
+    auto typ = getTType(builder, fut.dtype(), lhShape, ownShape, rhShape,
+                        fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, std::move(fut)});
@@ -233,18 +243,12 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   for (auto &v : _ivm) {
     ::mlir::Value value = v.second;
     // append the type and array/value
-    auto retDtTyp = value.getType().dyn_cast<::imex::dist::DistTensorType>();
-    if (!retDtTyp) {
-      auto valPtTyp = value.getType().dyn_cast<::imex::ptensor::PTensorType>();
-      assert(valPtTyp);
-      retDtTyp = ::imex::dist::DistTensorType::get(
-          builder.getContext(),
-          valPtTyp); // FIXME balanced needs to be reported back
+    if (!value.getType().isa<::imex::dist::DistTensorType>()) {
       value = builder.create<::imex::dist::CastOp>(loc, value);
     }
     ret_values[idx] = value;
     _func.insertResult(idx, value.getType(), {});
-    auto rank = retDtTyp.getPTensorType().getRank();
+    auto rank = value.getType().cast<::imex::dist::DistTensorType>().getRank();
     _irm[v.first] = rank;
     // add sizes of dtensor (3 memrefs + team + balanced) to sz
     sz += dtensor_sz(rank);
@@ -266,51 +270,62 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
   auto output = outputV.data();
   size_t pos = 0;
 
+  auto getMR = [](int rank, auto buff, void *&allocated, void *&aligned,
+                  intptr_t &offset, intptr_t *&sizes, intptr_t *&strides) {
+    allocated = reinterpret_cast<void *>(buff[0]);
+    aligned = reinterpret_cast<void *>(buff[1]);
+    offset = buff[2];
+    sizes = &buff[3];
+    strides = &buff[3 + rank];
+    return memref_sz(rank);
+  };
+
   // _ivm defines the order of return values
   for (auto &r : _ivm) {
     auto guid = r.first;
     if (auto v = _icm.find(guid); v != _icm.end()) {
       assert(v->first == guid);
       auto rank = _irm[guid];
-      // first extract tensor
-      void *t_allocated = reinterpret_cast<void *>(output[pos]);
-      void *t_aligned = reinterpret_cast<void *>(output[pos + 1]);
-      intptr_t t_offset = output[pos + 2];
-      intptr_t *t_sizes = output + pos + 3;
-      intptr_t *t_stride = output + pos + 3 + rank;
-      pos += memref_sz(rank);
-      // second is the team
+      // first extract team
       auto team = output[pos];
       pos += 1;
-      // third is balanced
-      auto balanced = output[pos];
-      pos += 1;
+      // then tensors
+      void *t_allocated[3];
+      void *t_aligned[3];
+      intptr_t t_offset[3];
+      intptr_t *t_sizes[3];
+      intptr_t *t_strides[3];
       if (rank > 0) {
-        // third extract global shape
-        int64_t *gs_allocated = reinterpret_cast<int64_t *>(output[pos]);
-        int64_t *gs_aligned = reinterpret_cast<int64_t *>(output[pos + 1]);
-        intptr_t gs_offset = output[pos + 2];
-        // no sizes/stride needed
-        pos += memref_sz(1);
+        for (auto t = 0; t < 3; ++t) {
+          pos += getMR(rank, &output[pos], t_allocated[t], t_aligned[t],
+                       t_offset[t], t_sizes[t], t_strides[t]);
+        }
         // lastly extract local offsets
         uint64_t *lo_allocated = reinterpret_cast<uint64_t *>(output[pos]);
         uint64_t *lo_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
         intptr_t lo_offset = output[pos + 2];
-        // no sizes/stride needed
+        // no sizes/stride needed, just skip
         pos += memref_sz(1);
-        // call finalization
+        // call finalization callback
         v->second(
-            reinterpret_cast<Transceiver *>(team), rank, t_allocated, t_aligned,
-            t_offset, t_sizes, t_stride, // tensor
-            gs_allocated,
-            gs_aligned + gs_offset, // global shape is 1d tensor of uint64_t
+            reinterpret_cast<Transceiver *>(team), rank, t_allocated[0],
+            t_aligned[0], t_offset[0], t_sizes[0], t_strides[0], // lhsHalo
+            t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+            t_strides[1], // lData
+            t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
+            t_strides[2], // rhsHalo
             lo_allocated,
-            lo_aligned + lo_offset, // local offset is 1d tensor of uint64_t
-            balanced);
+            lo_aligned + lo_offset // local offset is 1d tensor of uint64_t
+        );
       } else { // 0d tensor
-        v->second(reinterpret_cast<Transceiver *>(team), rank, t_allocated,
-                  t_aligned, t_offset, t_sizes, t_stride, nullptr, nullptr,
-                  nullptr, nullptr, 1);
+        pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
+                     t_offset[1], t_sizes[1], t_strides[1]);
+        v->second(reinterpret_cast<Transceiver *>(team), rank, nullptr, nullptr,
+                  0, nullptr, nullptr, // lhsHalo
+                  t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+                  t_strides[1],                          // lData
+                  nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
+                  nullptr, nullptr);
       }
     } else {
       assert(false);
@@ -413,9 +428,10 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
 static const char *pass_pipeline =
     getenv("DDPT_PASSES") ? getenv("DDPT_PASSES")
                           : "func.func(ptensor-dist),"
-                            "func.func(dist-coalesce),"
+                            // "func.func(dist-coalesce)," FIXME
                             "convert-dist-to-standard,"
                             "convert-ptensor-to-linalg,"
+                            "canonicalize,"
                             "func.func(tosa-to-linalg),"
                             "func.func(tosa-to-tensor),"
                             "canonicalize,"
@@ -433,7 +449,7 @@ static const char *pass_pipeline =
                             "func.func(linalg-detensorize),"
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
-                            "func.func(buffer-deallocation),"
+                            // "func.func(buffer-deallocation)," FIXME
                             "imex-remove-temporaries,"
                             "func.func(convert-linalg-to-parallel-loops),"
                             "func.func(scf-parallel-loop-fusion),"

@@ -16,44 +16,44 @@
 struct DeferredReshape : public Deferred {
   enum CopyMode : char { COPY_NEVER, COPY_ALWAYS, COPY_POSSIBLE };
   id_type _a;
-  shape_type _shape;
   CopyMode _copy;
 
   DeferredReshape() = default;
   DeferredReshape(const tensor_i::future_type &a, const shape_type &shape,
                   CopyMode copy)
-      : Deferred(a.dtype(), shape.size(), a.team(), true), _a(a.guid()),
-        _shape(shape), _copy(copy) {}
+      : Deferred(a.dtype(), shape, a.team(), true), _a(a.guid()), _copy(copy) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, _a);
-    ::mlir::SmallVector<::mlir::Value> shp(_shape.size());
-    for (auto i = 0; i < _shape.size(); ++i) {
-      shp[i] = ::imex::createIndex(loc, builder, _shape[i]);
+    ::mlir::SmallVector<::mlir::Value> shp(shape().size());
+    for (auto i = 0; i < shape().size(); ++i) {
+      shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
     }
     auto copyA =
         _copy == COPY_POSSIBLE
             ? ::mlir::IntegerAttr()
             : ::imex::getIntAttr<1>(builder, COPY_ALWAYS ? true : false);
 
-    ::mlir::SmallVector<int64_t> nshape(shp.size(),
-                                        ::mlir::ShapedType::kDynamic);
     auto outTyp = ::imex::ptensor::PTensorType::get(
-        nshape, ::imex::dist::getPTensorType(av).getElementType());
+        shape(), ::imex::dist::getElementType(av));
     auto op =
         builder.create<::imex::ptensor::ReshapeOp>(loc, outTyp, av, shp, copyA);
 
     dm.addVal(this->guid(), op,
-              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-                     void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, int64_t *gs_allocated,
-                     int64_t *gs_aligned, uint64_t *lo_allocated,
-                     uint64_t *lo_aligned, uint64_t balanced) {
-                auto t =
-                    mk_tnsr(transceiver, _dtype, rank, allocated, aligned,
-                            offset, sizes, strides, gs_allocated, gs_aligned,
-                            lo_allocated, lo_aligned, balanced);
+              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
+                     void *l_aligned, intptr_t l_offset,
+                     const intptr_t *l_sizes, const intptr_t *l_strides,
+                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                auto t = mk_tnsr(
+                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
+                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
+                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned);
                 if (_copy != COPY_ALWAYS) {
                   assert(!"copy-free reshape not supported");
                   if (Registry::has(_a)) {
@@ -70,7 +70,7 @@ struct DeferredReshape : public Deferred {
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
-    ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
+    // ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
     ser.template value<sizeof(_copy)>(_copy);
   }
 };

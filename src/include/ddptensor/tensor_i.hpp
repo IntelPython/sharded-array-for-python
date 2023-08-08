@@ -15,20 +15,26 @@ class NDSlice;
 /// Futures and promises readily provide meta information
 ///   - id
 ///   - dtype (element type)
-///   - rank (number of dimensions)
+///   - shape (dim is unknown if < 0)
 ///   - team
 ///   - balanced (flag indicating if tensor's partitions are balanced)
 class TensorMeta {
 protected:
   id_type _guid = -1;
   DTypeId _dtype = DTYPE_LAST;
-  int _rank = -1;
+  shape_type _shape = {};
   uint64_t _team;
   bool _balanced = true;
 
 public:
-  TensorMeta(id_type id, DTypeId dt, int rank, uint64_t team, bool balanced)
-      : _guid(id), _dtype(dt), _rank(rank), _team(team), _balanced(balanced) {}
+  TensorMeta(id_type id, DTypeId dt, const shape_type &shape, uint64_t team,
+             bool balanced)
+      : _guid(id), _dtype(dt), _shape(shape), _team(team), _balanced(balanced) {
+  }
+  TensorMeta(id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
+             bool balanced)
+      : _guid(id), _dtype(dt), _shape(std::forward<shape_type>(shape)),
+        _team(team), _balanced(balanced) {}
   TensorMeta() = default;
 
   /// @return globally unique id
@@ -37,8 +43,11 @@ public:
   /// @return dtype of future tensor
   DTypeId dtype() const { return _dtype; }
 
-  /// @return rank (number of dims) of future tensor
-  int rank() const { return _rank; }
+  /// @return shape of future tensor (dim is unknown if < 0)
+  const shape_type &shape() const { return _shape; }
+
+  /// @return rank of tensor (num of dims)
+  rank_type rank() const { return _shape.size(); }
 
   // @ return team, 0 means non-distributed
   int team() const { return _team; }
@@ -64,16 +73,25 @@ public:
   /// TFuture also readily provides meta information
   ///   - id
   ///   - dtype (element type)
-  ///   - rank (number of dimensions)
+  ///   - shape
   ///   - balanced (flag indicating if tensor's partitions are balanced)
   template <typename T> class Metaified : public T, public TensorMeta {
   public:
     Metaified() = default;
-    Metaified(T &&f, id_type id, DTypeId dt, int rank, uint64_t team,
+    Metaified(T &&f, id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
               bool balanced)
-        : T(std::move(f)), TensorMeta(id, dt, rank, team, balanced) {}
-    Metaified(id_type id, DTypeId dt, int rank, uint64_t team, bool balanced)
-        : T(), TensorMeta(id, dt, rank, team, balanced) {}
+        : T(std::move(f)),
+          TensorMeta(id, dt, std::move(shape), team, balanced) {}
+    Metaified(T &&f, id_type id, DTypeId dt, const shape_type &shape,
+              uint64_t team, bool balanced)
+        : T(std::move(f)), TensorMeta(id, dt, shape, team, balanced) {}
+    Metaified(id_type id, DTypeId dt, const shape_type &shape, uint64_t team,
+              bool balanced)
+        : T(), TensorMeta(id, dt, shape, team, balanced) {}
+    Metaified(id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
+              bool balanced)
+        : T(),
+          TensorMeta(id, dt, std::forward<shape_type>(shape), team, balanced) {}
     ~Metaified() {}
   };
 
@@ -88,7 +106,7 @@ public:
   virtual DTypeId dtype() const = 0;
   /// @return tensor's shape
   virtual const int64_t *shape() const = 0;
-  /// @returnnumber of dimensions of tensor
+  /// @return number of dimensions of tensor
   virtual int ndims() const = 0;
   /// @return global number of elements in tensor
   virtual uint64_t size() const = 0;

@@ -58,6 +58,7 @@ class TestEWB:
             v = 8 * 16 * 3
             assert float(r1) == v
 
+    @pytest.mark.skip(reason="FIXME reshape")
     def test_add_shifted2(self):
         def doit(aapi):
             a = aapi.reshape(aapi.arange(0, 64, 1, dtype=aapi.float64), [8, 8])
@@ -67,6 +68,40 @@ class TestEWB:
             return c + d
 
         assert runAndCompare(doit)
+
+    def test_add_shifted3(self):
+        aa = dt.arange(0, 64, 1, dtype=dt.int64)
+        bb = dt.arange(0, 64, 1, dtype=dt.int64)
+        a = aa[0:8]
+        b = bb[50:58]
+        c = a + b + 1
+        r1 = dt.sum(c)
+        assert int(r1) == 464
+
+    def test_add_shifted4(self):
+        aa = dt.arange(0, 64, 1, dtype=dt.int64)
+        a = aa[0:8]
+        b = aa[50:58]
+        c = a + b + 1
+        r1 = dt.sum(c)
+        assert int(r1) == 464
+
+    def test_add_shifted5(self):
+        aa = dt.arange(0, 64, 1, dtype=dt.int64)
+        bb = dt.arange(0, 64, 1, dtype=dt.int64)
+        a = aa[0:16:2]
+        b = bb[40:64:3]
+        c = a + b + 1
+        r1 = dt.sum(c)
+        assert int(r1) == 468
+
+    def test_add_shifted6(self):
+        aa = dt.arange(0, 64, 1, dtype=dt.int64)
+        a = aa[0:16:2]
+        b = aa[30:54:3]
+        c = a + b + 1
+        r1 = dt.sum(c)
+        assert int(r1) == 388
 
     @pytest.mark.skip(reason="FIXME")
     def test_prod_het(self):

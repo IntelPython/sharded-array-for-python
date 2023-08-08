@@ -5,6 +5,7 @@
 */
 
 #include "ddptensor/EWBinOp.hpp"
+#include "ddptensor/Broadcast.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
@@ -87,7 +88,7 @@ struct DeferredEWBinOp : public Deferred {
   DeferredEWBinOp() = default;
   DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type &a,
                   const tensor_i::future_type &b)
-      : Deferred(a.dtype(), std::max(a.rank(), b.rank()), a.team(), true),
+      : Deferred(a.dtype(), broadcast(a.shape(), b.shape()), a.team(), true),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
@@ -96,10 +97,8 @@ struct DeferredEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto aTyp = ::imex::dist::getPTensorType(av);
-    ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
-    auto outTyp =
-        ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+    auto outTyp = ::imex::ptensor::PTensorType::get(
+        shape(), ::imex::dist::getElementType(av));
 
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
@@ -107,15 +106,19 @@ struct DeferredEWBinOp : public Deferred {
     //     builder.create<::imex::ptensor::EWBinOp>(loc, ddpt2mlir(_op), av,
     //     bv);
     dm.addVal(this->guid(), bop,
-              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-                     void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, int64_t *gs_allocated,
-                     int64_t *gs_aligned, uint64_t *lo_allocated,
-                     uint64_t *lo_aligned, uint64_t balanced) {
-                this->set_value(std::move(
-                    mk_tnsr(transceiver, _dtype, rank, allocated, aligned,
-                            offset, sizes, strides, gs_allocated, gs_aligned,
-                            lo_allocated, lo_aligned, balanced)));
+              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
+                     void *l_aligned, intptr_t l_offset,
+                     const intptr_t *l_sizes, const intptr_t *l_strides,
+                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                this->set_value(std::move(mk_tnsr(
+                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
+                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
+                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
               });
     return false;
   }

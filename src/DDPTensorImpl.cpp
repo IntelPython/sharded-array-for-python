@@ -10,108 +10,72 @@
 #include <algorithm>
 #include <iostream>
 
-DDPTensorImpl::DDPTensorImpl(Transceiver *transceiver, DTypeId dtype,
-                             uint64_t ndims, void *allocated, void *aligned,
-                             intptr_t offset, const intptr_t *sizes,
-                             const intptr_t *strides, int64_t *gs_allocated,
-                             int64_t *gs_aligned, uint64_t *lo_allocated,
-                             uint64_t *lo_aligned, uint64_t balanced,
-                             rank_type owner)
-    : _transceiver(transceiver), _owner(owner), _allocated(allocated),
-      _aligned(aligned), _gs_allocated(gs_allocated), _gs_aligned(gs_aligned),
-      _lo_allocated(lo_allocated), _lo_aligned(lo_aligned), _offset(offset),
-      _ndims(ndims), _balanced(balanced), _dtype(dtype) {
-  if (ndims > 0) {
-    _sizes = new intptr_t[ndims];
-    _strides = new intptr_t[ndims];
-    memcpy(_sizes, sizes, ndims * sizeof(*_sizes));
-    memcpy(_strides, strides, ndims * sizeof(*_strides));
-  } else {
+DDPTensorImpl::DDPTensorImpl(
+    Transceiver *transceiver, DTypeId dtype, shape_type gShape,
+    void *l_allocated, void *l_aligned, intptr_t l_offset,
+    const intptr_t *l_sizes, const intptr_t *l_strides, void *o_allocated,
+    void *o_aligned, intptr_t o_offset, const intptr_t *o_sizes,
+    const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+    intptr_t r_offset, const intptr_t *r_sizes, const intptr_t *r_strides,
+    uint64_t *lo_allocated, uint64_t *lo_aligned, rank_type owner)
+    : _owner(owner), _transceiver(transceiver), _gShape(gShape),
+      _lo_allocated(lo_allocated), _lo_aligned(lo_aligned),
+      _lhsHalo(gShape.size(), l_allocated, l_aligned, l_offset, l_sizes,
+               l_strides),
+      _lData(gShape.size(), o_allocated, o_aligned, o_offset, o_sizes,
+             o_strides),
+      _rhsHalo(gShape.size(), r_allocated, r_aligned, r_offset, r_sizes,
+               r_strides),
+      _dtype(dtype) {
+  if (ndims() == 0) {
     _owner = REPLICATED;
-    assert(_aligned);
   }
   assert(!_transceiver || _transceiver == getTransceiver());
 }
 
 DDPTensorImpl::DDPTensorImpl(DTypeId dtype, const shape_type &shp,
                              rank_type owner)
-    : _owner(owner), _ndims(shp.size()), _dtype(dtype) {
-  alloc();
+    : _owner(owner), _gShape(shp), _dtype(dtype) {
 
+  auto esz = sizeof_dtype(_dtype);
+  auto lsz =
+      std::accumulate(shp.begin(), shp.end(), esz, std::multiplies<intptr_t>());
+  auto allocated = aligned_alloc(esz, lsz);
+  auto nds = ndims();
+  auto sizes = new intptr_t[nds];
+  auto strides = new intptr_t[nds];
   intptr_t stride = 1;
-  auto ndims = shp.size();
-  assert(ndims <= 1);
-  for (auto i = 0; i < ndims; ++i) {
-    _sizes[i] = shp[i];
-    _strides[ndims - i - 1] = stride;
+  assert(nds <= 1);
+  for (auto i = 0; i < nds; ++i) {
+    sizes[i] = shp[i];
+    strides[nds - i - 1] = stride;
     stride *= shp[i];
   }
+  _lData = DynMemRef(nds, allocated, allocated, 0, sizes, strides);
   assert(!_transceiver || _transceiver == getTransceiver());
 }
 
 // incomplete, useful for computing meta information
 DDPTensorImpl::DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner)
-    : _owner(owner), _ndims(N) {
-  assert(_ndims <= 1);
+    : _owner(owner), _gShape(shape, shape + N) {
+  assert(ndims() <= 1);
   assert(!_transceiver || _transceiver == getTransceiver());
 }
 
 DDPTensorImpl::~DDPTensorImpl() {
   if (!_base) {
-    free(_allocated); // delete[] reinterpret_cast<char *>(_allocated);
+    // FIXME it seems possible that halos get reallocated even with when there
+    // is a base _lhsHalo.freeData(); FIXME lhs and rhs can be identical
+    _lData.freeData();
+    _rhsHalo.freeData();
   }
-  free(_gs_allocated);
   free(_lo_allocated);
-  delete[] _sizes;
-  delete[] _strides;
-}
-
-DDPTensorImpl::ptr_type DDPTensorImpl::clone(bool copy) {
-  // FIXME memory leak
-  auto nd = ndims();
-  auto sz = size();
-  auto esz = sizeof_dtype(dtype());
-  auto bsz = sz * esz;
-  auto allocated =
-      aligned_alloc(esz, bsz); // new (std::align_val_t(esz)) char[bsz];
-  auto aligned = allocated;
-  if (copy)
-    memcpy(aligned, _aligned, bsz);
-  // FIXME jit returns private mem
-  // memcpy(gs_aligned, _gs_aligned, nd*sizeof(*gs_aligned));
-  // auto gs_allocated = new uint64_t[nd];
-  // auto gs_aligned = gs_allocated;
-  auto gs_allocated = _gs_allocated;
-  auto gs_aligned = _gs_aligned;
-  auto lo_allocated =
-      (uint64_t *)aligned_alloc(sizeof(uint64_t), nd * sizeof(uint64_t));
-  auto lo_aligned = lo_allocated;
-  memcpy(lo_aligned, _lo_aligned, nd * sizeof(*lo_aligned));
-
-  // strides and sizes are allocated/copied in constructor
-  return std::make_shared<DDPTensorImpl>(
-      transceiver(), dtype(), nd, allocated, aligned, _offset, _sizes, _strides,
-      gs_allocated, gs_aligned, lo_allocated, lo_aligned, balanced(), owner());
-}
-
-void DDPTensorImpl::alloc(bool all) {
-  auto esz = sizeof_dtype(_dtype);
-  _allocated =
-      aligned_alloc(esz, esz * local_size()); // new (std::align_val_t(esz))
-                                              // char[esz * local_size()];
-  _aligned = _allocated;
-  _offset = 0;
-  if (all) {
-    auto nds = ndims();
-    _sizes = new intptr_t[nds];
-    _strides = new intptr_t[nds];
-  }
 }
 
 void *DDPTensorImpl::data() {
   void *ret;
-  dispatch(_dtype, _aligned,
-           [this, &ret](auto *ptr) { ret = ptr + this->_offset; });
+  dispatch(_dtype, _lData._aligned,
+           [this, &ret](auto *ptr) { ret = ptr + this->_lData._offset; });
   return ret;
 }
 
@@ -119,13 +83,13 @@ bool DDPTensorImpl::is_sliced() const {
   if (ndims() == 0)
     return false;
   auto d = ndims() - 1;
-  intptr_t tsz = _strides[d];
+  intptr_t tsz = _lData._strides[d];
   if (tsz == 1) {
     for (; d > 0; --d) {
-      tsz *= _sizes[d];
+      tsz *= _lData._sizes[d];
       if (tsz <= 0)
         break;
-      if (_strides[d - 1] > tsz)
+      if (_lData._strides[d - 1] > tsz)
         return true;
     }
   }
@@ -137,21 +101,21 @@ std::string DDPTensorImpl::__repr__() const {
   std::ostringstream oss;
   oss << "ddptensor{gs=(";
   for (auto i = 0; i < nd; ++i)
-    oss << _gs_aligned[i] << (i == nd - 1 ? "" : ", ");
+    oss << _gShape[i] << (i == nd - 1 ? "" : ", ");
   oss << "), loff=(";
   for (auto i = 0; i < nd; ++i)
     oss << _lo_aligned[i] << (i == nd - 1 ? "" : ", ");
   oss << "), lsz=(";
   for (auto i = 0; i < nd; ++i)
-    oss << _sizes[i] << (i == nd - 1 ? "" : ", ");
+    oss << _lData._sizes[i] << (i == nd - 1 ? "" : ", ");
   oss << "), str=(";
   for (auto i = 0; i < nd; ++i)
-    oss << _strides[i] << (i == nd - 1 ? "" : ", ");
-  oss << "), p=" << _allocated << ", poff=" << _offset
+    oss << _lData._strides[i] << (i == nd - 1 ? "" : ", ");
+  oss << "), p=" << _lData._allocated << ", poff=" << _lData._offset
       << ", team=" << _transceiver << "}\n";
 
-  dispatch(_dtype, _aligned, [this, nd, &oss](auto *ptr) {
-    auto cptr = ptr + this->_offset;
+  dispatch(_dtype, _lData._aligned, [this, nd, &oss](auto *ptr) {
+    auto cptr = ptr + this->_lData._offset;
     if (nd > 0) {
       printit(oss, 0, cptr);
     } else {
@@ -166,8 +130,8 @@ bool DDPTensorImpl::__bool__() const {
     throw(std::runtime_error("Cast to scalar bool: tensor is not replicated"));
 
   bool res;
-  dispatch(_dtype, _aligned, [this, &res](auto *ptr) {
-    res = static_cast<bool>(ptr[this->_offset]);
+  dispatch(_dtype, _lData._aligned, [this, &res](auto *ptr) {
+    res = static_cast<bool>(ptr[this->_lData._offset]);
   });
   return res;
 }
@@ -177,8 +141,8 @@ double DDPTensorImpl::__float__() const {
     throw(std::runtime_error("Cast to scalar float: tensor is not replicated"));
 
   double res;
-  dispatch(_dtype, _aligned, [this, &res](auto *ptr) {
-    res = static_cast<double>(ptr[this->_offset]);
+  dispatch(_dtype, _lData._aligned, [this, &res](auto *ptr) {
+    res = static_cast<double>(ptr[this->_lData._offset]);
   });
   return res;
 }
@@ -188,45 +152,46 @@ int64_t DDPTensorImpl::__int__() const {
     throw(std::runtime_error("Cast to scalar int: tensor is not replicated"));
 
   float res;
-  dispatch(_dtype, _aligned, [this, &res](auto *ptr) {
-    res = static_cast<float>(ptr[this->_offset]);
+  dispatch(_dtype, _lData._aligned, [this, &res](auto *ptr) {
+    res = static_cast<float>(ptr[this->_lData._offset]);
   });
   return res;
 }
 
 void DDPTensorImpl::add_to_args(std::vector<void *> &args) {
   int ndims = this->ndims();
-  // local tensor first
-  intptr_t *buff = new intptr_t[dtensor_sz(ndims)];
-  buff[0] = reinterpret_cast<intptr_t>(_allocated);
-  buff[1] = reinterpret_cast<intptr_t>(_aligned);
-  buff[2] = static_cast<intptr_t>(_offset);
-  memcpy(buff + 3, _sizes, ndims * sizeof(intptr_t));
-  memcpy(buff + 3 + ndims, _strides, ndims * sizeof(intptr_t));
-  args.push_back(buff);
-  if (_transceiver) {
-    // second the transceiver
+  auto storeMR = [ndims](DynMemRef &mr) -> intptr_t * {
+    intptr_t *buff = new intptr_t[dtensor_sz(ndims)];
+    buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
+    buff[1] = reinterpret_cast<intptr_t>(mr._aligned);
+    buff[2] = static_cast<intptr_t>(mr._offset);
+    memcpy(buff + 3, mr._sizes, ndims * sizeof(intptr_t));
+    memcpy(buff + 3 + ndims, mr._strides, ndims * sizeof(intptr_t));
+    return buff;
+  }; // FIXME memory leak?
+
+  if (_transceiver == nullptr) {
+    // no-dist-mode
+    args.push_back(storeMR(_lData));
+  } else {
+    // transceiver/team first
     args.push_back(_transceiver);
-    // balanced third
-    args.push_back(&_balanced);
+    // local tensor first
     if (ndims > 0) {
-      // global shape next
-      buff = new intptr_t[dtensor_sz(1)];
-      buff[0] = reinterpret_cast<intptr_t>(_gs_allocated);
-      buff[1] = reinterpret_cast<intptr_t>(_gs_aligned);
-      buff[2] = 0;
-      buff[3] = ndims;
-      buff[4] = 1;
-      args.push_back(buff);
+      args.push_back(storeMR(_lhsHalo));
+      args.push_back(storeMR(_lData));
+      args.push_back(storeMR(_rhsHalo));
       assert(5 == memref_sz(1));
       // local offsets last
-      buff = new intptr_t[dtensor_sz(1)];
+      auto buff = new intptr_t[dtensor_sz(1)];
       buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
       buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
       buff[2] = 0;
       buff[3] = ndims;
       buff[4] = 1;
       args.push_back(buff);
+    } else {
+      args.push_back(storeMR(_lData));
     }
   }
 }
@@ -243,16 +208,17 @@ void DDPTensorImpl::replicate() {
     assert(lsz == 0);
     auto nd = ndims();
     for (auto i = 0; i < nd; ++i) {
-      _sizes[i] = _strides[i] = 1;
+      _lData._sizes[i] = _lData._strides[i] = 1;
     }
-    _sizes[nd - 1] = gsz;
+    _lData._sizes[nd - 1] = gsz;
   }
-  dispatch(_dtype, _aligned, [this, lsz, gsz](auto *ptr) {
-    auto tmp = ptr[this->_offset];
+  dispatch(_dtype, _lData._aligned, [this, lsz, gsz](auto *ptr) {
+    auto tmp = ptr[this->_lData._offset];
     if (lsz != gsz)
-      ptr[this->_offset] = 0;
-    getTransceiver()->reduce_all(&ptr[this->_offset], this->_dtype, 1, SUM);
-    assert(lsz != gsz || tmp == ptr[this->_offset]);
+      ptr[this->_lData._offset] = 0;
+    getTransceiver()->reduce_all(&ptr[this->_lData._offset], this->_dtype, 1,
+                                 SUM);
+    assert(lsz != gsz || tmp == ptr[this->_lData._offset]);
   });
   set_owner(REPLICATED);
 }

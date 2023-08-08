@@ -150,7 +150,7 @@ struct DeferredSetItem : public Deferred {
   DeferredSetItem(const tensor_i::future_type &a,
                   const tensor_i::future_type &b,
                   const std::vector<py::slice> &v)
-      : Deferred(a.guid(), a.dtype(), a.rank(), a.team(), a.balanced()),
+      : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
         _a(a.guid()), _b(b.guid()), _slc(v) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
@@ -205,7 +205,7 @@ struct DeferredMap : public Deferred {
 
   DeferredMap() = default;
   DeferredMap(const tensor_i::future_type &a, py::object &func)
-      : Deferred(a.guid(), a.dtype(), a.rank(), a.team(), a.balanced()),
+      : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
         _a(a.guid()), _func(func) {}
 
   void run() override {
@@ -255,10 +255,20 @@ struct DeferredGetItem : public Deferred {
   id_type _a;
   NDSlice _slc;
 
+  static shape_type mkShape(const tensor_i::future_type &a,
+                            const NDSlice &slc) {
+    shape_type shape;
+    for (auto i = 0; i < slc.sizes().size(); ++i) {
+      auto s = slc.sizes()[i];
+      shape.emplace_back(s == ALL_SIZE ? a.shape()[i] : s);
+    }
+    return shape;
+  }
+
   DeferredGetItem() = default;
-  DeferredGetItem(const tensor_i::future_type &a,
-                  const std::vector<py::slice> &v)
-      : Deferred(a.dtype(), a.rank(), a.team(), false), _a(a.guid()), _slc(v) {}
+  DeferredGetItem(const tensor_i::future_type &a, NDSlice &&v)
+      : Deferred(a.dtype(), std::move(mkShape(a, v)), a.team(), false),
+        _a(a.guid()), _slc(std::move(v)) {}
 
   void run() {
     // const auto a = std::move(Registry::get(_a).get());
@@ -278,50 +288,43 @@ struct DeferredGetItem : public Deferred {
     std::vector<::mlir::OpFoldResult> offsV(nd);
     std::vector<::mlir::OpFoldResult> sizesV(nd);
     std::vector<::mlir::OpFoldResult> stridesV(nd);
-    ::mlir::SmallVector<int64_t> shape(nd, ::mlir::ShapedType::kDynamic);
     for (auto i = 0; i < nd; ++i) {
       offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
       stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-      if (sizes[i] == 1) {
-        sizesV[i] = builder.getIndexAttr(sizes[i]);
-        shape[i] = sizes[i];
+      if (sizes[i] == ALL_SIZE) {
+        sizesV[i] =
+            builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
       } else {
-        if (sizes[i] == ALL_SIZE) {
-          sizesV[i] =
-              builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
-        } else {
-          sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
-        }
+        sizesV[i] = builder.getIndexAttr(sizes[i]);
       }
     }
 
-    auto oTyp = ::imex::dist::getPTensorType(av);
     // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
-    auto outTyp =
-        ::imex::ptensor::PTensorType::get(shape, oTyp.getElementType());
-    // if(auto dtyp = av.getType().dyn_cast<::imex::dist::DistTensorType>()) {
-    //   av = builder.create<::mlir::UnrealizedConversionCastOp>(loc,
-    //   dtyp.getPTensorType(), av).getResult(0);
-    // }
+    auto outTyp = ::imex::ptensor::PTensorType::get(
+        shape(), ::imex::dist::getElementType(av));
     // now we can create the PTensor op using the above Values
     auto res = builder.create<::imex::ptensor::SubviewOp>(
         loc, outTyp, av, offsV, sizesV, stridesV);
 
-    dm.addVal(
-        this->guid(), res,
-        [this, dtype](Transceiver *transceiver, uint64_t rank, void *allocated,
-                      void *aligned, intptr_t offset, const intptr_t *sizes,
-                      const intptr_t *strides, int64_t *gs_allocated,
-                      int64_t *gs_aligned, uint64_t *lo_allocated,
-                      uint64_t *lo_aligned, uint64_t balanced) {
-          auto t = mk_tnsr(transceiver, dtype, rank, allocated, aligned, offset,
-                           sizes, strides, gs_allocated, gs_aligned,
-                           lo_allocated, lo_aligned, balanced);
-          if (Registry::has(_a)) {
-            t->set_base(Registry::get(_a).get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
+                     void *l_aligned, intptr_t l_offset,
+                     const intptr_t *l_sizes, const intptr_t *l_strides,
+                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                auto t = mk_tnsr(
+                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
+                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
+                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned);
+                if (Registry::has(_a)) {
+                  t->set_base(Registry::get(_a).get());
+                } // else _a is a temporary and was dropped
+                this->set_value(std::move(t));
+              });
     return false;
   }
 
@@ -337,7 +340,8 @@ struct DeferredGetItem : public Deferred {
 
 ddptensor *GetItem::__getitem__(const ddptensor &a,
                                 const std::vector<py::slice> &v) {
-  return new ddptensor(defer<DeferredGetItem>(a.get(), v));
+  NDSlice slc(v);
+  return new ddptensor(defer<DeferredGetItem>(a.get(), std::move(slc)));
 }
 
 GetItem::py_future_type GetItem::get_local(const ddptensor &a, py::handle h) {

@@ -17,7 +17,7 @@
 #include <bitsery/bitsery.h>
 #include <bitsery/traits/vector.h>
 
-using shape_type = std::vector<uint64_t>;
+using shape_type = std::vector<int64_t>;
 using dim_vec_type = std::vector<int>;
 using rank_type = uint64_t;
 using Buffer = std::vector<uint8_t>;

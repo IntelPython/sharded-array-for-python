@@ -174,21 +174,6 @@ static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
   };
 }
 
-/// @return true if size/strides represent a contiguous data layout
-bool is_contiguous(const int64_t *sizes, const int64_t *strides, uint64_t nd) {
-  if (nd == 0)
-    return true;
-  if (strides[nd - 1] != 1)
-    return false;
-  auto sz = 1;
-  for (auto i = nd - 1; i > 0; --i) {
-    sz *= sizes[i];
-    if (strides[i - 1] != sz)
-      return false;
-  }
-  return true;
-}
-
 /// copy possibly strided tensor into a contiguous block of data
 void bufferize(void *cptr, DTypeId dtype, const int64_t *sizes,
                const int64_t *strides, const int64_t *tStarts,
@@ -439,151 +424,200 @@ TYPED_RESHAPE(i1, bool);
 
 } // extern "C"
 
-/// @brief repartition tensor using generic and raw pointers
-/// We assume tensor is partitioned along the first dimension (only) and
-/// partitions are ordered by ranks
-void _idtr_repartition(DTypeId ddpttype, int64_t rank, void *lDataPtr,
-                       int64_t *lShapePtr, int64_t *lStridesPtr,
-                       int64_t *lOffsPtr, void *outPtr, int64_t *oShapePtr,
-                       int64_t *oOffsPtr, Transceiver *tc) {
+/// @brief Update data in halo parts
+/// We assume tensor is partitioned along the first dimension only
+/// (row partitioning) and partitions are ordered by ranks
+void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
+                       int64_t *ownedShape, int64_t *ownedStride,
+                       int64_t *bbOff, int64_t *bbShape, void *ownedData,
+                       void *leftHaloData, void *rightHaloData,
+                       Transceiver *tc) {
 
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = getTransceiver();
 #endif
-  auto N = tc->nranks();
-  auto me = tc->rank();
+  auto nworkers = tc->nranks();
+  if (nworkers <= 1)
+    return;
+  auto myWorkerIndex = tc->rank();
 
-  // First we allgather the requested target partitioning
-
-  auto myBOff = 2 * rank * me;
-  ::std::vector<int64_t> buff(2 * rank * N);
-  for (int64_t i = 0; i < rank; ++i) {
-    buff[myBOff + i] = oOffsPtr[i];
-    buff[myBOff + i + rank] = oShapePtr[i];
+  // Gather table with bounding box offsets and shapes for all workers
+  // [ (w0 offsets) o_0, o_1, ..., o_ndims,
+  //   (w0  shapes) s_0, s_1, ..., s_ndims,
+  //   (w1 offsets) ... ]
+  ::std::vector<int64_t> bbTable(2 * ndims * nworkers);
+  auto ptableStart = 2 * ndims * myWorkerIndex;
+  for (int64_t i = 0; i < ndims; ++i) {
+    bbTable[ptableStart + i] = bbOff[i];
+    bbTable[ptableStart + i + ndims] = bbShape[i];
   }
-  ::std::vector<int> counts(N, rank * 2);
-  ::std::vector<int> dspl(N);
-  for (auto i = 0; i < N; ++i) {
-    dspl[i] = 2 * rank * i;
+  ::std::vector<int> counts(nworkers, ndims * 2);
+  ::std::vector<int> offsets(nworkers);
+  for (auto i = 0; i < nworkers; ++i) {
+    offsets[i] = 2 * ndims * i;
   }
-  tc->gather(buff.data(), counts.data(), dspl.data(), INT64, REPLICATED);
+  tc->gather(bbTable.data(), counts.data(), offsets.data(), INT64, REPLICATED);
 
-  // compute overlap of my local data with each requested part
+  // global indices for row partitioning
+  auto ownedRowStart = ownedOff[0];
+  auto ownedRows = ownedShape[0];
+  auto ownedRowEnd = ownedRowStart + ownedRows;
+  // all remaining dims are treated as one large column
+  auto ownedCols = std::accumulate(&ownedShape[1], &ownedShape[ndims], 1,
+                                   std::multiplies<int64_t>());
 
-  auto myOff = static_cast<int64_t>(lOffsPtr[0]);
-  auto mySz = static_cast<int64_t>(lShapePtr[0]);
-  auto myEnd = myOff + mySz;
-  auto myTileSz = std::accumulate(&lShapePtr[1], &lShapePtr[rank], 1,
-                                  std::multiplies<int64_t>());
+  // find local elements to send to next workers (destination leftHalo)
+  // and previous workers (destination rightHalo)
+  std::vector<int> lSendOff(nworkers, 0), rSendOff(nworkers, 0);
+  std::vector<int> lSendSize(nworkers, 0), rSendSize(nworkers, 0);
 
-  std::vector<int> soffs(N);
-  std::vector<int> sszs(N, 0);
-  std::vector<int64_t> tStarts(N * rank, 0);
-  std::vector<int64_t> tSizes(N * rank, 0);
-  std::vector<int64_t> nSizes(N);
-  int64_t totSSz = 0;
-  bool needsBufferize = !is_contiguous(lShapePtr, lStridesPtr, rank);
+  // use send buffer if owned data is strided
+  bool bufferizeSend = !is_contiguous(ownedShape, ownedStride, ndims);
+  std::vector<int64_t> lBufferStart(nworkers * ndims, 0);
+  std::vector<int64_t> lBufferSize(nworkers * ndims, 0);
+  std::vector<int64_t> rBufferStart(nworkers * ndims, 0);
+  std::vector<int64_t> rBufferSize(nworkers * ndims, 0);
+  int64_t lTotalSendSize = 0, rTotalSendSize = 0;
 
-  for (auto i = 0; i < N; ++i) {
-    nSizes[i] = std::accumulate(&buff[2 * rank * i + rank + 1],
-                                &buff[2 * rank * i + rank + rank], 1,
-                                std::multiplies<int64_t>());
-    if (nSizes[i] != myTileSz)
-      needsBufferize = true;
-  }
-  for (auto i = 0; i < N; ++i) {
-    auto nSz = nSizes[i];
-    auto tOff = buff[2 * rank * i];
-    auto tSz = buff[2 * rank * i + rank];
-    auto tEnd = tOff + tSz;
-
-    if (tEnd > myOff && tOff < myEnd) {
-      // We have a target partition which is inside my local data
-      // we now compute what data goes to this target partition
-      auto start = std::max(myOff, tOff);
-      auto end = std::min(myEnd, tEnd);
-      tStarts[i * rank] = start - myOff;
-      tSizes[i * rank] = end - start;
-      soffs[i] = needsBufferize ? (i ? soffs[i - 1] + sszs[i - 1] : 0)
-                                : (int)(start - myOff) * myTileSz;
-      sszs[i] = (int)(end - start) * nSz;
-    } else {
-      soffs[i] = i ? soffs[i - 1] + sszs[i - 1] : 0;
+  for (auto i = 0; i < nworkers; ++i) {
+    if (i == myWorkerIndex) {
+      continue;
     }
-    totSSz += sszs[i];
-    for (auto r = 1; r < rank; ++r) {
-      tStarts[i * rank + r] = buff[2 * rank * i + r];
-      tSizes[i * rank + r] = buff[2 * rank * i + rank + r];
-      // assert(tSizes[i*rank+r] <= lShapePtr[r]);
+    // worker i bounding box indices
+    auto bRowStart = bbTable[2 * ndims * i];
+    auto bRows = bbTable[2 * ndims * i + ndims];
+    auto bRowEnd = bRowStart + bRows;
+
+    if (bRowEnd > ownedRowStart && bRowStart < ownedRowEnd) {
+      // bounding box overlaps with local data
+      // calculate indices for data to be sent
+      auto globalRowStart = std::max(ownedRowStart, bRowStart);
+      auto globalRowEnd = std::min(ownedRowEnd, bRowEnd);
+      auto localRowStart = globalRowStart - ownedRowStart;
+      auto localStart = (int)(localRowStart)*ownedCols;
+      auto nRows = globalRowEnd - globalRowStart;
+      auto nSend = (int)(nRows)*ownedCols;
+
+      if (i < myWorkerIndex) {
+        // target is rightHalo
+        if (bufferizeSend) {
+          rSendOff[i] = i ? rSendOff[i - 1] + rSendSize[i - 1] : 0;
+          rBufferStart[i * ndims] = localRowStart;
+          rBufferSize[i * ndims] = nRows;
+          for (auto j = 1; j < ndims; ++j) {
+            rBufferStart[i * ndims + j] = ownedOff[j];
+            rBufferSize[i * ndims + j] = ownedShape[j];
+          }
+        } else {
+          rSendOff[i] = localStart;
+        }
+        rSendSize[i] = nSend;
+        rTotalSendSize += nSend;
+      } else {
+        // target is leftHalo
+        if (bufferizeSend) {
+          lSendOff[i] = i ? lSendOff[i - 1] + lSendSize[i - 1] : 0;
+          lBufferStart[i * ndims] = localRowStart;
+          lBufferSize[i * ndims] = nRows;
+          for (auto j = 1; j < ndims; ++j) {
+            lBufferStart[i * ndims + j] = ownedOff[j];
+            lBufferSize[i * ndims + j] = ownedShape[j];
+          }
+        } else {
+          lSendOff[i] = localStart;
+        }
+        lSendSize[i] = nSend;
+        lTotalSendSize += nSend;
+      }
     }
   }
 
-  // send our send sizes to others and receive theirs
-  std::vector<int> rszs(N);
-  tc->alltoall(sszs.data(), 1, INT32, rszs.data());
-
-  // compute receive-displacements
-  std::vector<int> roffs(N);
-  roffs[0] = 0;
-  for (auto i = 1; i < N; ++i) {
-    // compute for all i > 0
-    roffs[i] = roffs[i - 1] + rszs[i - 1];
+  // receive maps
+  std::vector<int> lRecvSize(nworkers), rRecvSize(nworkers);
+  std::vector<int> lRecvOff(nworkers), rRecvOff(nworkers);
+  // receive size is sender's send size
+  tc->alltoall(lSendSize.data(), 1, INT32, lRecvSize.data());
+  tc->alltoall(rSendSize.data(), 1, INT32, rRecvSize.data());
+  // compute offset in a contiguous receive buffer
+  lRecvOff[0] = 0;
+  rRecvOff[0] = 0;
+  for (auto i = 1; i < nworkers; ++i) {
+    lRecvOff[i] = lRecvOff[i - 1] + lRecvSize[i - 1];
+    rRecvOff[i] = rRecvOff[i - 1] + rRecvSize[i - 1];
   }
 
-  // Finally communicate elements
-  if (needsBufferize) {
-    // create send buffer if strided
-    Buffer tmpbuff;
-    tmpbuff.resize(totSSz * sizeof_dtype(ddpttype));
-    bufferize(lDataPtr, ddpttype, lShapePtr, lStridesPtr, tStarts.data(),
-              tSizes.data(), rank, N, tmpbuff.data());
-    tc->alltoall(tmpbuff.data(), sszs.data(), soffs.data(), ddpttype, outPtr,
-                 rszs.data(), roffs.data());
+  // communicate left/right halos
+  if (bufferizeSend) {
+    Buffer sendBuff;
+    sendBuff.resize(std::max(lTotalSendSize, rTotalSendSize) *
+                    sizeof_dtype(ddpttype));
+    bufferize(ownedData, ddpttype, ownedShape, ownedStride, lBufferStart.data(),
+              lBufferSize.data(), ndims, nworkers, sendBuff.data());
+    tc->alltoall(sendBuff.data(), lSendSize.data(), lSendOff.data(), ddpttype,
+                 leftHaloData, lRecvSize.data(), lRecvOff.data());
+    bufferize(ownedData, ddpttype, ownedShape, ownedStride, rBufferStart.data(),
+              rBufferSize.data(), ndims, nworkers, sendBuff.data());
+    tc->alltoall(sendBuff.data(), rSendSize.data(), rSendOff.data(), ddpttype,
+                 rightHaloData, rRecvSize.data(), rRecvOff.data());
   } else {
-    tc->alltoall(lDataPtr, sszs.data(), soffs.data(), ddpttype, outPtr,
-                 rszs.data(), roffs.data());
+    tc->alltoall(ownedData, lSendSize.data(), lSendOff.data(), ddpttype,
+                 leftHaloData, lRecvSize.data(), lRecvOff.data());
+    tc->alltoall(ownedData, rSendSize.data(), rSendOff.data(), ddpttype,
+                 rightHaloData, rRecvSize.data(), rRecvOff.data());
   }
 }
 
 /// @brief templated wrapper for typed function versions calling
-/// _idtr_repartition
+/// _idtr_update_halo
 template <typename T>
-void _idtr_repartition(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
-                       void *lOffsDescr, int64_t lRank, void *lDescr,
-                       int64_t oOffsRank, void *oOffsDescr, int64_t oRank,
-                       void *oDescr, Transceiver *tc) {
+void _idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
+                       int64_t oOffRank, void *oOffDescr, int64_t oDataRank,
+                       void *oDataDescr, int64_t bbOffRank, void *bbOffDescr,
+                       int64_t bbShapeRank, void *bbShapeDescr,
+                       int64_t lHaloRank, void *lHaloDescr, int64_t rHaloRank,
+                       void *rHaloDescr) {
 
   auto ddpttype = DTYPE<T>::value;
 
-  // Construct unranked memrefs for metadata
-  UnrankedMemRefType<T> lData(lRank, lDescr);
-  UnrankedMemRefType<T> oData(oRank, oDescr);
+  // Construct unranked memrefs for metadata and data
+  MRIdx1d ownedOff(oOffRank, oOffDescr);
+  MRIdx1d bbOff(bbOffRank, bbOffDescr);
+  MRIdx1d bbShape(bbShapeRank, bbShapeDescr);
+  UnrankedMemRefType<T> ownedData(oDataRank, oDataDescr);
+  UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
+  UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
 
-  _idtr_repartition(ddpttype, lRank, lData.data(), lData.sizes(),
-                    lData.strides(), MRIdx1d(lOffsRank, lOffsDescr).data(),
-                    oData.data(), oData.sizes(),
-                    MRIdx1d(oOffsRank, oOffsDescr).data(), tc);
+  assert(leftHalo.contiguous_layout());
+  assert(rightHalo.contiguous_layout());
+
+  _idtr_update_halo(ddpttype, ownedData.rank(), ownedOff.data(),
+                    ownedData.sizes(), ownedData.strides(), bbOff.data(),
+                    bbShape.data(), ownedData.data(), leftHalo.data(),
+                    rightHalo.data(), tc);
 }
 
 extern "C" {
-#define TYPED_REPARTITON(_sfx, _typ)                                           \
-  void _idtr_repartition_##_sfx(                                               \
-      int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
-      void *lOffsDescr, int64_t rank, void *lDescr, int64_t oOffsRank,         \
-      void *oOffsDescr, int64_t oRank, void *oDescr, Transceiver *tc) {        \
-    _idtr_repartition<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr,    \
-                            rank, lDescr, oOffsRank, oOffsDescr, oRank,        \
-                            oDescr, tc);                                       \
+#define TYPED_UPDATE_HALO(_sfx, _typ)                                          \
+  void _idtr_update_halo_##_sfx(                                               \
+      Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,                  \
+      int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
+      int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
+      void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \
+      int64_t rHaloRank, void *rHaloDescr) {                                   \
+    _idtr_update_halo<_typ>(tc, gShapeRank, gShapeDescr, oOffRank, oOffDescr,  \
+                            oDataRank, oDataDescr, bbOffRank, bbOffDescr,      \
+                            bbShapeRank, bbShapeDescr, lHaloRank, lHaloDescr,  \
+                            rHaloRank, rHaloDescr);                            \
   }
 
-TYPED_REPARTITON(f64, double);
-TYPED_REPARTITON(f32, float);
-TYPED_REPARTITON(i64, int64_t);
-TYPED_REPARTITON(i32, int32_t);
-TYPED_REPARTITON(i16, int16_t);
-TYPED_REPARTITON(i8, int8_t);
-TYPED_REPARTITON(i1, bool);
+TYPED_UPDATE_HALO(f64, double);
+TYPED_UPDATE_HALO(f32, float);
+TYPED_UPDATE_HALO(i64, int64_t);
+TYPED_UPDATE_HALO(i32, int32_t);
+TYPED_UPDATE_HALO(i16, int16_t);
+TYPED_UPDATE_HALO(i8, int8_t);
+TYPED_UPDATE_HALO(i1, bool);
 
 } // extern "C"
 

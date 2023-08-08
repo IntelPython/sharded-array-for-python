@@ -97,10 +97,12 @@ inline ::imex::ptensor::DType getPTDType(DTypeId dt) {
 // function type used for reporting back tensor results generated
 // by Deferred::generate_mlir
 using SetResFunc = std::function<void(
-    Transceiver *transceiver, uint64_t rank, void *allocated, void *aligned,
-    intptr_t offset, const intptr_t *sizes, const intptr_t *strides,
-    int64_t *gs_allocated, int64_t *gs_aligned, uint64_t *lo_allocated,
-    uint64_t *lo_aligned, uint64_t balanced)>;
+    Transceiver *transceiver, uint64_t rank, void *l_allocated, void *l_aligned,
+    intptr_t l_offset, const intptr_t *l_sizes, const intptr_t *l_strides,
+    void *o_allocated, void *o_aligned, intptr_t o_offset,
+    const intptr_t *o_sizes, const intptr_t *o_strides, void *r_allocated,
+    void *r_aligned, intptr_t r_offset, const intptr_t *r_sizes,
+    const intptr_t *r_strides, uint64_t *lo_allocated, uint64_t *lo_aligned)>;
 using ReadyFunc = std::function<void(id_type guid)>;
 
 // initialize jit

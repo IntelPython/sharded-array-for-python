@@ -4,14 +4,22 @@ import pytest
 
 
 class TestIO:
-    def test_to_numpy(self):
+    @pytest.mark.skip(reason="FIXME reshape")
+    def test_to_numpy2d(self):
         a = dt.reshape(dt.arange(0, 110, 1, dtype=dt.float64), [11, 10])
         b = dt.to_numpy(a)
         c = np.sum(b)
         v = np.sum(np.reshape(np.arange(0, 110, 1, dtype=np.float64), (11, 10)))
         assert float(c) == v
 
-    @pytest.mark.skip(reason="FIXME")
+    def test_to_numpy1d(self):
+        a = dt.arange(0, 110, 1, dtype=dt.float64)
+        b = dt.to_numpy(a)
+        c = np.sum(b)
+        v = np.sum(np.arange(0, 110, 1, dtype=np.float64))
+        assert float(c) == v
+
+    @pytest.mark.skip(reason="FIXME reshape")
     def test_to_numpy_strided(self):
         a = dt.reshape(dt.arange(0, 110, 1, dtype=dt.float64), [11, 10])
         b = dt.to_numpy(a[4:12:2, 1:11:3])

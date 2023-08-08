@@ -50,29 +50,43 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 
   DeferredT() = default;
   DeferredT(const DeferredT<P, F> &) = delete;
-  DeferredT(id_type guid, DTypeId dt, int rank, uint64_t team, bool balanced)
-      : P(guid, dt, rank, team, balanced), Runable() {}
+  DeferredT(id_type guid, DTypeId dt, shape_type &&shape, uint64_t team,
+            bool balanced)
+      : P(guid, dt, std::forward<shape_type>(shape), team, balanced),
+        Runable() {}
+  DeferredT(id_type guid, DTypeId dt, const shape_type &shape, uint64_t team,
+            bool balanced)
+      : P(guid, dt, shape, team, balanced), Runable() {}
 };
 
 /// Deferred operation returning/producing a tensor
-/// holds a guid as well as rank, dtype and balanced-flag of future tensor
+/// holds a guid as well as shape, dtype and balanced-flag of future tensor
 class Deferred
     : public DeferredT<tensor_i::promise_type, tensor_i::future_type> {
 public:
   using ptr_type = std::unique_ptr<Deferred>;
 
-  Deferred(DTypeId dt, int rank, uint64_t team, bool balanced)
+  Deferred(DTypeId dt, shape_type &&shape, uint64_t team, bool balanced)
       : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
             Registry::NOGUID, // might be set later
-            dt, rank, team, balanced) {}
-  Deferred(id_type guid, DTypeId dt, int rank, uint64_t team, bool balanced)
+            dt, std::forward<shape_type>(shape), team, balanced) {}
+  Deferred(id_type guid, DTypeId dt, shape_type &&shape, uint64_t team,
+           bool balanced)
       : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            guid, dt, rank, team, balanced) {}
-  // FIXME we should not allow default values for dtype and rank
+            guid, dt, std::forward<shape_type>(shape), team, balanced) {}
+  Deferred(DTypeId dt, const shape_type &shape, uint64_t team, bool balanced)
+      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
+            Registry::NOGUID, // might be set later
+            dt, shape, team, balanced) {}
+  Deferred(id_type guid, DTypeId dt, const shape_type &shape, uint64_t team,
+           bool balanced)
+      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
+            guid, dt, shape, team, balanced) {}
+  // FIXME we should not allow default values for dtype and shape
   // we should need this only while we are gradually moving to mlir
   Deferred()
       : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            Registry::NOGUID, DTYPE_LAST, -1, 0, true) {}
+            Registry::NOGUID, DTYPE_LAST, {}, 0, true) {}
   Deferred(const Deferred &) = delete;
   Deferred(Deferred &&) = delete;
 

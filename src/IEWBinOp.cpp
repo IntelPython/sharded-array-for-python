@@ -58,7 +58,7 @@ struct DeferredIEWBinOp : public Deferred {
   DeferredIEWBinOp() = default;
   DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
                    const tensor_i::future_type &b)
-      : Deferred(a.dtype(), a.rank(), a.team(), a.balanced()), _a(a.guid()),
+      : Deferred(a.dtype(), a.shape(), a.team(), a.balanced()), _a(a.guid()),
         _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
@@ -67,10 +67,8 @@ struct DeferredIEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto aTyp = ::imex::dist::getPTensorType(av);
-    ::mlir::SmallVector<int64_t> shape(rank(), ::mlir::ShapedType::kDynamic);
-    auto outTyp =
-        ::imex::ptensor::PTensorType::get(shape, aTyp.getElementType());
+    auto outTyp = ::imex::ptensor::PTensorType::get(
+        shape(), ::imex::dist::getElementType(av));
 
     auto binop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
@@ -85,11 +83,14 @@ struct DeferredIEWBinOp : public Deferred {
                                                          szs, strds);
     // ... and use av as to later create the ptensor
     dm.addVal(this->guid(), av,
-              [this](Transceiver *transceiver, uint64_t rank, void *allocated,
-                     void *aligned, intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, int64_t *gs_allocated,
-                     int64_t *gs_aligned, uint64_t *lo_allocated,
-                     uint64_t *lo_aligned, uint64_t balanced) {
+              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
+                     void *l_aligned, intptr_t l_offset,
+                     const intptr_t *l_sizes, const intptr_t *l_strides,
+                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
                 this->set_value(Registry::get(this->_a).get());
               });
     return false;

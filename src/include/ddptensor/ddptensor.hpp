@@ -18,9 +18,13 @@ public:
   ddptensor(tensor_i::future_type &&f)
       : _ftx(std::forward<tensor_i::future_type>(f)) {}
   ddptensor(std::shared_future<tensor_i::ptr_type> &&f, id_type id, DTypeId dt,
-            int rank, uint64_t team, bool balanced)
+            const shape_type &shape, uint64_t team, bool balanced)
       : _ftx(std::forward<std::shared_future<tensor_i::ptr_type>>(f), id, dt,
-             rank, team, balanced) {}
+             shape, team, balanced) {}
+  ddptensor(std::shared_future<tensor_i::ptr_type> &&f, id_type id, DTypeId dt,
+            shape_type &&shape, uint64_t team, bool balanced)
+      : _ftx(std::forward<std::shared_future<tensor_i::ptr_type>>(f), id, dt,
+             std::forward<shape_type>(shape), team, balanced) {}
 
   ~ddptensor() { Service::drop(*this); }
 

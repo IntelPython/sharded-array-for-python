@@ -91,7 +91,7 @@ public:
     ///
     /// @return number of elements for each dimension-slice as a vector
     ///
-    shape_type shape() const
+    vec_t shape() const
     {
         std::vector<uint64_t> ret(_slice_vec.size());
         auto v = ret.begin();
