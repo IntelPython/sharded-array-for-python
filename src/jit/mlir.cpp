@@ -117,9 +117,10 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
 
 // convert ddpt's DTYpeId into MLIR type
 static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
-                             ::mlir::SmallVector<int64_t> &lhShape,
-                             ::mlir::SmallVector<int64_t> &ownShape,
-                             ::mlir::SmallVector<int64_t> &rhShape,
+                             const ::mlir::SmallVector<int64_t> &gShape,
+                             const ::mlir::SmallVector<int64_t> &lhShape,
+                             const ::mlir::SmallVector<int64_t> &ownShape,
+                             const ::mlir::SmallVector<int64_t> &rhShape,
                              uint64_t team, bool balanced) {
   ::mlir::Type etyp;
 
@@ -154,9 +155,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
   };
 
   if (team) {
-    if (ownShape.size()) {
-      auto gShape = ownShape;
-      gShape[0] += lhShape[0] + rhShape[0];
+    if (gShape.size()) {
       return ::imex::dist::DistTensorType::get(gShape, etyp,
                                                {lhShape, ownShape, rhShape});
     } else {
@@ -183,8 +182,10 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
       ownShape[i] = impl->local_shape()[i];
       rhShape[i] = impl->rh_shape()[i];
     }
-    auto typ = getTType(builder, fut.dtype(), lhShape, ownShape, rhShape,
-                        fut.team(), fut.balanced());
+    auto typ = getTType(
+        builder, fut.dtype(),
+        ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
+        lhShape, ownShape, rhShape, fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, std::move(fut)});
@@ -516,7 +517,8 @@ JIT::JIT()
   crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
   const char *idtr = getenv("DDPT_IDTR_SO");
   idtr = idtr ? idtr : "libidtr.so";
-  _sharedLibPaths = {idtr, crunner};
+  _sharedLibPaths = {idtr, crunner,
+                     "/home/fschlimb/llvm/lib/libmlir_runner_utils.so"};
 
   // detect target architecture
   auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
@@ -562,14 +564,12 @@ void init() {
   ::mlir::registerConvertFuncToLLVMPass();
   ::mlir::bufferization::registerBufferizationPasses();
   ::mlir::arith::registerArithPasses();
-  ::mlir::registerAffinePasses();
   ::mlir::registerCanonicalizerPass();
   ::mlir::registerConvertAffineToStandardPass();
   ::mlir::registerFinalizeMemRefToLLVMConversionPass();
   ::mlir::registerArithToLLVMConversionPass();
   ::mlir::registerConvertMathToLLVMPass();
   ::mlir::registerConvertControlFlowToLLVMPass();
-  ::mlir::registerConvertLinalgToLLVMPass();
   ::mlir::registerConvertOpenMPToLLVMPass();
   ::mlir::memref::registerMemRefPasses();
   ::mlir::registerReconcileUnrealizedCastsPass();

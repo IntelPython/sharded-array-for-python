@@ -186,7 +186,6 @@ target_link_libraries(_ddpt_rt PRIVATE
     MLIRFuncToLLVM
     MLIRFuncTransforms
     MLIRLinalgDialect
-    MLIRLinalgToLLVM
     MLIRLinalgTransforms
     MLIRLLVMDialect
     MLIRMathDialect

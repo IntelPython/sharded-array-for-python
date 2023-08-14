@@ -280,9 +280,10 @@ struct DeferredGetItem : public Deferred {
     // get params and extract offsets/sizes/strides
     const auto dtype = this->dtype();
     auto av = dm.getDependent(builder, _a);
-    auto &offs = _slc.offsets();
-    auto &sizes = _slc.sizes();
-    auto &strides = _slc.strides();
+    const auto &offs = _slc.offsets();
+    const auto &sizes =
+        shape(); // we already converted ALL_SIZE as much as posible
+    const auto &strides = _slc.strides();
     auto nd = offs.size();
     // convert C++ slices into vectors of MLIR Values
     std::vector<::mlir::OpFoldResult> offsV(nd);
@@ -291,7 +292,7 @@ struct DeferredGetItem : public Deferred {
     for (auto i = 0; i < nd; ++i) {
       offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
       stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-      if (sizes[i] == ALL_SIZE) {
+      if (sizes[i] < 0) {
         sizesV[i] =
             builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
       } else {
