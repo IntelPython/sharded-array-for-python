@@ -146,8 +146,8 @@ jobs:
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
           cd examples
-          python -u ./stencil-2d.py 5 1024 star 4
-          DDPT_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
+          DDPT_FALLBACK=numpy python -u ./stencil-2d.py 5 1024 star 4
+          DDPT_FALLBACK=numpy DDPT_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
           python -u ./wave_equation.py -ct
           DDPT_FORCE_DIST=1 python -u ./wave_equation.py -ct
           cd -

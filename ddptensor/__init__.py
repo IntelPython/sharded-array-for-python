@@ -14,6 +14,7 @@ https://data-apis.org/array-api/latest
 # are simply forwarded as-is.
 
 _bool = bool
+from typing import Any
 from . import _ddptensor as _cdt
 from ._ddptensor import (
     FLOAT64 as float64,
@@ -34,6 +35,7 @@ from ._ddptensor import (
 
 from .ddptensor import dtensor
 from os import getenv
+from importlib import import_module
 from . import array_api as api
 from . import spmd
 
@@ -96,12 +98,12 @@ for func in api.api_categories["ReduceOp"]:
         f"{func} = lambda this, dim=None: dtensor(_cdt.ReduceOp.op(_cdt.{FUNC}, this._t, dim if dim else []))"
     )
 
-for func in api.api_categories["ManipOp"]:
-    FUNC = func.upper()
-    if func == "reshape":
-        exec(
-            f"{func} = lambda this, /, shape, *, copy=None: dtensor(_cdt.ManipOp.reshape(this._t, shape, copy))"
-        )
+# for func in api.api_categories["ManipOp"]:
+#     FUNC = func.upper()
+#     if func == "reshape":
+#         exec(
+#             f"{func} = lambda this, /, shape, *, copy=None: dtensor(_cdt.ManipOp.reshape(this._t, shape, copy))"
+#         )
 
 for func in api.api_categories["LinAlgOp"]:
     FUNC = func.upper()
@@ -118,3 +120,44 @@ for func in api.api_categories["LinAlgOp"]:
         )
     elif func == "matrix_transpose":
         exec(f"{func} = lambda this: dtensor(_cdt.LinAlgOp.{func}(this._t))")
+
+
+_fb_env = getenv("DDPT_FALLBACK")
+if _fb_env is not None:
+
+    class _fallback:
+        "Fallback to whatever is provided in DDPT_FALLBACK"
+        _fb_lib = import_module(_fb_env)
+
+        def __init__(self, fname: str, mod=None) -> None:
+            "get callable with name 'fname' from fallback-lib or throw exception"
+            self._mod = mod if mod else _fallback._fb_lib
+            self._func = getattr(self._mod, fname)
+
+        def __call__(self, *args: Any, **kwds: Any) -> Any:
+            "convert ddptensors args to fallback arrays, call fallback-lib and return converted ddptensor"
+            nargs = []
+            nkwds = {}
+            for arg in args:
+                nargs.append(
+                    spmd.get_locals(arg)[0] if isinstance(arg, dtensor) else arg
+                )
+            for k, v in kwds.items():
+                nkwds[k] = spmd.get_locals(v)[0] if isinstance(v, dtensor) else v
+
+            res = self._func(*nargs, **nkwds)
+            return (
+                spmd.from_locals(res)
+                if isinstance(res, _fallback._fb_lib.ndarray)
+                else res
+            )
+
+        def __getattr__(self, name):
+            """Attempt to find a fallback in current fallback object.
+            This might be necessary if we call something like dt.linalg.norm(...)
+            """
+            return _fallback(name, self._func)
+
+    def __getattr__(name):
+        "Attempt to find a fallback in fallback-lib"
+        return _fallback(name)

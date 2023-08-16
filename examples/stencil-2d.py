@@ -65,7 +65,6 @@ if sys.version_info >= (33, 3):
 else:
     from timeit import default_timer as timer
 
-import numpy
 import ddptensor as np
 import ddptensor.numpy
 
@@ -192,7 +191,7 @@ def main():
     # ******************************************************************************
 
     B = np.spmd.gather(B)
-    norm = numpy.linalg.norm(numpy.reshape(B, n * n), ord=1)
+    norm = np.linalg.norm(np.reshape(B, n * n), ord=1)
     active_points = (n - 2 * r) ** 2
     norm /= active_points
 
