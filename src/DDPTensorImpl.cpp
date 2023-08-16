@@ -62,14 +62,33 @@ DDPTensorImpl::DDPTensorImpl(const int64_t *shape, uint64_t N, rank_type owner)
   assert(!_transceiver || _transceiver == getTransceiver());
 }
 
+// from numpy
+DDPTensorImpl::DDPTensorImpl(DTypeId dtype, ssize_t ndims, const ssize_t *shape,
+                             const intptr_t *strides, void *data)
+    : _owner(NOOWNER), _gShape(shape, shape + ndims),
+      _lo_allocated(
+          static_cast<uint64_t *>(calloc(ndims, sizeof_dtype(dtype)))),
+      _lo_aligned(_lo_allocated),
+      _lData(ndims, data, data, 0, reinterpret_cast<const intptr_t *>(shape),
+             reinterpret_cast<const intptr_t *>(strides)),
+      _dtype(dtype) {}
+
+void DDPTensorImpl::set_base(const tensor_i::ptr_type &base) {
+  _base = new SharedBaseObject<tensor_i::ptr_type>(base);
+}
+void DDPTensorImpl::set_base(BaseObj *obj) { _base = obj; }
+
 DDPTensorImpl::~DDPTensorImpl() {
   if (!_base) {
     // FIXME it seems possible that halos get reallocated even with when there
-    // is a base _lhsHalo.freeData(); FIXME lhs and rhs can be identical
+    // is a base
+    if (_lhsHalo._allocated != _rhsHalo._allocated)
+      _lhsHalo.freeData(); // lhs and rhs can be identical
     _lData.freeData();
     _rhsHalo.freeData();
   }
   free(_lo_allocated);
+  delete _base;
 }
 
 void *DDPTensorImpl::data() {
@@ -103,8 +122,9 @@ std::string DDPTensorImpl::__repr__() const {
   for (auto i = 0; i < nd; ++i)
     oss << _gShape[i] << (i == nd - 1 ? "" : ", ");
   oss << "), loff=(";
-  for (auto i = 0; i < nd; ++i)
-    oss << _lo_aligned[i] << (i == nd - 1 ? "" : ", ");
+  if (_lo_aligned)
+    for (auto i = 0; i < nd; ++i)
+      oss << _lo_aligned[i] << (i == nd - 1 ? "" : ", ");
   oss << "), lsz=(";
   for (auto i = 0; i < nd; ++i)
     oss << _lData._sizes[i] << (i == nd - 1 ? "" : ", ");

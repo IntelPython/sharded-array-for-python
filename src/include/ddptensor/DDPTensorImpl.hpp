@@ -17,6 +17,25 @@
 
 class Transceiver;
 
+/// @brief use this to provide a base object to the tensor
+// such a base object can own shared data
+// you might need to implem,ent reference counting
+struct BaseObj {
+  virtual ~BaseObj() {}
+};
+
+/// @brief Simple implementatino of BaseObj for ref-counting types
+/// @tparam T ref-counting type, such as py::object of std::shared_Ptr
+/// we keep an object of the ref-counting type. Normal ref-counting/destructors
+/// will take care of the rest.
+template <typename T> struct SharedBaseObject : public BaseObj {
+  SharedBaseObject(const SharedBaseObject &) = default;
+  SharedBaseObject(SharedBaseObject &&) = default;
+  SharedBaseObject(const T &o) : _base(o) {}
+  SharedBaseObject(T &&o) : _base(std::forward<T>(o)) {}
+  T _base;
+};
+
 /// The actual implementation of the DDPTensor, implementing the tensor_i
 /// interface. It holds the tensor data and some meta information. The member
 /// attributes are mostly inspired by the needs of interacting with MLIR. It
@@ -25,6 +44,7 @@ class Transceiver;
 /// Here, the halos are never used for anything except for interchanging with
 /// MLIR.
 class DDPTensorImpl : public tensor_i {
+
   mutable rank_type _owner;
   Transceiver *_transceiver = nullptr;
   shape_type _gShape = {};
@@ -34,7 +54,7 @@ class DDPTensorImpl : public tensor_i {
   DynMemRef _lData;
   DynMemRef _rhsHalo;
   DTypeId _dtype = DTYPE_LAST;
-  tensor_i::ptr_type _base;
+  BaseObj *_base = nullptr;
 
 public:
   using ptr_type = std::shared_ptr<DDPTensorImpl>;
@@ -63,8 +83,14 @@ public:
   // incomplete, useful for computing meta information
   DDPTensorImpl() : _owner(REPLICATED) { assert(ndims() <= 1); }
 
+  // From numpy
+  // FIXME multi-proc
+  DDPTensorImpl(DTypeId dtype, ssize_t ndims, const ssize_t *shape,
+                const intptr_t *strides, void *data);
+
   // set the base tensor
-  void set_base(const tensor_i::ptr_type &base) { _base = base; }
+  void set_base(const tensor_i::ptr_type &base);
+  void set_base(BaseObj *obj);
 
   virtual ~DDPTensorImpl();
 

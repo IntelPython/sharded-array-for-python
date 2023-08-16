@@ -26,9 +26,9 @@ class TestSPMD:
         assert c == v
         MPI.COMM_WORLD.barrier()
 
-    def test_get_local(self):
+    def test_get_locals(self):
         a = dt.ones((32, 32), dt.float64)
-        l = dt.spmd.get_local(a)
+        l = dt.spmd.get_locals(a)[0]
         l[0, 0] = 0
         MPI.COMM_WORLD.barrier()
         c = dt.sum(a, [0, 1])
@@ -40,10 +40,10 @@ class TestSPMD:
         MPI.COMM_WORLD.size == 1 and os.getenv("DDPT_FORCE_DIST", "") == "",
         reason="FIXME extra memref.copy",
     )
-    def test_get_local_of_view(self):
+    def test_get_locals_of_view(self):
         a = dt.ones((32, 32), dt.float64)
         b = a[0:32:2, 0:32:2]
-        l = dt.spmd.get_local(b)
+        l = dt.spmd.get_locals(b)[0]
         assert len(l) > 0
         l[0, 0] = 0
         MPI.COMM_WORLD.barrier()
@@ -87,3 +87,11 @@ class TestSPMD:
         v = np.sum(np.arange(0, 110, 1, dtype=np.float64)[34:82:2])
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
+
+    @pytest.mark.skipif(MPI.COMM_WORLD.size > 1, reason="FIXME multi-proc")
+    def test_from_locals(self):
+        npa = np.arange(1, 11, 2, dtype=np.int64)
+        a = dt.spmd.from_locals(npa)
+        x = 4711
+        npa[0] = x
+        assert int(a[0]) == x

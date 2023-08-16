@@ -5,12 +5,94 @@
 */
 
 #include "ddptensor/IO.hpp"
+#include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Transceiver.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
+// ***************************************************************************
+
+/// @brief form a ddptensor from local numpy arrays (inplace - no copy)
+struct DeferredFromLocal : public Deferred {
+  py::array _npa;
+
+  DeferredFromLocal() = default;
+  DeferredFromLocal(py::array npa)
+      : Deferred(getDTypeId(npa.dtype()),
+                 {npa.shape(), npa.shape() + npa.ndim()}, 0, true),
+        _npa(npa) {}
+
+  // get our DTypeId from py::dtype
+  DTypeId getDTypeId(const py::dtype &dtype) {
+    auto bw = dtype.itemsize();
+    auto kind = dtype.kind();
+    switch (kind) {
+    case 'i':
+      switch (bw) {
+      case 1:
+        return INT8;
+      case 2:
+        return INT16;
+      case 4:
+        return INT32;
+      case 8:
+        return INT64;
+      };
+    case 'f':
+      switch (bw) {
+      case 4:
+        return FLOAT32;
+      case 8:
+        return FLOAT64;
+      };
+    };
+    throw std::runtime_error("Unsupported dtype");
+  }
+
+  void run() override {
+    auto _strides = _npa.strides();
+    auto shape = _npa.shape();
+    auto data = _npa.mutable_data();
+    auto dtype = _npa.dtype();
+    auto ndim = _npa.ndim();
+    auto eSz = dtype.itemsize();
+
+    // py::array stores strides in bytes, not elements
+    std::vector<intptr_t> strides(ndim);
+    for (auto i = 0; i < ndim; ++i) {
+      strides[i] = _strides[i] / eSz;
+    }
+
+    auto res = mk_tnsr(getDTypeId(dtype), ndim, shape, strides.data(), data);
+    // make sure we do not delete numpy's memory before the numpy array is dead
+    // notice: py::objects have ref-counting)
+    res->set_base(new SharedBaseObject<py::object>(_npa));
+    set_value(std::move(res));
+  }
+
+  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+                     jit::DepManager &dm) override {
+    return true;
+  }
+
+  FactoryId factory() const { return F_FROMLOCALS; }
+
+  template <typename S> void serialize(S &ser) {}
+};
+
 GetItem::py_future_type IO::to_numpy(const ddptensor &a) {
   assert(!getTransceiver()->is_cw() || getTransceiver()->rank() == 0);
   return GetItem::gather(a, getTransceiver()->is_cw() ? 0 : REPLICATED);
 }
+
+ddptensor *IO::from_locals(const std::vector<py::array> &a) {
+  assert(a.size() == 1);
+  return new ddptensor(defer<DeferredFromLocal>(a.front()));
+}
+
+FACTORY_INIT(DeferredFromLocal, F_FROMLOCALS);

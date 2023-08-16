@@ -59,13 +59,13 @@ py::object wrap(DDPTensorImpl::ptr_type tnsr, const py::handle &handle) {
 
 // ***************************************************************************
 
-struct DeferredGetLocal
+struct DeferredGetLocals
     : public DeferredT<GetItem::py_promise_type, GetItem::py_future_type> {
   id_type _a;
   py::handle _handle;
 
-  DeferredGetLocal() = default;
-  DeferredGetLocal(const tensor_i::future_type &a, py::handle &handle)
+  DeferredGetLocals() = default;
+  DeferredGetLocals(const tensor_i::future_type &a, py::handle &handle)
       : _a(a.guid()), _handle(handle) {}
 
   void run() override {
@@ -73,7 +73,7 @@ struct DeferredGetLocal
     auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
     assert(a_ptr);
     auto res = wrap(a_ptr, _handle);
-    set_value(res);
+    set_value(py::make_tuple(res));
   }
 
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
@@ -81,7 +81,7 @@ struct DeferredGetLocal
     return true;
   }
 
-  FactoryId factory() const { return F_GETLOCAL; }
+  FactoryId factory() const { return F_GETLOCALS; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -345,8 +345,8 @@ ddptensor *GetItem::__getitem__(const ddptensor &a,
   return new ddptensor(defer<DeferredGetItem>(a.get(), std::move(slc)));
 }
 
-GetItem::py_future_type GetItem::get_local(const ddptensor &a, py::handle h) {
-  return defer<DeferredGetLocal>(a.get(), h);
+GetItem::py_future_type GetItem::get_locals(const ddptensor &a, py::handle h) {
+  return defer<DeferredGetLocals>(a.get(), h);
 }
 
 GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
@@ -377,4 +377,4 @@ FACTORY_INIT(DeferredGetItem, F_GETITEM);
 FACTORY_INIT(DeferredSetItem, F_SETITEM);
 FACTORY_INIT(DeferredMap, F_MAP);
 FACTORY_INIT(DeferredGather, F_GATHER);
-FACTORY_INIT(DeferredGetLocal, F_GETLOCAL);
+FACTORY_INIT(DeferredGetLocals, F_GETLOCALS);

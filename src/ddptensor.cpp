@@ -135,10 +135,11 @@ PYBIND11_MODULE(_ddptensor, m) {
       .def("sync", &sync_promises)
       .def("myrank", &myrank)
       .def("_get_slice", &GetItem::get_slice)
-      .def("_get_local",
+      .def("_get_locals",
            [](const ddptensor &f, py::handle h) {
-             PY_SYNC_RETURN(GetItem::get_local(f, h));
+             PY_SYNC_RETURN(GetItem::get_locals(f, h));
            })
+      .def("_from_locals", &IO::from_locals)
       .def("_gather",
            [](const ddptensor &f, rank_type root = REPLICATED) {
              PY_SYNC_RETURN(GetItem::gather(f, root));

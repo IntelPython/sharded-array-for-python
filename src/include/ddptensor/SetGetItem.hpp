@@ -19,7 +19,7 @@ struct GetItem {
                                 const std::vector<py::slice> &v);
   static py::object get_slice(const ddptensor &a,
                               const std::vector<py::slice> &v);
-  static py_future_type get_local(const ddptensor &a, py::handle h);
+  static py_future_type get_locals(const ddptensor &a, py::handle h);
   static py_future_type gather(const ddptensor &a, rank_type root);
 };
 

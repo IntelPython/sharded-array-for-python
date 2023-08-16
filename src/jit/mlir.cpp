@@ -178,12 +178,12 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     auto rank = impl->ndims();
     ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
     for (size_t i = 0; i < rank; i++) {
-      lhShape[i] = impl->lh_shape()[i];
+      lhShape[i] = impl->lh_shape() ? impl->lh_shape()[i] : 0;
       ownShape[i] = impl->local_shape()[i];
-      rhShape[i] = impl->rh_shape()[i];
+      rhShape[i] = impl->rh_shape() ? impl->rh_shape()[i] : 0;
     }
     auto typ = getTType(
-        builder, fut.dtype(),
+        builder, impl->dtype(),
         ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
         lhShape, ownShape, rhShape, fut.team(), fut.balanced());
     _func.insertArgument(idx, typ, {}, loc);
