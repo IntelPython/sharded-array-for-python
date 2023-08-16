@@ -67,6 +67,9 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(AddMLIR)
 #include(AddIMEX)
 
+# macro for mlir root directory
+add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}")
+
 #find_package(OpenMP)
 
 set(MKL_LIBRARIES -L${MKLROOT}/lib -lmkl_intel_lp64 -lmkl_tbb_thread -lmkl_core -ltbb -lpthread -lrt -ldl -lm)

@@ -513,12 +513,13 @@ JIT::JIT()
     }
   }
 
-  const char *crunner = getenv("DDPT_CRUNNER_SO");
-  crunner = crunner ? crunner : "libmlir_c_runner_utils.so";
-  const char *idtr = getenv("DDPT_IDTR_SO");
-  idtr = idtr ? idtr : "libidtr.so";
-  _sharedLibPaths = {idtr, crunner,
-                     "/home/fschlimb/llvm/lib/libmlir_runner_utils.so"};
+  const char *mlirRoot = getenv("MLIRROOT");
+  mlirRoot = mlirRoot ? mlirRoot : CMAKE_MLIR_ROOT;
+  _crunnerlib = std::string(mlirRoot) + "/lib/libmlir_c_runner_utils.so";
+  _runnerlib = std::string(mlirRoot) + "/lib/libmlir_runner_utils.so";
+  const char *idtrlib = getenv("DDPT_IDTR_SO");
+  idtrlib = idtrlib ? idtrlib : "libidtr.so";
+  _sharedLibPaths = {idtrlib, _crunnerlib.c_str(), _runnerlib.c_str()};
 
   // detect target architecture
   auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();

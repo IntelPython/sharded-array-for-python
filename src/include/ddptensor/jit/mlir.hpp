@@ -177,6 +177,7 @@ private:
   bool _useCache;
   int _jit_opt_level;
   ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
+  std::string _crunnerlib, _runnerlib;
 };
 
 // size of memreftype in number of intptr_t's

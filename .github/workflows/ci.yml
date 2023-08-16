@@ -9,9 +9,6 @@ jobs:
     runs-on: [self-hosted, dds-base]
     strategy:
       fail-fast: false
-    env:
-      MLIRROOT: /localdisk/llvm/curr
-      IMEXROOT: third_party/install/imex
     steps:
       - name: Check repo
         uses: actions/checkout@v3
@@ -126,7 +123,6 @@ jobs:
           # for some reason we cannot use the idtr from the install, not even a copy works
           libidtr=`ls ${PWD}/build/lib.linux-x86_64-cpython-*/ddptensor/libidtr.so`
           echo "DDPT_IDTR_SO=${libidtr}" >> $GITHUB_ENV
-          echo "DDPT_CRUNNER_SO=${GITHUB_WORKSPACE}/third_party/install/llvm-mlir/lib/libmlir_c_runner_utils.so" >> $GITHUB_ENV
           echo $DDPT_IDTR_SO
       - name: Test DDPT (pytest)
         run: |
