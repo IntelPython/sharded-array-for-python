@@ -106,19 +106,20 @@ struct DeferredEWBinOp : public Deferred {
     //     builder.create<::imex::ptensor::EWBinOp>(loc, ddpt2mlir(_op), av,
     //     bv);
     dm.addVal(this->guid(), bop,
-              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
-                     void *l_aligned, intptr_t l_offset,
-                     const intptr_t *l_sizes, const intptr_t *l_strides,
-                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
                 this->set_value(std::move(mk_tnsr(
-                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
-                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                    r_strides, lo_allocated, lo_aligned)));
               });
     return false;
   }

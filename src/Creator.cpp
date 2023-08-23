@@ -64,32 +64,33 @@ struct DeferredFull : public Deferred {
     ::imex::ptensor::DType dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
 
-    auto team =
-        _team == 0
-            ? ::mlir::Value()
-            : ::imex::createIndex(loc, builder,
-                                  reinterpret_cast<uint64_t>(getTransceiver()));
+    auto transceiver = getTransceiver();
+    auto teamV = team() == 0
+                     ? ::mlir::Value()
+                     : ::imex::createIndex(loc, builder,
+                                           reinterpret_cast<uint64_t>(team()));
 
     auto rTyp = ::imex::ptensor::PTensorType::get(
         shape(), imex::ptensor::toMLIR(builder, dtyp));
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::CreateOp>(loc, rTyp, shp, dtyp,
-                                                        val, nullptr, team),
-              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
-                     void *l_aligned, intptr_t l_offset,
-                     const intptr_t *l_sizes, const intptr_t *l_strides,
-                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                                                        val, nullptr, teamV),
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
                 assert(rank == this->rank());
                 this->set_value(std::move(mk_tnsr(
-                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
-                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                    r_strides, lo_allocated, lo_aligned)));
               });
     return false;
   }
@@ -126,11 +127,11 @@ struct DeferredArange : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
-    auto team =
-        _team == 0
-            ? ::mlir::Value()
-            : ::imex::createIndex(loc, builder,
-                                  reinterpret_cast<uint64_t>(getTransceiver()));
+    auto transceiver = getTransceiver();
+    auto teamV = team() == 0
+                     ? ::mlir::Value()
+                     : ::imex::createIndex(loc, builder,
+                                           reinterpret_cast<uint64_t>(team()));
 
     auto _num = shape()[0];
 
@@ -142,11 +143,11 @@ struct DeferredArange : public Deferred {
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::LinSpaceOp>(
-                  loc, rTyp, start, stop, num, false, nullptr, team),
-              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
-                     void *l_aligned, intptr_t l_offset,
-                     const intptr_t *l_sizes, const intptr_t *l_strides,
-                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                  loc, rTyp, start, stop, num, false, nullptr, teamV),
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
@@ -154,10 +155,11 @@ struct DeferredArange : public Deferred {
                 assert(rank == 1);
                 assert(l_strides[0] == 1);
                 this->set_value(std::move(mk_tnsr(
-                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
-                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                    r_strides, lo_allocated, lo_aligned)));
               });
     return false;
   }
@@ -193,11 +195,10 @@ struct DeferredLinspace : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
-    auto team =
-        _team == 0
-            ? ::mlir::Value()
-            : ::imex::createIndex(loc, builder,
-                                  reinterpret_cast<uint64_t>(getTransceiver()));
+    auto teamV = team() == 0
+                     ? ::mlir::Value()
+                     : ::imex::createIndex(loc, builder,
+                                           reinterpret_cast<uint64_t>(team()));
 
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _end);
@@ -207,11 +208,11 @@ struct DeferredLinspace : public Deferred {
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::LinSpaceOp>(
-                  loc, rTyp, start, stop, num, _endpoint, nullptr, team),
-              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
-                     void *l_aligned, intptr_t l_offset,
-                     const intptr_t *l_sizes, const intptr_t *l_strides,
-                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+                  loc, rTyp, start, stop, num, _endpoint, nullptr, teamV),
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
@@ -219,10 +220,11 @@ struct DeferredLinspace : public Deferred {
                 assert(rank == 1);
                 assert(l_strides[0] == 1);
                 this->set_value(std::move(mk_tnsr(
-                    transceiver, _dtype, this->shape(), l_allocated, l_aligned,
-                    l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                    o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                    r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                    r_strides, lo_allocated, lo_aligned)));
               });
     return false;
   }

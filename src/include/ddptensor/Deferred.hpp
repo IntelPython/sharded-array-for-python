@@ -12,6 +12,7 @@
 #pragma once
 
 #include "Registry.hpp"
+#include "Transceiver.hpp"
 #include "jit/mlir.hpp"
 #include "tensor_i.hpp"
 
@@ -43,6 +44,7 @@ struct Runable {
 extern void push_runable(Runable::ptr_type &&r);
 
 // helper class
+// FIXME team is currently set to getTransceiver() always
 template <typename P, typename F> struct DeferredT : public P, public Runable {
   using ptr_type = std::unique_ptr<DeferredT>;
   using promise_type = P;
@@ -52,11 +54,14 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
   DeferredT(const DeferredT<P, F> &) = delete;
   DeferredT(id_type guid, DTypeId dt, shape_type &&shape, uint64_t team,
             bool balanced)
-      : P(guid, dt, std::forward<shape_type>(shape), team, balanced),
+      : P(guid, dt, std::forward<shape_type>(shape),
+          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0, balanced),
         Runable() {}
   DeferredT(id_type guid, DTypeId dt, const shape_type &shape, uint64_t team,
             bool balanced)
-      : P(guid, dt, shape, team, balanced), Runable() {}
+      : P(guid, dt, shape,
+          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0, balanced),
+        Runable() {}
 };
 
 /// Deferred operation returning/producing a tensor

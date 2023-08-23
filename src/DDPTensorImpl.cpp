@@ -195,7 +195,7 @@ void DDPTensorImpl::add_to_args(std::vector<void *> &args) {
     args.push_back(storeMR(_lData));
   } else {
     // transceiver/team first
-    args.push_back(_transceiver);
+    // args.push_back(_transceiver);
     // local tensor first
     if (ndims > 0) {
       args.push_back(storeMR(_lhsHalo));

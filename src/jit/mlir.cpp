@@ -121,7 +121,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
                              const ::mlir::SmallVector<int64_t> &lhShape,
                              const ::mlir::SmallVector<int64_t> &ownShape,
                              const ::mlir::SmallVector<int64_t> &rhShape,
-                             uint64_t team, bool balanced) {
+                             uint64_t team, const uint64_t *lOffs) {
   ::mlir::Type etyp;
 
   switch (dtype) {
@@ -156,11 +156,14 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
 
   if (team) {
     if (gShape.size()) {
-      return ::imex::dist::DistTensorType::get(gShape, etyp,
-                                               {lhShape, ownShape, rhShape});
+      return ::imex::dist::DistTensorType::get(
+          gShape, etyp, team,
+          ::llvm::ArrayRef<int64_t>(reinterpret_cast<const int64_t *>(lOffs),
+                                    gShape.size()),
+          {lhShape, ownShape, rhShape});
     } else {
       auto eShp = ::mlir::SmallVector<int64_t>();
-      return ::imex::dist::DistTensorType::get(eShp, etyp, {eShp});
+      return ::imex::dist::DistTensorType::get(eShp, etyp, team, {}, {eShp});
     }
   } else {
     return ::imex::ptensor::PTensorType::get(ownShape, etyp);
@@ -185,7 +188,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     auto typ = getTType(
         builder, impl->dtype(),
         ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
-        lhShape, ownShape, rhShape, fut.team(), fut.balanced());
+        lhShape, ownShape, rhShape, fut.team(), impl->local_offsets());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, std::move(fut)});
@@ -288,8 +291,8 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
       assert(v->first == guid);
       auto rank = _irm[guid];
       // first extract team
-      auto team = output[pos];
-      pos += 1;
+      // auto team = output[pos];
+      // pos += 1;
       // then tensors
       void *t_allocated[3];
       void *t_aligned[3];
@@ -309,8 +312,8 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
         pos += memref_sz(1);
         // call finalization callback
         v->second(
-            reinterpret_cast<Transceiver *>(team), rank, t_allocated[0],
-            t_aligned[0], t_offset[0], t_sizes[0], t_strides[0], // lhsHalo
+            rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
+            t_strides[0], // lhsHalo
             t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
             t_strides[1], // lData
             t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
@@ -321,8 +324,7 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
       } else { // 0d tensor
         pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
                      t_offset[1], t_sizes[1], t_strides[1]);
-        v->second(reinterpret_cast<Transceiver *>(team), rank, nullptr, nullptr,
-                  0, nullptr, nullptr, // lhsHalo
+        v->second(rank, nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
                   t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
                   t_strides[1],                          // lData
                   nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
@@ -451,7 +453,7 @@ static const char *pass_pipeline =
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
                             // "func.func(buffer-deallocation)," FIXME
-                            "imex-remove-temporaries,"
+                            // "imex-remove-temporaries," FIXME
                             "func.func(convert-linalg-to-parallel-loops),"
                             "func.func(scf-parallel-loop-fusion),"
                             "canonicalize,"

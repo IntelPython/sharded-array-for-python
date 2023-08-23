@@ -83,10 +83,10 @@ struct DeferredIEWBinOp : public Deferred {
                                                          szs, strds);
     // ... and use av as to later create the ptensor
     dm.addVal(this->guid(), av,
-              [this](Transceiver *transceiver, uint64_t rank, void *l_allocated,
-                     void *l_aligned, intptr_t l_offset,
-                     const intptr_t *l_sizes, const intptr_t *l_strides,
-                     void *o_allocated, void *o_aligned, intptr_t o_offset,
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,

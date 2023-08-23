@@ -50,7 +50,7 @@ public:
   rank_type rank() const { return _shape.size(); }
 
   // @ return team, 0 means non-distributed
-  int team() const { return _team; }
+  uint64_t team() const { return _team; }
 
   /// @return if future tensor will have balanced partitions
   int balanced() const { return _balanced; }
