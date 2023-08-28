@@ -1,5 +1,8 @@
 import numpy
 import ddptensor
+from ddptensor.numpy import fromfunction
+
+ddptensor.fromfunction = fromfunction
 
 
 def runAndCompare(func, do_gather=True):

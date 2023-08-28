@@ -431,7 +431,7 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
 static const char *pass_pipeline =
     getenv("DDPT_PASSES") ? getenv("DDPT_PASSES")
                           : "func.func(ptensor-dist),"
-                            // "func.func(dist-coalesce)," FIXME
+                            "func.func(dist-coalesce),"
                             "convert-dist-to-standard,"
                             "convert-ptensor-to-linalg,"
                             "canonicalize,"
@@ -452,7 +452,7 @@ static const char *pass_pipeline =
                             "func.func(linalg-detensorize),"
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
-                            // "func.func(buffer-deallocation)," FIXME
+                            "func.func(buffer-deallocation),"
                             // "imex-remove-temporaries," FIXME
                             "func.func(convert-linalg-to-parallel-loops),"
                             "func.func(scf-parallel-loop-fusion),"
@@ -491,9 +491,10 @@ JIT::JIT()
   }
   // some verbosity
   if (_verbose) {
-    std::cerr << "pass pipeline: " << pass_pipeline << std::endl;
+    std::cerr << "DDPT_PASSES=\"" << pass_pipeline << "\"" << std::endl;
     // _pm.enableStatistics();
-    _pm.enableTiming();
+    if (_verbose > 2)
+      _pm.enableTiming();
     // if(_verbose > 1)
     //   _pm.dump();
     if (_verbose > 3)

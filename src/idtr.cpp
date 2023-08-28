@@ -464,7 +464,9 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   auto ownedRows = ownedShape[0];
   auto ownedRowEnd = ownedRowStart + ownedRows;
   // all remaining dims are treated as one large column
-  auto ownedCols = std::accumulate(&ownedShape[1], &ownedShape[ndims], 1,
+  auto ownedTotCols = std::accumulate(&ownedShape[1], &ownedShape[ndims], 1,
+                                      std::multiplies<int64_t>());
+  auto bbTotCols = std::accumulate(&bbShape[1], &bbShape[ndims], 1,
                                    std::multiplies<int64_t>());
 
   // find local elements to send to next workers (destination leftHalo)
@@ -472,8 +474,11 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   std::vector<int> lSendOff(nworkers, 0), rSendOff(nworkers, 0);
   std::vector<int> lSendSize(nworkers, 0), rSendSize(nworkers, 0);
 
-  // use send buffer if owned data is strided
-  bool bufferizeSend = !is_contiguous(ownedShape, ownedStride, ndims);
+  // use send buffer if owned data is strided or sending a subview
+  bool bufferizeSend = (!is_contiguous(ownedShape, ownedStride, ndims) ||
+                        bbTotCols != ownedTotCols);
+
+  // assert(!bufferizeSend);
   std::vector<int64_t> lBufferStart(nworkers * ndims, 0);
   std::vector<int64_t> lBufferSize(nworkers * ndims, 0);
   std::vector<int64_t> rBufferStart(nworkers * ndims, 0);
@@ -495,9 +500,9 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
       auto globalRowStart = std::max(ownedRowStart, bRowStart);
       auto globalRowEnd = std::min(ownedRowEnd, bRowEnd);
       auto localRowStart = globalRowStart - ownedRowStart;
-      auto localStart = (int)(localRowStart)*ownedCols;
+      auto localStart = (int)(localRowStart)*ownedTotCols;
       auto nRows = globalRowEnd - globalRowStart;
-      auto nSend = (int)(nRows)*ownedCols;
+      auto nSend = (int)(nRows)*bbTotCols;
 
       if (i < myWorkerIndex) {
         // target is rightHalo
@@ -506,8 +511,8 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
           rBufferStart[i * ndims] = localRowStart;
           rBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
-            rBufferStart[i * ndims + j] = ownedOff[j];
-            rBufferSize[i * ndims + j] = ownedShape[j];
+            rBufferStart[i * ndims + j] = bbOff[j];
+            rBufferSize[i * ndims + j] = bbShape[j];
           }
         } else {
           rSendOff[i] = localStart;
@@ -521,8 +526,8 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
           lBufferStart[i * ndims] = localRowStart;
           lBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
-            lBufferStart[i * ndims + j] = ownedOff[j];
-            lBufferSize[i * ndims + j] = ownedShape[j];
+            lBufferStart[i * ndims + j] = bbOff[j];
+            lBufferSize[i * ndims + j] = bbShape[j];
           }
         } else {
           lSendOff[i] = localStart;
