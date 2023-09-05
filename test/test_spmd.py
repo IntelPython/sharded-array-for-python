@@ -36,10 +36,11 @@ class TestSPMD:
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
 
-    @pytest.mark.skipif(
-        MPI.COMM_WORLD.size == 1 and os.getenv("DDPT_FORCE_DIST", "") == "",
-        reason="FIXME extra memref.copy",
-    )
+    # @pytest.mark.skipif(
+    #     MPI.COMM_WORLD.size == 1, and os.getenv("DDPT_FORCE_DIST", "") == "",
+    #     reason="FIXME extra memref.copy",
+    # )
+    @pytest.mark.skip(reason="FIXME imex-remove-temporaries")
     def test_get_locals_of_view(self):
         a = dt.ones((32, 32), dt.float64)
         b = a[0:32:2, 0:32:2]

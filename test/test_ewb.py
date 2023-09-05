@@ -47,6 +47,15 @@ class TestEWB:
             v = 16 * 16 * 3
             assert float(r1) == v
 
+    def test_add_mul(self):
+        def doit(aapi):
+            a = aapi.zeros((16, 16), dtype=aapi.int64)
+            b = aapi.ones((12, 12), dtype=aapi.int64)
+            a[3:13, 3:13] = b[0:10, 1:11] + b[1:11, 1:11] * b[1, 1]
+            return a
+
+        assert runAndCompare(doit)
+
     def test_add_shifted1(self):
         for dtyp in mpi_idtypes:
             aa = dt.ones((16, 16), dtype=dtyp)
@@ -102,6 +111,16 @@ class TestEWB:
         c = a + b + 1
         r1 = dt.sum(c)
         assert int(r1) == 388
+
+    @pytest.mark.skip(reason="FIXME halo update")
+    def test_add_broadcast(self):
+        def doit(aapi):
+            a = aapi.zeros((16, 16), dtype=aapi.int64)
+            b = aapi.arange(1, 16, 1, dtype=aapi.int64)
+            a[3:13, 3:13] = a[0:10, 1:11] + b[0]
+            return a
+
+        assert runAndCompare(doit)
 
     @pytest.mark.skip(reason="FIXME")
     def test_prod_het(self):
