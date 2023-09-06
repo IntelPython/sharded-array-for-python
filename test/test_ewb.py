@@ -112,7 +112,6 @@ class TestEWB:
         r1 = dt.sum(c)
         assert int(r1) == 388
 
-    @pytest.mark.skip(reason="FIXME halo update")
     def test_add_broadcast(self):
         def doit(aapi):
             a = aapi.zeros((16, 16), dtype=aapi.int64)
