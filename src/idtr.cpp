@@ -199,6 +199,30 @@ void bufferize(void *cptr, DTypeId dtype, const int64_t *sizes,
       });
 }
 
+/// copy contiguous block of data into a possibly strided tensor
+void unpack(void *in, DTypeId dtype, const int64_t *sizes,
+            const int64_t *strides, const int64_t *tStarts,
+            const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
+  dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
+    auto buff = static_cast<decltype(ptr)>(in);
+
+    for (auto i = 0; i < N; ++i) {
+      auto szs = &tSizes[i * nd];
+      if (szs[0] > 0) {
+        auto sts = &tStarts[i * nd];
+        uint64_t off = 0;
+        for (int64_t r = 0; r < nd; ++r) {
+          off += sts[r] * strides[r];
+        }
+        forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
+          *out = *buff;
+          ++buff;
+        });
+      }
+    }
+  });
+}
+
 template <typename T>
 void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
            const int64_t *strides, const uint64_t *chunks, uint64_t nd,
@@ -430,7 +454,9 @@ TYPED_RESHAPE(i1, bool);
 void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
                        int64_t *ownedShape, int64_t *ownedStride,
                        int64_t *bbOff, int64_t *bbShape, void *ownedData,
-                       void *leftHaloData, void *rightHaloData,
+                       int64_t *leftHaloShape, int64_t *leftHaloStride,
+                       void *leftHaloData, int64_t *rightHaloShape,
+                       int64_t *rightHaloStride, void *rightHaloData,
                        Transceiver *tc) {
 
 #ifdef NO_TRANSCEIVER
@@ -478,7 +504,6 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   bool bufferizeSend = (!is_contiguous(ownedShape, ownedStride, ndims) ||
                         bbTotCols != ownedTotCols);
 
-  // assert(!bufferizeSend);
   std::vector<int64_t> lBufferStart(nworkers * ndims, 0);
   std::vector<int64_t> lBufferSize(nworkers * ndims, 0);
   std::vector<int64_t> rBufferStart(nworkers * ndims, 0);
@@ -552,24 +577,70 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
     rRecvOff[i] = rRecvOff[i - 1] + rRecvSize[i - 1];
   }
 
-  // communicate left/right halos
+  // receive buffering
+  void *lRecvData, *rRecvData;
+  void *sendData;
+  bool bufferizeLRecv = !is_contiguous(leftHaloShape, leftHaloStride, ndims);
+  bool bufferizeRRecv = !is_contiguous(rightHaloShape, rightHaloStride, ndims);
+  std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
+  std::vector<int64_t> lRecvBufferSize(nworkers * ndims, 0);
+  std::vector<int64_t> rRecvBufferSize(nworkers * ndims, 0);
+
+  // deduce receive shape for unpack
+  int64_t lTotalRecvSize = 0, rTotalRecvSize = 0;
+  for (auto i = 0; i < nworkers; ++i) {
+    if (bufferizeLRecv && lRecvSize[i] != 0) {
+      lTotalRecvSize += lRecvSize[i];
+      lRecvBufferSize[i * ndims] = lRecvSize[i] / bbTotCols; // nrows
+      for (auto j = 1; j < ndims; ++j) {
+        lRecvBufferSize[i * ndims + j] = bbShape[j]; // leftHaloShape[j]
+      }
+    }
+    if (bufferizeRRecv && rRecvSize[i] != 0) {
+      rTotalRecvSize += rRecvSize[i];
+      rRecvBufferSize[i * ndims] = rRecvSize[i] / bbTotCols; // nrows
+      for (auto j = 1; j < ndims; ++j) {
+        rRecvBufferSize[i * ndims + j] = bbShape[j]; // rightHaloShape[j]
+      }
+    }
+  }
+
+  Buffer recvBuff;
+  Buffer sendBuff;
+  if (bufferizeLRecv || bufferizeLRecv) {
+    recvBuff.resize(std::max(lTotalRecvSize, rTotalRecvSize) *
+                    sizeof_dtype(ddpttype));
+  }
   if (bufferizeSend) {
-    Buffer sendBuff;
     sendBuff.resize(std::max(lTotalSendSize, rTotalSendSize) *
                     sizeof_dtype(ddpttype));
+  }
+  lRecvData = bufferizeLRecv ? recvBuff.data() : leftHaloData;
+  rRecvData = bufferizeRRecv ? recvBuff.data() : rightHaloData;
+  sendData = bufferizeSend ? sendBuff.data() : ownedData;
+
+  // communicate left/right halos
+  if (bufferizeSend) {
     bufferize(ownedData, ddpttype, ownedShape, ownedStride, lBufferStart.data(),
               lBufferSize.data(), ndims, nworkers, sendBuff.data());
-    tc->alltoall(sendBuff.data(), lSendSize.data(), lSendOff.data(), ddpttype,
-                 leftHaloData, lRecvSize.data(), lRecvOff.data());
+  }
+  tc->alltoall(sendData, lSendSize.data(), lSendOff.data(), ddpttype, lRecvData,
+               lRecvSize.data(), lRecvOff.data());
+  if (bufferizeLRecv) {
+    unpack(lRecvData, ddpttype, leftHaloShape, leftHaloStride,
+           recvBufferStart.data(), lRecvBufferSize.data(), ndims, nworkers,
+           leftHaloData);
+  }
+  if (bufferizeSend) {
     bufferize(ownedData, ddpttype, ownedShape, ownedStride, rBufferStart.data(),
               rBufferSize.data(), ndims, nworkers, sendBuff.data());
-    tc->alltoall(sendBuff.data(), rSendSize.data(), rSendOff.data(), ddpttype,
-                 rightHaloData, rRecvSize.data(), rRecvOff.data());
-  } else {
-    tc->alltoall(ownedData, lSendSize.data(), lSendOff.data(), ddpttype,
-                 leftHaloData, lRecvSize.data(), lRecvOff.data());
-    tc->alltoall(ownedData, rSendSize.data(), rSendOff.data(), ddpttype,
-                 rightHaloData, rRecvSize.data(), rRecvOff.data());
+  }
+  tc->alltoall(sendData, rSendSize.data(), rSendOff.data(), ddpttype, rRecvData,
+               rRecvSize.data(), rRecvOff.data());
+  if (bufferizeRRecv) {
+    unpack(rRecvData, ddpttype, rightHaloShape, rightHaloStride,
+           recvBufferStart.data(), rRecvBufferSize.data(), ndims, nworkers,
+           rightHaloData);
   }
 }
 
@@ -593,13 +664,11 @@ void _idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
   UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
   UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
 
-  assert(leftHalo.contiguous_layout());
-  assert(rightHalo.contiguous_layout());
-
   _idtr_update_halo(ddpttype, ownedData.rank(), ownedOff.data(),
                     ownedData.sizes(), ownedData.strides(), bbOff.data(),
-                    bbShape.data(), ownedData.data(), leftHalo.data(),
-                    rightHalo.data(), tc);
+                    bbShape.data(), ownedData.data(), leftHalo.sizes(),
+                    leftHalo.strides(), leftHalo.data(), rightHalo.sizes(),
+                    rightHalo.strides(), rightHalo.data(), tc);
 }
 
 extern "C" {
