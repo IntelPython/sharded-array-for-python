@@ -455,7 +455,7 @@ static const char *pass_pipeline =
                             "func.func(tensor-bufferize),"
                             "func.func(finalizing-bufferize),"
                             "func.func(buffer-deallocation),"
-                            // "imex-remove-temporaries," FIXME
+                            "imex-remove-temporaries,"
                             "func.func(convert-linalg-to-parallel-loops),"
                             "func.func(scf-parallel-loop-fusion),"
                             "canonicalize,"
