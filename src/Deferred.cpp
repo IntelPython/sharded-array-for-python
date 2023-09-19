@@ -14,6 +14,7 @@
 #include "include/ddptensor/Transceiver.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/DistRuntime/IR/DistRuntimeOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -94,7 +95,7 @@ void process_promises() {
 
     // Create a MLIR module
     auto module = builder.create<::mlir::ModuleOp>(loc);
-    auto protos = builder.create<::imex::dist::RuntimePrototypesOp>(loc);
+    auto protos = builder.create<::imex::distruntime::RuntimePrototypesOp>(loc);
     module.push_back(protos);
     // Create the jit func
     // create dummy type, we'll replace it with the actual type later

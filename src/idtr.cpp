@@ -464,7 +464,7 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   tc = getTransceiver();
 #endif
   auto nworkers = tc->nranks();
-  if (nworkers <= 1)
+  if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
     return;
   auto myWorkerIndex = tc->rank();
 

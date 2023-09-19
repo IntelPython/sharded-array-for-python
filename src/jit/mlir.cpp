@@ -435,6 +435,7 @@ static const char *pass_pipeline =
                             "func.func(dist-infer-elementwise-cores),"
                             "convert-dist-to-standard,"
                             "canonicalize,"
+                            "lower-distruntime-to-idtr,"
                             "convert-ptensor-to-linalg,"
                             "canonicalize,"
                             "func.func(tosa-to-linalg),"
@@ -483,6 +484,7 @@ JIT::JIT()
   _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
   _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
   _context.getOrLoadDialect<::imex::dist::DistDialect>();
+  _context.getOrLoadDialect<::imex::distruntime::DistRuntimeDialect>();
   // create the pass pipeline from string
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");
@@ -582,6 +584,7 @@ void init() {
 
   ::imex::registerPTensorPasses();
   ::imex::registerDistPasses();
+  ::imex::registerDistRuntimePasses();
   ::imex::registerConvertDistToStandard();
   ::imex::registerConvertPTensorToLinalg();
 

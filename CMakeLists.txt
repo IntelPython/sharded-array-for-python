@@ -177,6 +177,8 @@ target_link_libraries(_ddpt_rt PRIVATE
     IMEXDistDialect
     IMEXDistTransforms
     IMEXDistToStandard
+    IMEXDistRuntimeDialect
+    IMEXDistRuntimeTransforms
     IMEXUtil
     IMEXTransforms
 	  MLIROptLib
