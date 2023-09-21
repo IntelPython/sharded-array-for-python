@@ -187,13 +187,17 @@ void MPITransceiver::reduce_all(void *inout, DTypeId T, size_t N,
   MPI_Allreduce(MPI_IN_PLACE, inout, N, to_mpi(T), to_mpi(op), _comm);
 }
 
-void MPITransceiver::alltoall(const void *buffer_send, const int *counts_send,
-                              const int *displacements_send, DTypeId datatype,
-                              void *buffer_recv, const int *counts_recv,
-                              const int *displacements_recv) {
-  MPI_Alltoallv(buffer_send, counts_send, displacements_send, to_mpi(datatype),
-                buffer_recv, counts_recv, displacements_recv, to_mpi(datatype),
-                _comm);
+Transceiver::WaitHandle
+MPITransceiver::alltoall(const void *buffer_send, const int *counts_send,
+                         const int *displacements_send, DTypeId datatype,
+                         void *buffer_recv, const int *counts_recv,
+                         const int *displacements_recv) {
+  MPI_Request request;
+  MPI_Ialltoallv(buffer_send, counts_send, displacements_send, to_mpi(datatype),
+                 buffer_recv, counts_recv, displacements_recv, to_mpi(datatype),
+                 _comm, &request);
+  static_assert(sizeof(request == sizeof(WaitHandle)));
+  return static_cast<WaitHandle>(request);
 }
 
 void MPITransceiver::alltoall(const void *buffer_send, const int counts,
@@ -225,4 +229,11 @@ void MPITransceiver::send_recv(void *buffer_send, int count_send,
   constexpr int SRTAG = 505;
   MPI_Sendrecv_replace(buffer_send, count_send, to_mpi(datatype_send), dest,
                        SRTAG, source, SRTAG, _comm, MPI_STATUS_IGNORE);
+}
+
+void MPITransceiver::wait(WaitHandle h) {
+  if (h) {
+    auto r = static_cast<MPI_Request>(h);
+    MPI_Wait(&r, MPI_STATUS_IGNORE);
+  }
 }

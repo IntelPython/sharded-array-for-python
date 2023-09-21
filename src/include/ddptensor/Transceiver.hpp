@@ -10,6 +10,8 @@
 
 class Transceiver {
 public:
+  using WaitHandle = uint32_t;
+
   virtual ~Transceiver(){};
 
   virtual bool is_cw() = 0;
@@ -38,10 +40,11 @@ public:
   virtual void reduce_all(void *inout, DTypeId T, size_t N, RedOpType op) = 0;
 
   // umm, can this be higher-level?
-  virtual void alltoall(const void *buffer_send, const int *counts_send,
-                        const int *displacements_send, DTypeId datatype_send,
-                        void *buffer_recv, const int *counts_recv,
-                        const int *displacements_recv) = 0;
+  virtual WaitHandle alltoall(const void *buffer_send, const int *counts_send,
+                              const int *displacements_send,
+                              DTypeId datatype_send, void *buffer_recv,
+                              const int *counts_recv,
+                              const int *displacements_recv) = 0;
   virtual void alltoall(const void *buffer_send, const int counts,
                         DTypeId datatype, void *buffer_recv) = 0;
 
@@ -50,6 +53,7 @@ public:
 
   virtual void send_recv(void *buffer_send, int count_send,
                          DTypeId datatype_send, int dest, int source) = 0;
+  virtual void wait(WaitHandle) = 0;
 };
 
 extern void init_transceiver(Transceiver *);

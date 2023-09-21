@@ -435,6 +435,7 @@ static const char *pass_pipeline =
                             "func.func(dist-infer-elementwise-cores),"
                             "convert-dist-to-standard,"
                             "canonicalize,"
+                            "overlap-comm-and-compute,"
                             "lower-distruntime-to-idtr,"
                             "convert-ptensor-to-linalg,"
                             "canonicalize,"

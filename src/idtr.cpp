@@ -30,7 +30,33 @@ template <typename T> T *mr_to_ptr(void *ptr, intptr_t offset) {
   return reinterpret_cast<T *>(ptr) + offset; // &mr.aligned[mr.offset]
 }
 
+// abstract handle providing an abstract wait method
+struct WaitHandleBase {
+  virtual ~WaitHandleBase(){};
+  virtual void wait() = 0;
+};
+
+// concrete handle to be instantiated with a lambda or alike
+// the lambda will be executed within wait()
+template <typename T> class WaitHandle : public WaitHandleBase {
+  T _fini;
+
+public:
+  WaitHandle(T fini) : _fini(fini) {}
+  virtual void wait() override { _fini(); }
+};
+
+template <typename T> WaitHandle<T> *mkWaitHandle(T fini) {
+  return new WaitHandle<T>(fini);
+};
+
 extern "C" {
+void _idtr_wait(WaitHandleBase *handle) {
+  if (handle) {
+    handle->wait();
+    delete handle;
+  }
+}
 
 #define NO_TRANSCEIVER
 #ifdef NO_TRANSCEIVER
@@ -401,8 +427,9 @@ void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
   Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
   bufferizeN(lDataPtr, ddpttype, lShapePtr, lStridesPtr, lsOffs.data(),
              lsEnds.data(), lRank, N, outbuff.data());
-  tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype, oDataPtr,
-               rszs.data(), roffs.data());
+  auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype,
+                          oDataPtr, rszs.data(), roffs.data());
+  tc->wait(hdl);
 }
 
 /// @brief reshape tensor
@@ -451,13 +478,14 @@ TYPED_RESHAPE(i1, bool);
 /// @brief Update data in halo parts
 /// We assume tensor is partitioned along the first dimension only
 /// (row partitioning) and partitions are ordered by ranks
-void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
-                       int64_t *ownedShape, int64_t *ownedStride,
-                       int64_t *bbOff, int64_t *bbShape, void *ownedData,
-                       int64_t *leftHaloShape, int64_t *leftHaloStride,
-                       void *leftHaloData, int64_t *rightHaloShape,
-                       int64_t *rightHaloStride, void *rightHaloData,
-                       Transceiver *tc) {
+/// @return (MPI) handles
+void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
+                        int64_t *ownedShape, int64_t *ownedStride,
+                        int64_t *bbOff, int64_t *bbShape, void *ownedData,
+                        int64_t *leftHaloShape, int64_t *leftHaloStride,
+                        void *leftHaloData, int64_t *rightHaloShape,
+                        int64_t *rightHaloStride, void *rightHaloData,
+                        Transceiver *tc) {
 
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
@@ -465,7 +493,7 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
 #endif
   auto nworkers = tc->nranks();
   if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
-    return;
+    return nullptr;
   auto myWorkerIndex = tc->rank();
 
   // Gather table with bounding box offsets and shapes for all workers
@@ -582,7 +610,6 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   void *sendData;
   bool bufferizeLRecv = !is_contiguous(leftHaloShape, leftHaloStride, ndims);
   bool bufferizeRRecv = !is_contiguous(rightHaloShape, rightHaloStride, ndims);
-  std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
   std::vector<int64_t> lRecvBufferSize(nworkers * ndims, 0);
   std::vector<int64_t> rRecvBufferSize(nworkers * ndims, 0);
 
@@ -624,35 +651,50 @@ void _idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
     bufferize(ownedData, ddpttype, ownedShape, ownedStride, lBufferStart.data(),
               lBufferSize.data(), ndims, nworkers, sendBuff.data());
   }
-  tc->alltoall(sendData, lSendSize.data(), lSendOff.data(), ddpttype, lRecvData,
-               lRecvSize.data(), lRecvOff.data());
-  if (bufferizeLRecv) {
-    unpack(lRecvData, ddpttype, leftHaloShape, leftHaloStride,
-           recvBufferStart.data(), lRecvBufferSize.data(), ndims, nworkers,
-           leftHaloData);
-  }
+  auto lwh = tc->alltoall(sendData, lSendSize.data(), lSendOff.data(), ddpttype,
+                          lRecvData, lRecvSize.data(), lRecvOff.data());
   if (bufferizeSend) {
     bufferize(ownedData, ddpttype, ownedShape, ownedStride, rBufferStart.data(),
               rBufferSize.data(), ndims, nworkers, sendBuff.data());
   }
-  tc->alltoall(sendData, rSendSize.data(), rSendOff.data(), ddpttype, rRecvData,
-               rRecvSize.data(), rRecvOff.data());
-  if (bufferizeRRecv) {
-    unpack(rRecvData, ddpttype, rightHaloShape, rightHaloStride,
-           recvBufferStart.data(), rRecvBufferSize.data(), ndims, nworkers,
-           rightHaloData);
+  auto rwh = tc->alltoall(sendData, rSendSize.data(), rSendOff.data(), ddpttype,
+                          rRecvData, rRecvSize.data(), rRecvOff.data());
+
+  auto wait = [=, _lRecvBufferSize = std::move(lRecvBufferSize),
+               _rRecvBufferSize = std::move(rRecvBufferSize)]() {
+    tc->wait(lwh);
+    std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
+    if (bufferizeLRecv) {
+      unpack(lRecvData, ddpttype, leftHaloShape, leftHaloStride,
+             recvBufferStart.data(), _lRecvBufferSize.data(), ndims, nworkers,
+             leftHaloData);
+    }
+    tc->wait(rwh);
+    if (bufferizeRRecv) {
+      unpack(rRecvData, ddpttype, rightHaloShape, rightHaloStride,
+             recvBufferStart.data(), _rRecvBufferSize.data(), ndims, nworkers,
+             rightHaloData);
+    }
+  };
+  assert(lRecvBufferSize.empty() && rRecvBufferSize.empty());
+
+  // FIXME (in imex) buffer-dealloc pass deallocs halo strides and sizes
+  if (bufferizeLRecv || bufferizeRRecv || getenv("DDPT_NO_ASYNC")) {
+    wait();
+    return nullptr;
   }
+  return mkWaitHandle(wait);
 }
 
 /// @brief templated wrapper for typed function versions calling
 /// _idtr_update_halo
 template <typename T>
-void _idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
-                       int64_t oOffRank, void *oOffDescr, int64_t oDataRank,
-                       void *oDataDescr, int64_t bbOffRank, void *bbOffDescr,
-                       int64_t bbShapeRank, void *bbShapeDescr,
-                       int64_t lHaloRank, void *lHaloDescr, int64_t rHaloRank,
-                       void *rHaloDescr) {
+void *_idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
+                        int64_t oOffRank, void *oOffDescr, int64_t oDataRank,
+                        void *oDataDescr, int64_t bbOffRank, void *bbOffDescr,
+                        int64_t bbShapeRank, void *bbShapeDescr,
+                        int64_t lHaloRank, void *lHaloDescr, int64_t rHaloRank,
+                        void *rHaloDescr) {
 
   auto ddpttype = DTYPE<T>::value;
 
@@ -664,25 +706,25 @@ void _idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
   UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
   UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
 
-  _idtr_update_halo(ddpttype, ownedData.rank(), ownedOff.data(),
-                    ownedData.sizes(), ownedData.strides(), bbOff.data(),
-                    bbShape.data(), ownedData.data(), leftHalo.sizes(),
-                    leftHalo.strides(), leftHalo.data(), rightHalo.sizes(),
-                    rightHalo.strides(), rightHalo.data(), tc);
+  return _idtr_update_halo(
+      ddpttype, ownedData.rank(), ownedOff.data(), ownedData.sizes(),
+      ownedData.strides(), bbOff.data(), bbShape.data(), ownedData.data(),
+      leftHalo.sizes(), leftHalo.strides(), leftHalo.data(), rightHalo.sizes(),
+      rightHalo.strides(), rightHalo.data(), tc);
 }
 
 extern "C" {
 #define TYPED_UPDATE_HALO(_sfx, _typ)                                          \
-  void _idtr_update_halo_##_sfx(                                               \
+  void *_idtr_update_halo_##_sfx(                                              \
       Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,                  \
       int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
       int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
       void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \
       int64_t rHaloRank, void *rHaloDescr) {                                   \
-    _idtr_update_halo<_typ>(tc, gShapeRank, gShapeDescr, oOffRank, oOffDescr,  \
-                            oDataRank, oDataDescr, bbOffRank, bbOffDescr,      \
-                            bbShapeRank, bbShapeDescr, lHaloRank, lHaloDescr,  \
-                            rHaloRank, rHaloDescr);                            \
+    return _idtr_update_halo<_typ>(                                            \
+        tc, gShapeRank, gShapeDescr, oOffRank, oOffDescr, oDataRank,           \
+        oDataDescr, bbOffRank, bbOffDescr, bbShapeRank, bbShapeDescr,          \
+        lHaloRank, lHaloDescr, rHaloRank, rHaloDescr);                         \
   }
 
 TYPED_UPDATE_HALO(f64, double);
