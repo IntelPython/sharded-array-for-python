@@ -31,7 +31,7 @@ MPIMediator::MPIMediator() : _listener(nullptr) {
   _comm = c->comm();
   int sz;
   MPI_Comm_size(_comm, &sz);
-  if (sz > 1)
+  if (sz > 1 && getTransceiver()->is_cw())
     _listener = new std::thread(&MPIMediator::listen, this);
 }
 
@@ -45,7 +45,7 @@ MPIMediator::~MPIMediator() {
     to_workers(nullptr);
   MPI_Barrier(_comm);
   if (!getTransceiver()->is_cw() || rank == 0)
-    send_to_workers(nullptr, true, _comm);
+    defer(nullptr); // send_to_workers(nullptr, true, _comm);
   if (_listener) {
     _listener->join();
     delete _listener;
