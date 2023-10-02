@@ -13,6 +13,7 @@
 #include <cassert>
 #include <iostream>
 #include <memory>
+#include <unordered_map>
 
 constexpr id_t UNKNOWN_GUID = -1;
 
@@ -475,26 +476,64 @@ TYPED_RESHAPE(i1, bool);
 
 } // extern "C"
 
-/// @brief Update data in halo parts
-/// We assume tensor is partitioned along the first dimension only
-/// (row partitioning) and partitions are ordered by ranks
-/// @return (MPI) handles
-void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
-                        int64_t *ownedShape, int64_t *ownedStride,
-                        int64_t *bbOff, int64_t *bbShape, void *ownedData,
-                        int64_t *leftHaloShape, int64_t *leftHaloStride,
-                        void *leftHaloData, int64_t *rightHaloShape,
-                        int64_t *rightHaloStride, void *rightHaloData,
-                        Transceiver *tc) {
+// struct for caching meta data for update_halo
+// no copies allowed, only move-semantics and reference access
+struct UHCache {
+  // copying needed?
+  std::vector<int64_t> _lBufferStart, _lBufferSize, _rBufferStart, _rBufferSize;
+  std::vector<int64_t> _lRecvBufferSize, _rRecvBufferSize;
+  // send maps
+  std::vector<int> _lSendSize, _rSendSize, _lSendOff, _rSendOff;
+  // receive maps
+  std::vector<int> _lRecvSize, _rRecvSize, _lRecvOff, _rRecvOff;
+  bool _bufferizeSend, _bufferizeLRecv, _bufferizeRRecv;
+  // start and sizes for chunks from remotes if copies are needed
+  int64_t _lTotalRecvSize, _rTotalRecvSize, _lTotalSendSize, _rTotalSendSize;
 
-#ifdef NO_TRANSCEIVER
-  initMPIRuntime();
-  tc = getTransceiver();
-#endif
-  auto nworkers = tc->nranks();
-  if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
-    return nullptr;
+  UHCache() = default;
+  UHCache(const UHCache &) = delete;
+  UHCache(UHCache &&) = default;
+  UHCache(std::vector<int64_t> &&lBufferStart,
+          std::vector<int64_t> &&lBufferSize,
+          std::vector<int64_t> &&rBufferStart,
+          std::vector<int64_t> &&rBufferSize,
+          std::vector<int64_t> &&lRecvBufferSize,
+          std::vector<int64_t> &&rRecvBufferSize, std::vector<int> &&lSendSize,
+          std::vector<int> &&rSendSize, std::vector<int> &&lSendOff,
+          std::vector<int> &&rSendOff, std::vector<int> &&lRecvSize,
+          std::vector<int> &&rRecvSize, std::vector<int> &&lRecvOff,
+          std::vector<int> &&rRecvOff, bool bufferizeSend, bool bufferizeLRecv,
+          bool bufferizeRRecv, int64_t lTotalRecvSize, int64_t rTotalRecvSize,
+          int64_t lTotalSendSize, int64_t rTotalSendSize)
+      : _lBufferStart(std::move(lBufferStart)),
+        _lBufferSize(std::move(lBufferSize)),
+        _rBufferStart(std::move(rBufferStart)),
+        _rBufferSize(std::move(rBufferSize)),
+        _lRecvBufferSize(std::move(lRecvBufferSize)),
+        _rRecvBufferSize(std::move(rRecvBufferSize)),
+        _lSendSize(std::move(lSendSize)), _rSendSize(std::move(rSendSize)),
+        _lSendOff(std::move(lSendOff)), _rSendOff(std::move(rSendOff)),
+        _lRecvSize(std::move(lRecvSize)), _rRecvSize(std::move(rRecvSize)),
+        _lRecvOff(std::move(lRecvOff)), _rRecvOff(std::move(rRecvOff)),
+        _bufferizeSend(bufferizeSend), _bufferizeLRecv(bufferizeLRecv),
+        _bufferizeRRecv(bufferizeRRecv), _lTotalRecvSize(lTotalRecvSize),
+        _rTotalRecvSize(rTotalRecvSize), _lTotalSendSize(lTotalSendSize),
+        _rTotalSendSize(rTotalSendSize) {}
+  UHCache &operator=(const UHCache &) = delete;
+  UHCache &operator=(UHCache &&) = default;
+};
+
+UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
+                    int64_t *ownedShape, int64_t *ownedStride, int64_t *bbOff,
+                    int64_t *bbShape, int64_t *leftHaloShape,
+                    int64_t *leftHaloStride, int64_t *rightHaloShape,
+                    int64_t *rightHaloStride, Transceiver *tc) {
+  UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
+  cE._lTotalRecvSize = 0;
+  cE._rTotalRecvSize = 0;
+  cE._lTotalSendSize = 0;
+  cE._rTotalSendSize = 0;
 
   // Gather table with bounding box offsets and shapes for all workers
   // [ (w0 offsets) o_0, o_1, ..., o_ndims,
@@ -525,18 +564,19 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
 
   // find local elements to send to next workers (destination leftHalo)
   // and previous workers (destination rightHalo)
-  std::vector<int> lSendOff(nworkers, 0), rSendOff(nworkers, 0);
-  std::vector<int> lSendSize(nworkers, 0), rSendSize(nworkers, 0);
+  cE._lSendOff.resize(nworkers, 0);
+  cE._rSendOff.resize(nworkers, 0);
+  cE._lSendSize.resize(nworkers, 0);
+  cE._rSendSize.resize(nworkers, 0);
 
   // use send buffer if owned data is strided or sending a subview
-  bool bufferizeSend = (!is_contiguous(ownedShape, ownedStride, ndims) ||
-                        bbTotCols != ownedTotCols);
+  cE._bufferizeSend = (!is_contiguous(ownedShape, ownedStride, ndims) ||
+                       bbTotCols != ownedTotCols);
 
-  std::vector<int64_t> lBufferStart(nworkers * ndims, 0);
-  std::vector<int64_t> lBufferSize(nworkers * ndims, 0);
-  std::vector<int64_t> rBufferStart(nworkers * ndims, 0);
-  std::vector<int64_t> rBufferSize(nworkers * ndims, 0);
-  int64_t lTotalSendSize = 0, rTotalSendSize = 0;
+  cE._lBufferStart.resize(nworkers * ndims, 0);
+  cE._lBufferSize.resize(nworkers * ndims, 0);
+  cE._rBufferStart.resize(nworkers * ndims, 0);
+  cE._rBufferSize.resize(nworkers * ndims, 0);
 
   for (auto i = 0; i < nworkers; ++i) {
     if (i == myWorkerIndex) {
@@ -559,127 +599,170 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
 
       if (i < myWorkerIndex) {
         // target is rightHalo
-        if (bufferizeSend) {
-          rSendOff[i] = i ? rSendOff[i - 1] + rSendSize[i - 1] : 0;
-          rBufferStart[i * ndims] = localRowStart;
-          rBufferSize[i * ndims] = nRows;
+        if (cE._bufferizeSend) {
+          cE._rSendOff[i] = i ? cE._rSendOff[i - 1] + cE._rSendSize[i - 1] : 0;
+          cE._rBufferStart[i * ndims] = localRowStart;
+          cE._rBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
-            rBufferStart[i * ndims + j] = bbOff[j];
-            rBufferSize[i * ndims + j] = bbShape[j];
+            cE._rBufferStart[i * ndims + j] = bbOff[j];
+            cE._rBufferSize[i * ndims + j] = bbShape[j];
           }
         } else {
-          rSendOff[i] = localStart;
+          cE._rSendOff[i] = localStart;
         }
-        rSendSize[i] = nSend;
-        rTotalSendSize += nSend;
+        cE._rSendSize[i] = nSend;
+        cE._rTotalSendSize += nSend;
       } else {
         // target is leftHalo
-        if (bufferizeSend) {
-          lSendOff[i] = i ? lSendOff[i - 1] + lSendSize[i - 1] : 0;
-          lBufferStart[i * ndims] = localRowStart;
-          lBufferSize[i * ndims] = nRows;
+        if (cE._bufferizeSend) {
+          cE._lSendOff[i] = i ? cE._lSendOff[i - 1] + cE._lSendSize[i - 1] : 0;
+          cE._lBufferStart[i * ndims] = localRowStart;
+          cE._lBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
-            lBufferStart[i * ndims + j] = bbOff[j];
-            lBufferSize[i * ndims + j] = bbShape[j];
+            cE._lBufferStart[i * ndims + j] = bbOff[j];
+            cE._lBufferSize[i * ndims + j] = bbShape[j];
           }
         } else {
-          lSendOff[i] = localStart;
+          cE._lSendOff[i] = localStart;
         }
-        lSendSize[i] = nSend;
-        lTotalSendSize += nSend;
+        cE._lSendSize[i] = nSend;
+        cE._lTotalSendSize += nSend;
       }
     }
   }
 
   // receive maps
-  std::vector<int> lRecvSize(nworkers), rRecvSize(nworkers);
-  std::vector<int> lRecvOff(nworkers), rRecvOff(nworkers);
+  cE._lRecvSize.resize(nworkers);
+  cE._rRecvSize.resize(nworkers);
+  cE._lRecvOff.resize(nworkers);
+  cE._rRecvOff.resize(nworkers);
+
   // receive size is sender's send size
-  tc->alltoall(lSendSize.data(), 1, INT32, lRecvSize.data());
-  tc->alltoall(rSendSize.data(), 1, INT32, rRecvSize.data());
+  tc->alltoall(cE._lSendSize.data(), 1, INT32, cE._lRecvSize.data());
+  tc->alltoall(cE._rSendSize.data(), 1, INT32, cE._rRecvSize.data());
   // compute offset in a contiguous receive buffer
-  lRecvOff[0] = 0;
-  rRecvOff[0] = 0;
+  cE._lRecvOff[0] = 0;
+  cE._rRecvOff[0] = 0;
   for (auto i = 1; i < nworkers; ++i) {
-    lRecvOff[i] = lRecvOff[i - 1] + lRecvSize[i - 1];
-    rRecvOff[i] = rRecvOff[i - 1] + rRecvSize[i - 1];
+    cE._lRecvOff[i] = cE._lRecvOff[i - 1] + cE._lRecvSize[i - 1];
+    cE._rRecvOff[i] = cE._rRecvOff[i - 1] + cE._rRecvSize[i - 1];
   }
 
   // receive buffering
-  void *lRecvData, *rRecvData;
-  void *sendData;
-  bool bufferizeLRecv = !is_contiguous(leftHaloShape, leftHaloStride, ndims);
-  bool bufferizeRRecv = !is_contiguous(rightHaloShape, rightHaloStride, ndims);
-  std::vector<int64_t> lRecvBufferSize(nworkers * ndims, 0);
-  std::vector<int64_t> rRecvBufferSize(nworkers * ndims, 0);
+  cE._bufferizeLRecv = !is_contiguous(leftHaloShape, leftHaloStride, ndims);
+  cE._bufferizeRRecv = !is_contiguous(rightHaloShape, rightHaloStride, ndims);
+  cE._lRecvBufferSize.resize(nworkers * ndims, 0);
+  cE._rRecvBufferSize.resize(nworkers * ndims, 0);
 
   // deduce receive shape for unpack
-  int64_t lTotalRecvSize = 0, rTotalRecvSize = 0;
   for (auto i = 0; i < nworkers; ++i) {
-    if (bufferizeLRecv && lRecvSize[i] != 0) {
-      lTotalRecvSize += lRecvSize[i];
-      lRecvBufferSize[i * ndims] = lRecvSize[i] / bbTotCols; // nrows
+    if (cE._bufferizeLRecv && cE._lRecvSize[i] != 0) {
+      cE._lTotalRecvSize += cE._lRecvSize[i];
+      cE._lRecvBufferSize[i * ndims] = cE._lRecvSize[i] / bbTotCols; // nrows
       for (auto j = 1; j < ndims; ++j) {
-        lRecvBufferSize[i * ndims + j] = bbShape[j]; // leftHaloShape[j]
+        cE._lRecvBufferSize[i * ndims + j] = bbShape[j]; // leftHaloShape[j]
       }
     }
-    if (bufferizeRRecv && rRecvSize[i] != 0) {
-      rTotalRecvSize += rRecvSize[i];
-      rRecvBufferSize[i * ndims] = rRecvSize[i] / bbTotCols; // nrows
+    if (cE._bufferizeRRecv && cE._rRecvSize[i] != 0) {
+      cE._rTotalRecvSize += cE._rRecvSize[i];
+      cE._rRecvBufferSize[i * ndims] = cE._rRecvSize[i] / bbTotCols; // nrows
       for (auto j = 1; j < ndims; ++j) {
-        rRecvBufferSize[i * ndims + j] = bbShape[j]; // rightHaloShape[j]
+        cE._rRecvBufferSize[i * ndims + j] = bbShape[j]; // rightHaloShape[j]
       }
     }
+  }
+  return cE;
+};
+
+/// @brief Update data in halo parts
+/// We assume tensor is partitioned along the first dimension only
+/// (row partitioning) and partitions are ordered by ranks
+/// if cache-key is provided (>=0) meta data is read from cache
+/// @return (MPI) handles
+void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
+                        int64_t *ownedShape, int64_t *ownedStride,
+                        int64_t *bbOff, int64_t *bbShape, void *ownedData,
+                        int64_t *leftHaloShape, int64_t *leftHaloStride,
+                        void *leftHaloData, int64_t *rightHaloShape,
+                        int64_t *rightHaloStride, void *rightHaloData,
+                        Transceiver *tc, int64_t key) {
+
+#ifdef NO_TRANSCEIVER
+  initMPIRuntime();
+  tc = getTransceiver();
+#endif
+  auto nworkers = tc->nranks();
+  if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
+    return nullptr;
+
+  // not thread-safe
+  static std::unordered_map<int64_t, UHCache> uhCache; // meta-data cache
+  static UHCache *cache = nullptr; // reading either from non-cached or cached
+
+  auto cIt = key == -1 ? uhCache.end() : uhCache.find(key);
+  if (cIt == uhCache.end()) { // not in cache
+    // update cache if requested
+    cIt = uhCache
+              .insert_or_assign(
+                  key, std::move(getMetaData(
+                           nworkers, ndims, ownedOff, ownedShape, ownedStride,
+                           bbOff, bbShape, leftHaloShape, leftHaloStride,
+                           rightHaloShape, rightHaloStride, tc)))
+              .first;
+  }
+  cache = &(cIt->second);
+
+  Buffer recvBuff(0), sendBuff(0);
+  if (cache->_bufferizeLRecv || cache->_bufferizeLRecv) {
+    recvBuff.resize(std::max(cache->_lTotalRecvSize, cache->_rTotalRecvSize) *
+                    sizeof_dtype(ddpttype));
+  }
+  if (cache->_bufferizeSend) {
+    sendBuff.resize(std::max(cache->_lTotalSendSize, cache->_rTotalSendSize) *
+                    sizeof_dtype(ddpttype));
   }
 
-  Buffer recvBuff;
-  Buffer sendBuff;
-  if (bufferizeLRecv || bufferizeLRecv) {
-    recvBuff.resize(std::max(lTotalRecvSize, rTotalRecvSize) *
-                    sizeof_dtype(ddpttype));
-  }
-  if (bufferizeSend) {
-    sendBuff.resize(std::max(lTotalSendSize, rTotalSendSize) *
-                    sizeof_dtype(ddpttype));
-  }
-  lRecvData = bufferizeLRecv ? recvBuff.data() : leftHaloData;
-  rRecvData = bufferizeRRecv ? recvBuff.data() : rightHaloData;
-  sendData = bufferizeSend ? sendBuff.data() : ownedData;
+  void *lRecvData = cache->_bufferizeLRecv ? recvBuff.data() : leftHaloData;
+  void *rRecvData = cache->_bufferizeRRecv ? recvBuff.data() : rightHaloData;
+  void *sendData = cache->_bufferizeSend ? sendBuff.data() : ownedData;
 
   // communicate left/right halos
-  if (bufferizeSend) {
-    bufferize(ownedData, ddpttype, ownedShape, ownedStride, lBufferStart.data(),
-              lBufferSize.data(), ndims, nworkers, sendBuff.data());
+  if (cache->_bufferizeSend) {
+    bufferize(ownedData, ddpttype, ownedShape, ownedStride,
+              cache->_lBufferStart.data(), cache->_lBufferSize.data(), ndims,
+              nworkers, sendBuff.data());
   }
-  auto lwh = tc->alltoall(sendData, lSendSize.data(), lSendOff.data(), ddpttype,
-                          lRecvData, lRecvSize.data(), lRecvOff.data());
-  if (bufferizeSend) {
-    bufferize(ownedData, ddpttype, ownedShape, ownedStride, rBufferStart.data(),
-              rBufferSize.data(), ndims, nworkers, sendBuff.data());
+  auto lwh = tc->alltoall(sendData, cache->_lSendSize.data(),
+                          cache->_lSendOff.data(), ddpttype, lRecvData,
+                          cache->_lRecvSize.data(), cache->_lRecvOff.data());
+  if (cache->_bufferizeSend) {
+    bufferize(ownedData, ddpttype, ownedShape, ownedStride,
+              cache->_rBufferStart.data(), cache->_rBufferSize.data(), ndims,
+              nworkers, sendBuff.data());
   }
-  auto rwh = tc->alltoall(sendData, rSendSize.data(), rSendOff.data(), ddpttype,
-                          rRecvData, rRecvSize.data(), rRecvOff.data());
+  auto rwh = tc->alltoall(sendData, cache->_rSendSize.data(),
+                          cache->_rSendOff.data(), ddpttype, rRecvData,
+                          cache->_rRecvSize.data(), cache->_rRecvOff.data());
 
-  auto wait = [=, _lRecvBufferSize = std::move(lRecvBufferSize),
-               _rRecvBufferSize = std::move(rRecvBufferSize)]() {
+  auto wait = [=]() {
     tc->wait(lwh);
     std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
-    if (bufferizeLRecv) {
+    if (cache->_bufferizeLRecv) {
       unpack(lRecvData, ddpttype, leftHaloShape, leftHaloStride,
-             recvBufferStart.data(), _lRecvBufferSize.data(), ndims, nworkers,
-             leftHaloData);
+             recvBufferStart.data(), cache->_lRecvBufferSize.data(), ndims,
+             nworkers, leftHaloData);
     }
     tc->wait(rwh);
-    if (bufferizeRRecv) {
+    if (cache->_bufferizeRRecv) {
       unpack(rRecvData, ddpttype, rightHaloShape, rightHaloStride,
-             recvBufferStart.data(), _rRecvBufferSize.data(), ndims, nworkers,
-             rightHaloData);
+             recvBufferStart.data(), cache->_rRecvBufferSize.data(), ndims,
+             nworkers, rightHaloData);
     }
   };
-  assert(lRecvBufferSize.empty() && rRecvBufferSize.empty());
 
   // FIXME (in imex) buffer-dealloc pass deallocs halo strides and sizes
-  if (bufferizeLRecv || bufferizeRRecv || getenv("DDPT_NO_ASYNC")) {
+  if (cache->_bufferizeLRecv || cache->_bufferizeRRecv ||
+      getenv("DDPT_NO_ASYNC")) {
     wait();
     return nullptr;
   }
@@ -694,7 +777,7 @@ void *_idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
                         void *oDataDescr, int64_t bbOffRank, void *bbOffDescr,
                         int64_t bbShapeRank, void *bbShapeDescr,
                         int64_t lHaloRank, void *lHaloDescr, int64_t rHaloRank,
-                        void *rHaloDescr) {
+                        void *rHaloDescr, int64_t key) {
 
   auto ddpttype = DTYPE<T>::value;
 
@@ -710,7 +793,7 @@ void *_idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
       ddpttype, ownedData.rank(), ownedOff.data(), ownedData.sizes(),
       ownedData.strides(), bbOff.data(), bbShape.data(), ownedData.data(),
       leftHalo.sizes(), leftHalo.strides(), leftHalo.data(), rightHalo.sizes(),
-      rightHalo.strides(), rightHalo.data(), tc);
+      rightHalo.strides(), rightHalo.data(), tc, key);
 }
 
 extern "C" {
@@ -720,11 +803,11 @@ extern "C" {
       int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
       int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
       void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \
-      int64_t rHaloRank, void *rHaloDescr) {                                   \
+      int64_t rHaloRank, void *rHaloDescr, int64_t key) {                      \
     return _idtr_update_halo<_typ>(                                            \
         tc, gShapeRank, gShapeDescr, oOffRank, oOffDescr, oDataRank,           \
         oDataDescr, bbOffRank, bbOffDescr, bbShapeRank, bbShapeDescr,          \
-        lHaloRank, lHaloDescr, rHaloRank, rHaloDescr);                         \
+        lHaloRank, lHaloDescr, rHaloRank, rHaloDescr, key);                    \
   }
 
 TYPED_UPDATE_HALO(f64, double);

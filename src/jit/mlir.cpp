@@ -436,6 +436,7 @@ static const char *pass_pipeline =
                             "convert-dist-to-standard,"
                             "canonicalize,"
                             "overlap-comm-and-compute,"
+                            "add-comm-cache-keys,"
                             "lower-distruntime-to-idtr,"
                             "convert-ptensor-to-linalg,"
                             "canonicalize,"
