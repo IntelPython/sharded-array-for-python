@@ -212,10 +212,14 @@ def run(n, backend, benchmark_mode, correctness_test):
         t = i * dt
 
         if t >= next_t_export - 1e-8:
-            elev_max = float(np.max(e, all_axes))
-            u_max = float(np.max(u, all_axes))
+            _elev_max = np.max(e, all_axes)
+            _u_max = np.max(u, all_axes)
+            _total_v = np.sum(e + h, all_axes)
 
-            total_v = float(np.sum(e + h, all_axes)) * dx * dy
+            elev_max = float(_elev_max)
+            u_max = float(_u_max)
+            total_v = float(_total_v) * dx * dy
+
             if i_export == 0:
                 initial_v = total_v
                 tcpu_str = ""
@@ -229,9 +233,8 @@ def run(n, backend, benchmark_mode, correctness_test):
                 f"{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} "
                 f"u={u_max:7.5f} dV={diff_v: 6.3e} " + tcpu_str
             )
-            if elev_max > 1e3 or not math.isfinite(elev_max):
-                info(f"Invalid elevation value: {elev_max}")
-                break
+            if not benchmark_mode and (elev_max > 1e3 or not math.isfinite(elev_max)):
+                raise ValueError(f"Invalid elevation value: {elev_max}")
             i_export += 1
             next_t_export = i_export * t_export
             sync()
