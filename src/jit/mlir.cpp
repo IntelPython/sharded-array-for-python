@@ -476,7 +476,7 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
 
 static const char *pass_pipeline =
     getenv("DDPT_PASSES") ? getenv("DDPT_PASSES")
-                          : "func.func(ptensor-dist),"
+                          : "ptensor-dist,"
                             "func.func(dist-coalesce),"
                             "func.func(dist-infer-elementwise-cores),"
                             "convert-dist-to-standard,"
