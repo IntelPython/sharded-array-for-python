@@ -12,6 +12,7 @@
 #include "include/ddptensor/Registry.hpp"
 #include "include/ddptensor/Service.hpp"
 #include "include/ddptensor/Transceiver.hpp"
+#include "include/ddptensor/itac.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -85,8 +86,15 @@ void Runable::fini() { _deferred.clear(); }
 // statement) is finalized, the function gets compiled and executed. The loop
 // completes by calling run() on the requesting object.
 void process_promises() {
+  int vtProcessSym, vtDDPTClass, vtPopSym;
+  VT(VT_classdef, "ddpt", &vtDDPTClass);
+  VT(VT_funcdef, "process", vtDDPTClass, &vtProcessSym);
+  VT(VT_funcdef, "pop", vtDDPTClass, &vtPopSym);
+  VT(VT_begin, vtProcessSym);
+
   bool done = false;
   jit::JIT jit;
+
   do {
     ::mlir::OpBuilder builder(&jit.context());
     auto loc = builder.getUnknownLoc();
@@ -121,7 +129,9 @@ void process_promises() {
 
     Runable::ptr_type d;
     while (true) {
+      VT(VT_begin, vtPopSym);
       _deferred.pop(d);
+      VT(VT_end, vtPopSym);
       if (d) {
         if (d->generate_mlir(builder, loc, dm)) {
           break;

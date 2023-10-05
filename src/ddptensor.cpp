@@ -41,6 +41,7 @@ using namespace pybind11::literals; // to bring _a
 #include "ddptensor/Service.hpp"
 #include "ddptensor/SetGetItem.hpp"
 #include "ddptensor/Sorting.hpp"
+#include "ddptensor/itac.hpp"
 #include "ddptensor/jit/mlir.hpp"
 
 #include <iostream>
@@ -96,31 +97,49 @@ void init(bool cw) {
 }
 
 void sync_promises() {
+  int vtWaitSym, vtDDPTClass;
+  VT(VT_classdef, "ddpt", &vtDDPTClass);
+  VT(VT_funcdef, "wait", vtDDPTClass, &vtWaitSym);
+  VT(VT_begin, vtWaitSym);
   py::gil_scoped_release release;
   (void)Service::run().get();
+  VT(VT_end, vtWaitSym);
 }
 
 // #########################################################################
 
 /// trigger compile&run and return future value
 #define PY_SYNC_RETURN(_f)                                                     \
+  int vtWaitSym, vtDDPTClass;                                                  \
+  VT(VT_classdef, "ddpt", &vtDDPTClass);                                       \
+  VT(VT_funcdef, "wait", vtDDPTClass, &vtWaitSym);                             \
+  VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  return (_f).get()
+  auto r = (_f).get();                                                         \
+  VT(VT_end, vtWaitSym);                                                       \
+  return r
 
 /// trigger compile&run and return given attribute _x
 #define SYNC_RETURN(_f, _a)                                                    \
+  int vtWaitSym, vtDDPTClass;                                                  \
+  VT(VT_classdef, "ddpt", &vtDDPTClass);                                       \
+  VT(VT_funcdef, "wait", vtDDPTClass, &vtWaitSym);                             \
+  VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  return (_f).get().get()->_a()
+  auto r = (_f).get().get()->_a();                                             \
+  VT(VT_end, vtWaitSym);                                                       \
+  return r
 
-/// Rerplicate ddptensor/future and SYNC_RETURN attributre _a
+/// Replicate ddptensor/future and SYNC_RETURN attribute _a
 #define REPL_SYNC_RETURN(_f, _a)                                               \
   auto r_ = std::unique_ptr<ddptensor>(Service::replicate(f));                 \
   SYNC_RETURN(r_->get(), _a)
 
 // Finally our Python module
 PYBIND11_MODULE(_ddptensor, m) {
+
   initFactories();
 
   jit::init();

@@ -101,6 +101,8 @@
 #include "llvm/Support/TargetSelect.h"
 // #include "llvm/Support/raw_ostream.h"
 
+#include "ddptensor/itac.hpp"
+
 namespace jit {
 
 static ::mlir::Type makeSignlessType(::mlir::Type type) {
@@ -261,6 +263,22 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     ++idx;
   }
 
+  if (HAS_ITAC()) {
+    int vtExeSym, vtDDPTClass;
+    VT(VT_classdef, "ddpt", &vtDDPTClass);
+    VT(VT_funcdef, "execute", vtDDPTClass, &vtExeSym);
+    auto s = builder.create<::mlir::arith::ConstantOp>(
+        loc, builder.getI32IntegerAttr(vtExeSym));
+    auto end = builder.create<::mlir::func::CallOp>(
+        builder.getUnknownLoc(), "VT_end",
+        ::mlir::TypeRange(builder.getIntegerType(32)), ::mlir::ValueRange(s));
+    mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(end->getBlock());
+    (void)builder.create<::mlir::func::CallOp>(
+        builder.getUnknownLoc(), "VT_begin",
+        ::mlir::TypeRange(builder.getIntegerType(32)), ::mlir::ValueRange(s));
+  }
+
   // add return statement
   auto ret_value = builder.create<::mlir::func::ReturnOp>(
       builder.getUnknownLoc(), ret_values);
@@ -348,10 +366,32 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
                                const std::string &fname,
                                std::vector<void *> &inp, size_t osz) {
 
+  int vtDDPTClass, vtHashSym, vtEEngineSym, vtRunSym, vtHashGenSym;
+  if (HAS_ITAC()) {
+    VT(VT_classdef, "ddpt", &vtDDPTClass);
+    VT(VT_funcdef, "lookup_cache", vtDDPTClass, &vtHashSym);
+    VT(VT_funcdef, "gen_sha", vtDDPTClass, &vtHashGenSym);
+    VT(VT_funcdef, "eengine", vtDDPTClass, &vtEEngineSym);
+    VT(VT_funcdef, "run", vtDDPTClass, &vtRunSym);
+    VT(VT_begin, vtEEngineSym);
+
+    ::mlir::OpBuilder builder(module->getContext());
+    ::mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPoint(module.getBody(),
+                              std::prev(module.getBody()->end()));
+    auto intTyp = builder.getIntegerType(32);
+    auto funcType = builder.getFunctionType({intTyp}, {intTyp});
+    builder.create<::mlir::func::FuncOp>(module.getLoc(), "VT_begin", funcType)
+        .setPrivate();
+    builder.create<::mlir::func::FuncOp>(module.getLoc(), "VT_end", funcType)
+        .setPrivate();
+  }
+
   ::mlir::ExecutionEngine *enginePtr;
   std::unique_ptr<::mlir::ExecutionEngine> tmpEngine;
 
   if (_useCache) {
+    VT(VT_begin, vtHashGenSym);
     static std::map<std::array<unsigned char, 20>,
                     std::unique_ptr<::mlir::ExecutionEngine>>
         engineCache;
@@ -359,7 +399,9 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     llvm::raw_sha1_ostream shaOS;
     module->print(shaOS);
     auto cksm = shaOS.sha1();
+    VT(VT_end, vtHashGenSym);
 
+    VT(VT_begin, vtHashSym);
     if (auto search = engineCache.find(cksm); search == engineCache.end()) {
       engineCache[cksm] = createExecutionEngine(module);
     } else {
@@ -367,9 +409,12 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
         std::cerr << "cached..." << std::endl;
     }
     enginePtr = engineCache[cksm].get();
+    VT(VT_end, vtHashSym);
   } else {
+    VT(VT_begin, vtHashSym);
     tmpEngine = createExecutionEngine(module);
     enginePtr = tmpEngine.get();
+    VT(VT_end, vtHashSym);
   }
 
   auto expectedFPtr =
@@ -398,6 +443,7 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
   // call function
   (*jittedFuncPtr)(args.data());
 
+  VT(VT_end, vtEEngineSym);
   return out;
 }
 
