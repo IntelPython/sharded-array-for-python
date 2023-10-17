@@ -43,11 +43,11 @@ struct DeferredFull : public Deferred {
       if (is_none(val)) {
         return {};
       } else if constexpr (std::is_floating_point_v<T>) {
-        return ::imex::createFloat<sizeof(T) * 8>(loc, builder, val._float);
+        return ::imex::createFloat(loc, builder, val._float, sizeof(T) * 8);
       } else if constexpr (std::is_same_v<bool, T>) {
-        return ::imex::createInt<1>(loc, builder, val._int);
+        return ::imex::createInt(loc, builder, val._int, 1);
       } else if constexpr (std::is_integral_v<T>) {
-        return ::imex::createInt<sizeof(T) * 8>(loc, builder, val._int);
+        return ::imex::createInt(loc, builder, val._int, sizeof(T) * 8);
       }
       assert("Unsupported dtype in dispatch");
       return {};

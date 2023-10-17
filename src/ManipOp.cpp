@@ -33,7 +33,7 @@ struct DeferredReshape : public Deferred {
     auto copyA =
         _copy == COPY_POSSIBLE
             ? ::mlir::IntegerAttr()
-            : ::imex::getIntAttr<1>(builder, COPY_ALWAYS ? true : false);
+            : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
 
     auto outTyp = ::imex::ptensor::PTensorType::get(
         shape(), ::imex::dist::getElementType(av));
