@@ -713,7 +713,7 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   cache = &(cIt->second);
 
   Buffer recvBuff(0), sendBuff(0);
-  if (cache->_bufferizeLRecv || cache->_bufferizeLRecv) {
+  if (cache->_bufferizeLRecv || cache->_bufferizeRRecv) {
     recvBuff.resize(std::max(cache->_lTotalRecvSize, cache->_rTotalRecvSize) *
                     sizeof_dtype(ddpttype));
   }

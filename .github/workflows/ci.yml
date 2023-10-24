@@ -152,6 +152,7 @@ jobs:
           mpirun -n 2 python -u ./wave_equation.py
           mpirun -n 3 python -u ./wave_equation.py
           mpirun -n 4 python -u ./wave_equation.py
+          python -u ./shallow_water.py
           cd -
       - name: Cleanup
         run: |
