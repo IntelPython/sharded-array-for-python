@@ -60,6 +60,30 @@ class TestSetGet:
 
         assert runAndCompare(doit)
 
+    def test_setitem6(self):
+        def doit(aapi):
+            n = 16
+            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float64)
+            b = aapi.zeros((n + 1, n + 1), aapi.float64)
+
+            b[1:n, 1:n] = a[1:n, 1:n]
+            return b
+
+        assert runAndCompare(doit)
+
+    def test_setitem7(self):
+        # Note: assert halo does not segfault
+        def doit(aapi):
+            n = 1024
+            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float64)
+            b = aapi.zeros((n, n), aapi.float64)
+
+            b[1:n, 1:n] = a[1:n, 1:n]
+            b[0, 1:n] = a[0, 1:n]
+            return b
+
+        assert runAndCompare(doit)
+
     def test_colon(self):
         a = dt.ones((16, 16), dt.float64)
         b = dt.zeros((16, 16), dt.float64)

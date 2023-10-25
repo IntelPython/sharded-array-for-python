@@ -51,13 +51,29 @@ template <typename T> WaitHandle<T> *mkWaitHandle(T fini) {
   return new WaitHandle<T>(fini);
 };
 
-extern "C" {
-void _idtr_wait(WaitHandleBase *handle) {
+void _idtr_wait(WaitHandleBase *handle, int64_t lHaloRank, void *lHaloDescr,
+                int64_t rHaloRank, void *rHaloDescr) {
   if (handle) {
     handle->wait();
     delete handle;
   }
 }
+
+extern "C" {
+#define TYPED_WAIT(_sfx)                                                       \
+  void _idtr_wait_##_sfx(WaitHandleBase *handle, int64_t lHaloRank,            \
+                         void *lHaloDescr, int64_t rHaloRank,                  \
+                         void *rHaloDescr) {                                   \
+    return _idtr_wait(handle, lHaloRank, lHaloDescr, rHaloRank, rHaloDescr);   \
+  }
+
+TYPED_WAIT(f64);
+TYPED_WAIT(f32);
+TYPED_WAIT(i64);
+TYPED_WAIT(i32);
+TYPED_WAIT(i16);
+TYPED_WAIT(i8);
+TYPED_WAIT(i1);
 
 #define NO_TRANSCEIVER
 #ifdef NO_TRANSCEIVER
@@ -486,6 +502,8 @@ struct UHCache {
   std::vector<int> _lSendSize, _rSendSize, _lSendOff, _rSendOff;
   // receive maps
   std::vector<int> _lRecvSize, _rRecvSize, _lRecvOff, _rRecvOff;
+  // buffers
+  Buffer _recvBuff, _sendLBuff, _sendRBuff;
   bool _bufferizeSend, _bufferizeLRecv, _bufferizeRRecv;
   // start and sizes for chunks from remotes if copies are needed
   int64_t _lTotalRecvSize, _rTotalRecvSize, _lTotalSendSize, _rTotalSendSize;
@@ -502,6 +520,7 @@ struct UHCache {
           std::vector<int> &&rSendSize, std::vector<int> &&lSendOff,
           std::vector<int> &&rSendOff, std::vector<int> &&lRecvSize,
           std::vector<int> &&rRecvSize, std::vector<int> &&lRecvOff,
+          Buffer &&recvBuff, Buffer &&sendLBuff, Buffer &&sendRBuff,
           std::vector<int> &&rRecvOff, bool bufferizeSend, bool bufferizeLRecv,
           bool bufferizeRRecv, int64_t lTotalRecvSize, int64_t rTotalRecvSize,
           int64_t lTotalSendSize, int64_t rTotalSendSize)
@@ -515,10 +534,11 @@ struct UHCache {
         _lSendOff(std::move(lSendOff)), _rSendOff(std::move(rSendOff)),
         _lRecvSize(std::move(lRecvSize)), _rRecvSize(std::move(rRecvSize)),
         _lRecvOff(std::move(lRecvOff)), _rRecvOff(std::move(rRecvOff)),
-        _bufferizeSend(bufferizeSend), _bufferizeLRecv(bufferizeLRecv),
-        _bufferizeRRecv(bufferizeRRecv), _lTotalRecvSize(lTotalRecvSize),
-        _rTotalRecvSize(rTotalRecvSize), _lTotalSendSize(lTotalSendSize),
-        _rTotalSendSize(rTotalSendSize) {}
+        _recvBuff(std::move(recvBuff)), _sendLBuff(std::move(sendLBuff)),
+        _sendRBuff(std::move(sendRBuff)), _bufferizeSend(bufferizeSend),
+        _bufferizeLRecv(bufferizeLRecv), _bufferizeRRecv(bufferizeRRecv),
+        _lTotalRecvSize(lTotalRecvSize), _rTotalRecvSize(rTotalRecvSize),
+        _lTotalSendSize(lTotalSendSize), _rTotalSendSize(rTotalSendSize) {}
   UHCache &operator=(const UHCache &) = delete;
   UHCache &operator=(UHCache &&) = default;
 };
@@ -712,35 +732,40 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
   }
   cache = &(cIt->second);
 
-  Buffer recvBuff(0), sendBuff(0);
   if (cache->_bufferizeLRecv || cache->_bufferizeRRecv) {
-    recvBuff.resize(std::max(cache->_lTotalRecvSize, cache->_rTotalRecvSize) *
-                    sizeof_dtype(ddpttype));
+    cache->_recvBuff.resize(
+        std::max(cache->_lTotalRecvSize, cache->_rTotalRecvSize) *
+        sizeof_dtype(ddpttype));
   }
   if (cache->_bufferizeSend) {
-    sendBuff.resize(std::max(cache->_lTotalSendSize, cache->_rTotalSendSize) *
-                    sizeof_dtype(ddpttype));
+    cache->_sendLBuff.resize(cache->_lTotalSendSize * sizeof_dtype(ddpttype));
+    cache->_sendRBuff.resize(cache->_rTotalSendSize * sizeof_dtype(ddpttype));
   }
 
-  void *lRecvData = cache->_bufferizeLRecv ? recvBuff.data() : leftHaloData;
-  void *rRecvData = cache->_bufferizeRRecv ? recvBuff.data() : rightHaloData;
-  void *sendData = cache->_bufferizeSend ? sendBuff.data() : ownedData;
+  void *lRecvData =
+      cache->_bufferizeLRecv ? cache->_recvBuff.data() : leftHaloData;
+  void *rRecvData =
+      cache->_bufferizeRRecv ? cache->_recvBuff.data() : rightHaloData;
+  void *lSendData =
+      cache->_bufferizeSend ? cache->_sendLBuff.data() : ownedData;
+  void *rSendData =
+      cache->_bufferizeSend ? cache->_sendRBuff.data() : ownedData;
 
   // communicate left/right halos
   if (cache->_bufferizeSend) {
     bufferize(ownedData, ddpttype, ownedShape, ownedStride,
               cache->_lBufferStart.data(), cache->_lBufferSize.data(), ndims,
-              nworkers, sendBuff.data());
+              nworkers, cache->_sendLBuff.data());
   }
-  auto lwh = tc->alltoall(sendData, cache->_lSendSize.data(),
+  auto lwh = tc->alltoall(lSendData, cache->_lSendSize.data(),
                           cache->_lSendOff.data(), ddpttype, lRecvData,
                           cache->_lRecvSize.data(), cache->_lRecvOff.data());
   if (cache->_bufferizeSend) {
     bufferize(ownedData, ddpttype, ownedShape, ownedStride,
               cache->_rBufferStart.data(), cache->_rBufferSize.data(), ndims,
-              nworkers, sendBuff.data());
+              nworkers, cache->_sendRBuff.data());
   }
-  auto rwh = tc->alltoall(sendData, cache->_rSendSize.data(),
+  auto rwh = tc->alltoall(rSendData, cache->_rSendSize.data(),
                           cache->_rSendOff.data(), ddpttype, rRecvData,
                           cache->_rRecvSize.data(), cache->_rRecvOff.data());
 
@@ -760,7 +785,6 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
     }
   };
 
-  // FIXME (in imex) buffer-dealloc pass deallocs halo strides and sizes
   if (cache->_bufferizeLRecv || cache->_bufferizeRRecv ||
       getenv("DDPT_NO_ASYNC")) {
     wait();

@@ -47,6 +47,17 @@ class TestEWB:
             v = 16 * 16 * 3
             assert float(r1) == v
 
+    def test_add4(self):
+        for dtyp in mpi_idtypes:
+            n = 16
+            a = dt.fromfunction(lambda i, j: i, (n, n), dtype=dtyp)
+            b = dt.ones((n, n), dtyp)
+            c = a + b
+            a[:, :] = a[:, :] + c[:, :]
+            r1 = dt.sum(a, [0, 1])
+            v = n * n * n
+            assert float(r1) == v
+
     def test_add_mul(self):
         def doit(aapi):
             a = aapi.zeros((16, 16), dtype=aapi.int64)
