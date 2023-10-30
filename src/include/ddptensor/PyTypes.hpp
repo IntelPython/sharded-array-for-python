@@ -9,6 +9,8 @@ namespace py = pybind11;
 #include "CppTypes.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
+
 template <typename T> py::object get_impl_dtype() {
   return get_impl_dtype(DTYPE<T>::value);
 };
@@ -136,3 +138,4 @@ inline py::tuple _make_tuple(const NDSlice & v)
     return _make_tuple(v, [](const V & v){return v.ndims();}, [](const V & v, int i){return v.dim(i).pyslice();});
 }
 #endif
+} // namespace DDPT

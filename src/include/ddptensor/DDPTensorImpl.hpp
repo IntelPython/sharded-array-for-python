@@ -15,6 +15,7 @@
 #include <sstream>
 #include <type_traits>
 
+namespace DDPT {
 class Transceiver;
 
 /// @brief use this to provide a base object to the tensor
@@ -266,3 +267,4 @@ void forall(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
             uint64_t nd, std::vector<int64_t> &idx, OP op) {
   forall_<T, OP, true>(d, cptr, sizes, strides, nd, op, &idx);
 }
+} // namespace DDPT

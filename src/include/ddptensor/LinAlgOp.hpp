@@ -10,6 +10,8 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
 struct LinAlgOp {
   static ddptensor *vecdot(const ddptensor &a, const ddptensor &b, int axis);
 };
+} // namespace DDPT

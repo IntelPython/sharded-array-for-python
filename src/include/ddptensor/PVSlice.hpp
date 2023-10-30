@@ -11,6 +11,8 @@
 #include "NDSlice.hpp"
 #include "Transceiver.hpp" // rank_type
 
+namespace DDPT {
+
 using offsets_type = std::vector<uint64_t>;
 
 constexpr static int NOSPLIT = 1;
@@ -93,3 +95,4 @@ public:
 
   friend std::ostream &operator<<(std::ostream &output, const PVSlice &slc);
 };
+} // namespace DDPT

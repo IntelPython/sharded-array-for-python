@@ -8,6 +8,7 @@
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Transceiver.hpp"
 #include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
@@ -17,6 +18,8 @@
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
+
+namespace DDPT {
 
 static const char *FORCE_DIST = getenv("DDPT_FORCE_DIST");
 
@@ -36,8 +39,9 @@ struct DeferredFull : public Deferred {
       : Deferred(dtype, shape, team, true), _val(val) {}
 
   template <typename T> struct ValAndDType {
-    static ::mlir::Value op(::mlir::OpBuilder &builder, ::mlir::Location loc,
-                            const PyScalar &val, ::imex::ptensor::DType &dtyp) {
+    static ::mlir::Value op(::mlir::OpBuilder &builder,
+                            const ::mlir::Location &loc, const PyScalar &val,
+                            ::imex::ptensor::DType &dtyp) {
       dtyp = jit::PT_DTYPE<T>::value;
 
       if (is_none(val)) {
@@ -54,7 +58,7 @@ struct DeferredFull : public Deferred {
     };
   };
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     ::mlir::SmallVector<::mlir::Value> shp(rank());
     for (auto i = 0; i < rank(); ++i) {
@@ -124,7 +128,7 @@ struct DeferredArange : public Deferred {
                  team, true),
         _start(start), _end(end), _step(step) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
     auto transceiver = getTransceiver();
@@ -192,7 +196,7 @@ struct DeferredLinspace : public Deferred {
       : Deferred(dtype, {static_cast<shape_type::value_type>(num)}, team, true),
         _start(start), _end(end), _num(num), _endpoint(endpoint) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // ::mlir::Value
     auto teamV = team() == 0
@@ -247,14 +251,15 @@ ddptensor *Creator::linspace(double start, double end, uint64_t num,
 
 // ***************************************************************************
 
+extern DTypeId DEFAULT_FLOAT;
+extern DTypeId DEFAULT_INT;
+
 std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
-                                                uint64_t team) {
+                                                uint64_t team, DTypeId dtype) {
   if (py::isinstance<ddptensor>(b)) {
     return {b.cast<ddptensor *>(), false};
-  } else if (py::isinstance<py::float_>(b)) {
-    return {Creator::full({}, b, FLOAT64, team), true};
-  } else if (py::isinstance<py::int_>(b)) {
-    return {Creator::full({}, b, INT64, team), true};
+  } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
+    return {Creator::full({}, b, dtype, team), true};
   }
   throw std::runtime_error(
       "Invalid right operand to elementwise binary operation");
@@ -263,3 +268,4 @@ std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
 FACTORY_INIT(DeferredFull, F_FULL);
 FACTORY_INIT(DeferredArange, F_ARANGE);
 FACTORY_INIT(DeferredLinspace, F_LINSPACE);
+} // namespace DDPT

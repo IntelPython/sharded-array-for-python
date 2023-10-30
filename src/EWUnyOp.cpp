@@ -6,11 +6,14 @@
 
 #include "ddptensor/EWUnyOp.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 
+namespace DDPT {
 #if 0
 namespace x {
 
@@ -202,7 +205,7 @@ struct DeferredEWUnyOp : public Deferred {
   DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
       : Deferred(a.dtype(), a.shape(), a.team(), true), _a(a.guid()), _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, _a);
 
@@ -243,3 +246,4 @@ ddptensor *EWUnyOp::op(EWUnyOpId op, const ddptensor &a) {
 }
 
 FACTORY_INIT(DeferredEWUnyOp, F_EWUNYOP);
+} // namespace DDPT

@@ -6,12 +6,16 @@
 
 #include "ddptensor/ManipOp.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
+
+namespace DDPT {
 
 struct DeferredReshape : public Deferred {
   enum CopyMode : char { COPY_NEVER, COPY_ALWAYS, COPY_POSSIBLE };
@@ -23,7 +27,7 @@ struct DeferredReshape : public Deferred {
                   CopyMode copy)
       : Deferred(a.dtype(), shape, a.team(), true), _a(a.guid()), _copy(copy) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, _a);
     ::mlir::SmallVector<::mlir::Value> shp(shape().size());
@@ -90,3 +94,4 @@ ddptensor *ManipOp::reshape(const ddptensor &a, const shape_type &shape,
 }
 
 FACTORY_INIT(DeferredReshape, F_RESHAPE);
+} // namespace DDPT

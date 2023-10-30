@@ -10,6 +10,8 @@
 #include "DDPTensorImpl.hpp"
 #include "PVSlice.hpp"
 
+namespace DDPT {
+
 void gather_tensor(DDPTensorImpl::ptr_type a_ptr, rank_type root, void *outPtr);
 
 struct CollComm {
@@ -140,3 +142,4 @@ struct CollComm {
     return {-1, -1};
   }
 };
+} // namespace DDPT

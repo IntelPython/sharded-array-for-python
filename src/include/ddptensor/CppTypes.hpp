@@ -17,6 +17,8 @@
 #include <bitsery/bitsery.h>
 #include <bitsery/traits/vector.h>
 
+namespace DDPT {
+
 using shape_type = std::vector<int64_t>;
 using dim_vec_type = std::vector<int>;
 using rank_type = uint64_t;
@@ -222,3 +224,4 @@ inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
 inline uint64_t dtensor_sz(int rank) {
   return 2 * memref_sz(1) + memref_sz(rank) + 2;
 };
+} // namespace DDPT

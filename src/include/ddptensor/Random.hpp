@@ -9,8 +9,11 @@
 #include "PyTypes.hpp"
 #include "ddptensor.hpp"
 
+namespace DDPT {
+
 struct Random {
   static ddptensor *rand(DTypeId dtype, const shape_type &shp,
                          const py::object &lower, const py::object &upper);
   static void seed(uint64_t s);
 };
+} // namespace DDPT

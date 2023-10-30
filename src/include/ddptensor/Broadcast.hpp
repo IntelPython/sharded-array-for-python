@@ -5,6 +5,8 @@
 
 #include "CppTypes.hpp"
 
+namespace DDPT {
+
 template <typename V1, typename V2>
 shape_type broadcast(const V1 &shape1, const V2 &shape2) {
   int64_t N1 = shape1.size();
@@ -29,3 +31,4 @@ shape_type broadcast(const V1 &shape1, const V2 &shape2) {
   }
   return shape;
 }
+} // namespace DDPT

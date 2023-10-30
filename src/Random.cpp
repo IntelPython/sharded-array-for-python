@@ -9,6 +9,8 @@
 #include "ddptensor/Factory.hpp"
 #include <bitsery/traits/vector.h>
 
+namespace DDPT {
+
 using ptr_type = tensor_i::ptr_type;
 
 #if 0
@@ -75,3 +77,4 @@ void Random::seed(uint64_t s) {
 }
 
 FACTORY_INIT(DeferredRandomOp, F_RANDOM);
+} // namespace DDPT

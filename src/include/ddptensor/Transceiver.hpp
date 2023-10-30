@@ -8,6 +8,8 @@
 
 #include "CppTypes.hpp"
 
+namespace DDPT {
+
 class Transceiver {
 public:
   using WaitHandle = uint32_t;
@@ -59,3 +61,4 @@ public:
 extern void init_transceiver(Transceiver *);
 extern void fini_transceiver();
 extern Transceiver *getTransceiver();
+} // namespace DDPT

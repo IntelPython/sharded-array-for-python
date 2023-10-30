@@ -2,6 +2,8 @@
 
 #include "ddptensor/CollComm.hpp"
 
+namespace DDPT {
+
 void bufferize(DDPTensorImpl::ptr_type a_ptr, void *outPtr) {
   dispatch(a_ptr->dtype(), a_ptr->data(), [&a_ptr, outPtr](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(outPtr);
@@ -153,3 +155,4 @@ std::vector<std::vector<int>> CollComm::map(const PVSlice &n_slc,
 #endif // if 0
   return {};
 }
+} // namespace DDPT

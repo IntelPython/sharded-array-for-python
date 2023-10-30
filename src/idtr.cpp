@@ -15,14 +15,16 @@
 #include <memory>
 #include <unordered_map>
 
+#define STRINGIFY(a) #a
+
 constexpr id_t UNKNOWN_GUID = -1;
 
 using container_type =
-    std::unordered_map<id_type, std::unique_ptr<DDPTensorImpl>>;
+    std::unordered_map<DDPT::id_type, std::unique_ptr<DDPT::DDPTensorImpl>>;
 
 static container_type gtensors;
-static id_type _nguid = -1;
-inline id_type get_guid() { return ++_nguid; }
+static DDPT::id_type _nguid = -1;
+inline DDPT::id_type get_guid() { return ++_nguid; }
 
 // Transceiver * theTransceiver = MPITransceiver();
 
@@ -65,7 +67,8 @@ extern "C" {
                          void *lHaloDescr, int64_t rHaloRank,                  \
                          void *rHaloDescr) {                                   \
     return _idtr_wait(handle, lHaloRank, lHaloDescr, rHaloRank, rHaloDescr);   \
-  }
+  }                                                                            \
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_wait_##_sfx = _idtr_wait_##_sfx))
 
 TYPED_WAIT(f64);
 TYPED_WAIT(f32);
@@ -78,38 +81,40 @@ TYPED_WAIT(i1);
 #define NO_TRANSCEIVER
 #ifdef NO_TRANSCEIVER
 static void initMPIRuntime() {
-  if (getTransceiver() == nullptr)
-    init_transceiver(new MPITransceiver(false));
+  if (DDPT::getTransceiver() == nullptr)
+    DDPT::init_transceiver(new DDPT::MPITransceiver(false));
 }
 #endif
 
 // Return number of ranks/processes in given team/communicator
-uint64_t idtr_nprocs(Transceiver *tc) {
+uint64_t idtr_nprocs(DDPT::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = getTransceiver();
+  tc = DDPT::getTransceiver();
 #endif
   return tc->nranks();
 }
 #pragma weak _idtr_nprocs = idtr_nprocs
+#pragma weak _mlir_ciface__idtr_nprocs = idtr_nprocs
 
 // Return rank in given team/communicator
-uint64_t idtr_prank(Transceiver *tc) {
+uint64_t idtr_prank(DDPT::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = getTransceiver();
+  tc = DDPT::getTransceiver();
 #endif
   return tc->rank();
 }
 #pragma weak _idtr_prank = idtr_prank
+#pragma weak _mlir_ciface__idtr_prank = idtr_prank
 
 // Register a global tensor of given shape.
 // Returns guid.
 // The runtime does not own or manage any memory.
 id_t idtr_init_dtensor(const uint64_t *shape, uint64_t nD) {
   auto guid = get_guid();
-  // gtensors[guid] = std::unique_ptr<DDPTensorImpl>(nD ? new
-  // DDPTensorImpl(shape, nD) : new DDPTensorImpl);
+  // gtensors[guid] = std::unique_ptr<DDPT::DDPTensorImpl>(nD ? new
+  // DDPT::DDPTensorImpl(shape, nD) : new DDPT::DDPTensorImpl);
   return guid;
 }
 
@@ -155,62 +160,62 @@ void _idtr_local_shape(id_t guid, void *alloced, void *aligned, intptr_t offset,
 } // extern "C"
 
 // convert id of our reduction op to id of imex::ptensor reduction op
-static ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop) {
+static DDPT::ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop) {
   switch (rop) {
   case ::imex::ptensor::MEAN:
-    return MEAN;
+    return DDPT::MEAN;
   case ::imex::ptensor::PROD:
-    return PROD;
+    return DDPT::PROD;
   case ::imex::ptensor::SUM:
-    return SUM;
+    return DDPT::SUM;
   case ::imex::ptensor::STD:
-    return STD;
+    return DDPT::STD;
   case ::imex::ptensor::VAR:
-    return VAR;
+    return DDPT::VAR;
   case ::imex::ptensor::MAX:
-    return MAX;
-  case MIN:
-    return MIN;
+    return DDPT::MAX;
+  case ::imex::ptensor::MIN:
+    return DDPT::MIN;
   default:
     throw std::runtime_error("Unknown reduction operation");
   }
 }
 
 // convert element type/dtype from MLIR to ddpt
-static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
+static DDPT::DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
   switch (dt) {
   case ::imex::ptensor::DType::F64:
-    return FLOAT64;
+    return DDPT::FLOAT64;
     break;
   case ::imex::ptensor::DType::I64:
-    return INT64;
+    return DDPT::INT64;
     break;
   case ::imex::ptensor::DType::U64:
-    return UINT64;
+    return DDPT::UINT64;
     break;
   case ::imex::ptensor::DType::F32:
-    return FLOAT32;
+    return DDPT::FLOAT32;
     break;
   case ::imex::ptensor::DType::I32:
-    return INT32;
+    return DDPT::INT32;
     break;
   case ::imex::ptensor::DType::U32:
-    return UINT32;
+    return DDPT::UINT32;
     break;
   case ::imex::ptensor::DType::I16:
-    return INT16;
+    return DDPT::INT16;
     break;
   case ::imex::ptensor::DType::U16:
-    return UINT16;
+    return DDPT::UINT16;
     break;
   case ::imex::ptensor::DType::I8:
-    return INT8;
+    return DDPT::INT8;
     break;
   case ::imex::ptensor::DType::U8:
-    return UINT8;
+    return DDPT::UINT8;
     break;
   case ::imex::ptensor::DType::I1:
-    return BOOL;
+    return DDPT::BOOL;
     break;
   default:
     throw std::runtime_error("unknown dtype");
@@ -218,32 +223,33 @@ static DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
 }
 
 /// copy possibly strided tensor into a contiguous block of data
-void bufferize(void *cptr, DTypeId dtype, const int64_t *sizes,
+void bufferize(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
                const int64_t *strides, const int64_t *tStarts,
                const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
-  dispatch(
-      dtype, cptr, [sizes, strides, tStarts, tSizes, nd, N, out](auto *ptr) {
-        auto buff = static_cast<decltype(ptr)>(out);
+  dispatch(dtype, cptr,
+           [sizes, strides, tStarts, tSizes, nd, N, out](auto *ptr) {
+             auto buff = static_cast<decltype(ptr)>(out);
 
-        for (auto i = 0; i < N; ++i) {
-          auto szs = &tSizes[i * nd];
-          if (szs[0] > 0) {
-            auto sts = &tStarts[i * nd];
-            uint64_t off = 0;
-            for (int64_t r = 0; r < nd; ++r) {
-              off += sts[r] * strides[r];
-            }
-            forall(0, &ptr[off], szs, strides, nd, [&buff](const auto *in) {
-              *buff = *in;
-              ++buff;
-            });
-          }
-        }
-      });
+             for (auto i = 0; i < N; ++i) {
+               auto szs = &tSizes[i * nd];
+               if (szs[0] > 0) {
+                 auto sts = &tStarts[i * nd];
+                 uint64_t off = 0;
+                 for (int64_t r = 0; r < nd; ++r) {
+                   off += sts[r] * strides[r];
+                 }
+                 DDPT::forall(0, &ptr[off], szs, strides, nd,
+                              [&buff](const auto *in) {
+                                *buff = *in;
+                                ++buff;
+                              });
+               }
+             }
+           });
 }
 
 /// copy contiguous block of data into a possibly strided tensor
-void unpack(void *in, DTypeId dtype, const int64_t *sizes,
+void unpack(void *in, DDPT::DTypeId dtype, const int64_t *sizes,
             const int64_t *strides, const int64_t *tStarts,
             const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
   dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
@@ -257,7 +263,7 @@ void unpack(void *in, DTypeId dtype, const int64_t *sizes,
         for (int64_t r = 0; r < nd; ++r) {
           off += sts[r] * strides[r];
         }
-        forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
+        DDPT::forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
           *out = *buff;
           ++buff;
         });
@@ -302,7 +308,7 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
 }
 
 /// copy a number of tensor elements into a contiguous block of data
-void bufferizeN(void *cptr, DTypeId dtype, const int64_t *sizes,
+void bufferizeN(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
                 const int64_t *strides, const int64_t *tStarts,
                 const int64_t *tEnds, uint64_t nd, uint64_t N, void *out) {
   std::vector<uint64_t> chunks(nd);
@@ -326,18 +332,18 @@ void bufferizeN(void *cptr, DTypeId dtype, const int64_t *sizes,
            });
 }
 
-using MRIdx1d = Unranked1DMemRefType<int64_t>;
+using MRIdx1d = DDPT::Unranked1DMemRefType<int64_t>;
 
 // FIXME hard-coded for contiguous layout
 template <typename T>
 void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
-  UnrankedMemRefType<T> data(dataRank, dataDescr);
+  DDPT::UnrankedMemRefType<T> data(dataRank, dataDescr);
   assert(dataRank == 0 || (dataRank == 1 && data.strides()[0] == 1));
   auto d = data.data();
-  auto t = DTYPE<T>::value;
+  auto t = DDPT::DTYPE<T>::value;
   auto r = dataRank ? data.sizes()[0] : 1;
   auto o = mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op));
-  getTransceiver()->reduce_all(d, t, r, o);
+  DDPT::getTransceiver()->reduce_all(d, t, r, o);
 }
 
 extern "C" {
@@ -345,7 +351,9 @@ extern "C" {
 #define TYPED_REDUCEALL(_sfx, _typ)                                            \
   void _idtr_reduce_all_##_sfx(int64_t dataRank, void *dataDescr, int op) {    \
     _idtr_reduce_all<_typ>(dataRank, dataDescr, op);                           \
-  }
+  }                                                                            \
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_reduce_all_##_sfx =                \
+                        _idtr_reduce_all_##_sfx))
 
 TYPED_REDUCEALL(f64, double);
 TYPED_REDUCEALL(f32, float);
@@ -360,14 +368,14 @@ TYPED_REDUCEALL(i1, bool);
 /// @brief reshape tensor
 /// We assume tensor is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
+void _idtr_reshape(DDPT::DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
                    void *lDataPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
                    int64_t *lOffsPtr, int64_t oRank, int64_t *oGShapePtr,
                    void *oDataPtr, int64_t *oShapePtr, int64_t *oOffsPtr,
-                   Transceiver *tc) {
+                   DDPT::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = getTransceiver();
+  tc = DDPT::getTransceiver();
 #endif
 
   assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
@@ -403,7 +411,8 @@ void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
   for (auto i = 0; i < N; ++i) {
     dspl[i] = 4 * i;
   }
-  tc->gather(buff.data(), counts.data(), dspl.data(), INT64, REPLICATED);
+  tc->gather(buff.data(), counts.data(), dspl.data(), DDPT::INT64,
+             DDPT::REPLICATED);
 
   // compute overlaps of current parts with requested parts
   // and store meta for alltoall
@@ -441,7 +450,7 @@ void _idtr_reshape(DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
     }
   }
 
-  Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
+  DDPT::Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
   bufferizeN(lDataPtr, ddpttype, lShapePtr, lStridesPtr, lsOffs.data(),
              lsEnds.data(), lRank, N, outbuff.data());
   auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype,
@@ -455,12 +464,12 @@ void _idtr_reshape(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
                    void *lOffsDescr, int64_t lRank, void *lDescr,
                    int64_t oGShapeRank, void *oGShapeDescr, int64_t oOffsRank,
                    void *oOffsDescr, int64_t oRank, void *oDescr,
-                   Transceiver *tc) {
+                   DDPT::Transceiver *tc) {
 
-  auto ddpttype = DTYPE<T>::value;
+  auto ddpttype = DDPT::DTYPE<T>::value;
 
-  UnrankedMemRefType<T> lData(lRank, lDescr);
-  UnrankedMemRefType<T> oData(oRank, oDescr);
+  DDPT::UnrankedMemRefType<T> lData(lRank, lDescr);
+  DDPT::UnrankedMemRefType<T> oData(oRank, oDescr);
 
   _idtr_reshape(ddpttype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
                 lData.data(), lData.sizes(), lData.strides(),
@@ -476,11 +485,13 @@ extern "C" {
       int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
       void *lOffsDescr, int64_t rank, void *lDescr, int64_t oGShapeRank,       \
       void *oGShapeDescr, int64_t oOffsRank, void *oOffsDescr, int64_t oRank,  \
-      void *oDescr, Transceiver *tc) {                                         \
+      void *oDescr, DDPT::Transceiver *tc) {                                   \
     _idtr_reshape<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr, rank,  \
                         lDescr, oGShapeRank, oGShapeDescr, oOffsRank,          \
                         oOffsDescr, oRank, oDescr, tc);                        \
-  }
+  }                                                                            \
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_reshape_##_sfx =                   \
+                        _idtr_reshape_##_sfx))
 
 TYPED_RESHAPE(f64, double);
 TYPED_RESHAPE(f32, float);
@@ -503,7 +514,7 @@ struct UHCache {
   // receive maps
   std::vector<int> _lRecvSize, _rRecvSize, _lRecvOff, _rRecvOff;
   // buffers
-  Buffer _recvBuff, _sendLBuff, _sendRBuff;
+  DDPT::Buffer _recvBuff, _sendLBuff, _sendRBuff;
   bool _bufferizeSend, _bufferizeLRecv, _bufferizeRRecv;
   // start and sizes for chunks from remotes if copies are needed
   int64_t _lTotalRecvSize, _rTotalRecvSize, _lTotalSendSize, _rTotalSendSize;
@@ -520,9 +531,10 @@ struct UHCache {
           std::vector<int> &&rSendSize, std::vector<int> &&lSendOff,
           std::vector<int> &&rSendOff, std::vector<int> &&lRecvSize,
           std::vector<int> &&rRecvSize, std::vector<int> &&lRecvOff,
-          Buffer &&recvBuff, Buffer &&sendLBuff, Buffer &&sendRBuff,
-          std::vector<int> &&rRecvOff, bool bufferizeSend, bool bufferizeLRecv,
-          bool bufferizeRRecv, int64_t lTotalRecvSize, int64_t rTotalRecvSize,
+          DDPT::Buffer &&recvBuff, DDPT::Buffer &&sendLBuff,
+          DDPT::Buffer &&sendRBuff, std::vector<int> &&rRecvOff,
+          bool bufferizeSend, bool bufferizeLRecv, bool bufferizeRRecv,
+          int64_t lTotalRecvSize, int64_t rTotalRecvSize,
           int64_t lTotalSendSize, int64_t rTotalSendSize)
       : _lBufferStart(std::move(lBufferStart)),
         _lBufferSize(std::move(lBufferSize)),
@@ -543,11 +555,11 @@ struct UHCache {
   UHCache &operator=(UHCache &&) = default;
 };
 
-UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
+UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
                     int64_t *ownedShape, int64_t *ownedStride, int64_t *bbOff,
                     int64_t *bbShape, int64_t *leftHaloShape,
                     int64_t *leftHaloStride, int64_t *rightHaloShape,
-                    int64_t *rightHaloStride, Transceiver *tc) {
+                    int64_t *rightHaloStride, DDPT::Transceiver *tc) {
   UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
   cE._lTotalRecvSize = 0;
@@ -570,7 +582,8 @@ UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   for (auto i = 0; i < nworkers; ++i) {
     offsets[i] = 2 * ndims * i;
   }
-  tc->gather(bbTable.data(), counts.data(), offsets.data(), INT64, REPLICATED);
+  tc->gather(bbTable.data(), counts.data(), offsets.data(), DDPT::INT64,
+             DDPT::REPLICATED);
 
   // global indices for row partitioning
   auto ownedRowStart = ownedOff[0];
@@ -590,7 +603,7 @@ UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   cE._rSendSize.resize(nworkers, 0);
 
   // use send buffer if owned data is strided or sending a subview
-  cE._bufferizeSend = (!is_contiguous(ownedShape, ownedStride, ndims) ||
+  cE._bufferizeSend = (!DDPT::is_contiguous(ownedShape, ownedStride, ndims) ||
                        bbTotCols != ownedTotCols);
 
   cE._lBufferStart.resize(nworkers * ndims, 0);
@@ -658,8 +671,8 @@ UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   cE._rRecvOff.resize(nworkers);
 
   // receive size is sender's send size
-  tc->alltoall(cE._lSendSize.data(), 1, INT32, cE._lRecvSize.data());
-  tc->alltoall(cE._rSendSize.data(), 1, INT32, cE._rRecvSize.data());
+  tc->alltoall(cE._lSendSize.data(), 1, DDPT::INT32, cE._lRecvSize.data());
+  tc->alltoall(cE._rSendSize.data(), 1, DDPT::INT32, cE._rRecvSize.data());
   // compute offset in a contiguous receive buffer
   cE._lRecvOff[0] = 0;
   cE._rRecvOff[0] = 0;
@@ -669,8 +682,10 @@ UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   }
 
   // receive buffering
-  cE._bufferizeLRecv = !is_contiguous(leftHaloShape, leftHaloStride, ndims);
-  cE._bufferizeRRecv = !is_contiguous(rightHaloShape, rightHaloStride, ndims);
+  cE._bufferizeLRecv =
+      !DDPT::is_contiguous(leftHaloShape, leftHaloStride, ndims);
+  cE._bufferizeRRecv =
+      !DDPT::is_contiguous(rightHaloShape, rightHaloStride, ndims);
   cE._lRecvBufferSize.resize(nworkers * ndims, 0);
   cE._rRecvBufferSize.resize(nworkers * ndims, 0);
 
@@ -699,17 +714,18 @@ UHCache getMetaData(rank_type nworkers, int64_t ndims, int64_t *ownedOff,
 /// (row partitioning) and partitions are ordered by ranks
 /// if cache-key is provided (>=0) meta data is read from cache
 /// @return (MPI) handles
-void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
-                        int64_t *ownedShape, int64_t *ownedStride,
-                        int64_t *bbOff, int64_t *bbShape, void *ownedData,
-                        int64_t *leftHaloShape, int64_t *leftHaloStride,
-                        void *leftHaloData, int64_t *rightHaloShape,
-                        int64_t *rightHaloStride, void *rightHaloData,
-                        Transceiver *tc, int64_t key) {
+void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
+                        int64_t *ownedOff, int64_t *ownedShape,
+                        int64_t *ownedStride, int64_t *bbOff, int64_t *bbShape,
+                        void *ownedData, int64_t *leftHaloShape,
+                        int64_t *leftHaloStride, void *leftHaloData,
+                        int64_t *rightHaloShape, int64_t *rightHaloStride,
+                        void *rightHaloData, DDPT::Transceiver *tc,
+                        int64_t key) {
 
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = getTransceiver();
+  tc = DDPT::getTransceiver();
 #endif
   auto nworkers = tc->nranks();
   if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
@@ -796,22 +812,22 @@ void *_idtr_update_halo(DTypeId ddpttype, int64_t ndims, int64_t *ownedOff,
 /// @brief templated wrapper for typed function versions calling
 /// _idtr_update_halo
 template <typename T>
-void *_idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
-                        int64_t oOffRank, void *oOffDescr, int64_t oDataRank,
-                        void *oDataDescr, int64_t bbOffRank, void *bbOffDescr,
-                        int64_t bbShapeRank, void *bbShapeDescr,
-                        int64_t lHaloRank, void *lHaloDescr, int64_t rHaloRank,
-                        void *rHaloDescr, int64_t key) {
+void *_idtr_update_halo(DDPT::Transceiver *tc, int64_t gShapeRank,
+                        void *gShapeDescr, int64_t oOffRank, void *oOffDescr,
+                        int64_t oDataRank, void *oDataDescr, int64_t bbOffRank,
+                        void *bbOffDescr, int64_t bbShapeRank,
+                        void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,
+                        int64_t rHaloRank, void *rHaloDescr, int64_t key) {
 
-  auto ddpttype = DTYPE<T>::value;
+  auto ddpttype = DDPT::DTYPE<T>::value;
 
   // Construct unranked memrefs for metadata and data
   MRIdx1d ownedOff(oOffRank, oOffDescr);
   MRIdx1d bbOff(bbOffRank, bbOffDescr);
   MRIdx1d bbShape(bbShapeRank, bbShapeDescr);
-  UnrankedMemRefType<T> ownedData(oDataRank, oDataDescr);
-  UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
-  UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
+  DDPT::UnrankedMemRefType<T> ownedData(oDataRank, oDataDescr);
+  DDPT::UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
+  DDPT::UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
 
   return _idtr_update_halo(
       ddpttype, ownedData.rank(), ownedOff.data(), ownedData.sizes(),
@@ -823,7 +839,7 @@ void *_idtr_update_halo(Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,
 extern "C" {
 #define TYPED_UPDATE_HALO(_sfx, _typ)                                          \
   void *_idtr_update_halo_##_sfx(                                              \
-      Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,                  \
+      DDPT::Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,            \
       int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
       int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
       void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \
@@ -832,7 +848,9 @@ extern "C" {
         tc, gShapeRank, gShapeDescr, oOffRank, oOffDescr, oDataRank,           \
         oDataDescr, bbOffRank, bbOffDescr, bbShapeRank, bbShapeDescr,          \
         lHaloRank, lHaloDescr, rHaloRank, rHaloDescr, key);                    \
-  }
+  }                                                                            \
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_update_halo_##_sfx =               \
+                        _idtr_update_halo_##_sfx))
 
 TYPED_UPDATE_HALO(f64, double);
 TYPED_UPDATE_HALO(f32, float);

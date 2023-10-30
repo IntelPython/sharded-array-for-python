@@ -10,7 +10,9 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
 struct ManipOp {
   static ddptensor *reshape(const ddptensor &a, const shape_type &shape,
                             const py::object &copy);
 };
+} // namespace DDPT

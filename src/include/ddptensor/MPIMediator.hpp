@@ -10,6 +10,8 @@
 #include <mpi.h>
 #include <thread>
 
+namespace DDPT {
+
 class MPIMediator : public Mediator {
   std::thread *_listener;
   MPI_Comm _comm;
@@ -24,3 +26,4 @@ public:
 protected:
   void listen();
 };
+} // namespace DDPT

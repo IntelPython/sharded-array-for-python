@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <iostream>
 
+namespace DDPT {
+
 DDPTensorImpl::DDPTensorImpl(
     Transceiver *transceiver, DTypeId dtype, shape_type gShape,
     void *l_allocated, void *l_aligned, intptr_t l_offset,
@@ -242,3 +244,4 @@ void DDPTensorImpl::replicate() {
   });
   set_owner(REPLICATED);
 }
+} // namespace DDPT

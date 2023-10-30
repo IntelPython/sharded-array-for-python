@@ -13,8 +13,18 @@
 
 #include "Registry.hpp"
 #include "Transceiver.hpp"
-#include "jit/mlir.hpp"
 #include "tensor_i.hpp"
+
+namespace mlir {
+class OpBuilder;
+class Location;
+} // namespace mlir
+
+namespace DDPT {
+
+namespace jit {
+class DepManager;
+}
 
 extern void process_promises();
 
@@ -31,7 +41,7 @@ struct Runable {
   /// the runable might not generate MLIR and instead return true
   /// to request the scheduler to execute the run method instead.
   /// @return false on success and true to request execution of run()
-  virtual bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location,
+  virtual bool generate_mlir(::mlir::OpBuilder &, const ::mlir::Location &,
                              jit::DepManager &) {
     throw(std::runtime_error("No MLIR support for this operation."));
     return false;
@@ -148,7 +158,8 @@ template <typename L> struct DeferredLambda : public Runable {
 
   void run() { _l(); }
 
-  bool generate_mlir(::mlir::OpBuilder &, ::mlir::Location, jit::DepManager &) {
+  bool generate_mlir(::mlir::OpBuilder &, const ::mlir::Location &,
+                     jit::DepManager &) {
     return _l();
   }
 
@@ -160,3 +171,4 @@ template <typename L> struct DeferredLambda : public Runable {
 template <typename L> void defer_lambda(L &&l) {
   push_runable(std::move(std::make_unique<DeferredLambda<L>>(l)));
 }
+} // namespace DDPT

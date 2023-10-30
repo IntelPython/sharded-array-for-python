@@ -10,6 +10,8 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
 struct EWBinOp {
   static ddptensor *op(EWBinOpId op, const py::object &a, const py::object &b);
 };
+} // namespace DDPT

@@ -11,6 +11,8 @@
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 
+namespace DDPT {
+
 #if 0
 namespace x {
 
@@ -147,3 +149,4 @@ ddptensor *LinAlgOp::vecdot(const ddptensor &a, const ddptensor &b, int axis) {
 }
 
 FACTORY_INIT(DeferredLinAlgOp, F_LINALGOP);
+} // namespace DDPT

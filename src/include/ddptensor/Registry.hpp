@@ -9,6 +9,7 @@
 
 #include "tensor_i.hpp"
 
+namespace DDPT {
 namespace Registry {
 
 constexpr static id_type NOGUID = -1;
@@ -33,3 +34,4 @@ bool has(id_type);
 void fini();
 
 }; // namespace Registry
+} // namespace DDPT

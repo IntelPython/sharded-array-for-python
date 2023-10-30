@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <cstring>
 
+namespace DDPT {
+
 /// @return true if size/strides represent a contiguous data layout
 inline bool is_contiguous(const int64_t *sizes, const int64_t *strides,
                           uint64_t ndims) {
@@ -125,3 +127,4 @@ struct DynMemRef {
 
   void freeData() { free(_allocated); }
 };
+} // namespace DDPT

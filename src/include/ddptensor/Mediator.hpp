@@ -6,11 +6,13 @@
 
 #pragma once
 
-#include "Deferred.hpp"
 #include "tensor_i.hpp"
 #include <vector>
 
+namespace DDPT {
+
 class NDSlice;
+class Runable;
 
 class Mediator {
 public:
@@ -24,3 +26,4 @@ public:
 extern void init_mediator(Mediator *);
 extern void fini_mediator();
 extern Mediator *getMediator();
+} // namespace DDPT

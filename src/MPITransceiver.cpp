@@ -10,6 +10,8 @@
 #include <mpi.h>
 #include <sstream>
 
+namespace DDPT {
+
 // Init MPI and transceiver
 
 MPITransceiver::MPITransceiver(bool is_cw)
@@ -237,3 +239,4 @@ void MPITransceiver::wait(WaitHandle h) {
     MPI_Wait(&r, MPI_STATUS_IGNORE);
   }
 }
+} // namespace DDPT

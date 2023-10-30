@@ -37,6 +37,8 @@
 #include "ddptensor/DDPTensorImpl.hpp"
 #include "ddptensor/Registry.hpp"
 
+// #include "llvm/Support/InitLLVM.h"
+
 #include "mlir/IR/MLIRContext.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -55,13 +57,13 @@
 // #include "mlir/Dialect/Async/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
-// #include "mlir/Dialect/GPU/Transforms/Passes.h"
-// #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
+#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 // #include "mlir/Dialect/NVGPU/Passes.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
-// #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
+#include "mlir/Dialect/SPIRV/Transforms/Passes.h"
 #include "mlir/Dialect/Shape/Transforms/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
 // #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
@@ -70,7 +72,9 @@
 // #include "mlir/Dialect/Transform/Transforms/Passes.h"
 // #include "mlir/Dialect/Vector/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
-// #include <mlir/InitAllPasses.h>
+#include <mlir/InitAllDialects.h>
+#include <mlir/InitAllExtensions.h>
+#include <mlir/InitAllPasses.h>
 
 #include "mlir/Parser/Parser.h"
 
@@ -78,9 +82,10 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
-#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
-#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
-#include "mlir/Target/LLVMIR/Dialect/OpenMP/OpenMPToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/All.h"
+// #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+// #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+// #include "mlir/Target/LLVMIR/Dialect/OpenMP/OpenMPToLLVMIRTranslation.h"
 
 #include <llvm/Support/raw_sha1_ostream.h>
 
@@ -103,6 +108,7 @@
 
 #include "ddptensor/itac.hpp"
 
+namespace DDPT {
 namespace jit {
 
 static ::mlir::Type makeSignlessType(::mlir::Type type) {
@@ -474,65 +480,138 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
   return std::move(maybeEngine.get());
 }
 
+static const char *cpu_pipeline = "ptensor-dist,"
+                                  "func.func(dist-coalesce),"
+                                  "func.func(dist-infer-elementwise-cores),"
+                                  "convert-dist-to-standard,"
+                                  "canonicalize,"
+                                  "overlap-comm-and-compute,"
+                                  "add-comm-cache-keys,"
+                                  "lower-distruntime-to-idtr,"
+                                  "convert-ptensor-to-linalg,"
+                                  "canonicalize,"
+                                  "func.func(tosa-to-linalg),"
+                                  "func.func(tosa-to-tensor),"
+                                  "canonicalize,"
+                                  "linalg-fuse-elementwise-ops,"
+                                  // "convert-shape-to-std,"
+                                  "arith-expand,"
+                                  "memref-expand,"
+                                  "arith-bufferize,"
+                                  // "func-bufferize,"
+                                  "func.func(empty-tensor-to-alloc-tensor),"
+                                  "func.func(scf-bufferize),"
+                                  "func.func(tensor-bufferize),"
+                                  "func.func(bufferization-bufferize),"
+                                  "func.func(linalg-bufferize),"
+                                  "func.func(linalg-detensorize),"
+                                  "func.func(tensor-bufferize),"
+                                  "func.func(finalizing-bufferize),"
+                                  "func.func(buffer-deallocation),"
+                                  "imex-remove-temporaries,"
+                                  "func.func(convert-linalg-to-parallel-loops),"
+                                  "func.func(scf-parallel-loop-fusion),"
+                                  "canonicalize,"
+                                  "fold-memref-alias-ops,"
+                                  "expand-strided-metadata,"
+                                  "convert-math-to-funcs,"
+                                  "lower-affine,"
+                                  "convert-scf-to-cf,"
+                                  "finalize-memref-to-llvm,"
+                                  "convert-math-to-llvm,"
+                                  "convert-math-to-libm,"
+                                  "convert-func-to-llvm,"
+                                  "reconcile-unrealized-casts";
+
+static const char *gpu_pipeline =
+    "ptensor-dist,"
+    "func.func(dist-coalesce),"
+    "func.func(dist-infer-elementwise-cores),"
+    "convert-dist-to-standard,"
+    "canonicalize,"
+    "overlap-comm-and-compute,"
+    "add-comm-cache-keys,"
+    "lower-distruntime-to-idtr,"
+    "convert-ptensor-to-linalg,"
+    "canonicalize,"
+    "func.func(tosa-make-broadcastable),"
+    "func.func(tosa-to-linalg),"
+    "func.func(tosa-to-tensor),"
+    "canonicalize,"
+    "linalg-fuse-elementwise-ops,"
+    "arith-expand,"
+    "memref-expand,"
+    "arith-bufferize,"
+    "func-bufferize,"
+    "func.func(empty-tensor-to-alloc-tensor),"
+    "func.func(scf-bufferize),"
+    "func.func(tensor-bufferize),"
+    "func.func(bufferization-bufferize),"
+    "func.func(linalg-bufferize),"
+    "func.func(linalg-detensorize),"
+    "func.func(tensor-bufferize),"
+    "func.func(finalizing-bufferize),"
+    "imex-remove-temporaries,"
+    "func.func(convert-linalg-to-parallel-loops),"
+    "func.func(scf-parallel-loop-fusion),"
+    // GPU
+    "func.func(imex-add-outer-parallel-loop),"
+    "func.func(gpu-map-parallel-loops),"
+    "func.func(convert-parallel-loops-to-gpu),"
+    // insert-gpu-allocs pass can have client-api = opencl or vulkan args
+    "func.func(insert-gpu-allocs{client-api=opencl}),"
+    "canonicalize,"
+    "normalize-memrefs,"
+    // Unstride memrefs does not seem to be needed.
+    //  "func.func(unstride-memrefs),"
+    "func.func(lower-affine),"
+    "gpu-kernel-outlining,"
+    "canonicalize,"
+    "cse,"
+    // The following set-spirv-* passes can have client-api = opencl or vulkan
+    // args
+    "set-spirv-capabilities{client-api=opencl},"
+    "gpu.module(set-spirv-abi-attrs{client-api=opencl}),"
+    "canonicalize,"
+    "fold-memref-alias-ops,"
+    "imex-convert-gpu-to-spirv,"
+    "spirv.module(spirv-lower-abi-attrs),"
+    "spirv.module(spirv-update-vce),"
+    // "func.func(llvm-request-c-wrappers),"
+    "serialize-spirv,"
+    "expand-strided-metadata,"
+    "lower-affine,"
+    "convert-gpu-to-gpux,"
+    "convert-func-to-llvm,"
+    "convert-math-to-llvm,"
+    "convert-gpux-to-llvm,"
+    "finalize-memref-to-llvm,"
+    "reconcile-unrealized-casts";
+
 static const char *pass_pipeline =
-    getenv("DDPT_PASSES") ? getenv("DDPT_PASSES")
-                          : "ptensor-dist,"
-                            "func.func(dist-coalesce),"
-                            "func.func(dist-infer-elementwise-cores),"
-                            "convert-dist-to-standard,"
-                            "canonicalize,"
-                            "overlap-comm-and-compute,"
-                            "add-comm-cache-keys,"
-                            "lower-distruntime-to-idtr,"
-                            "convert-ptensor-to-linalg,"
-                            "canonicalize,"
-                            "func.func(tosa-to-linalg),"
-                            "func.func(tosa-to-tensor),"
-                            "canonicalize,"
-                            "linalg-fuse-elementwise-ops,"
-                            // "convert-shape-to-std,"
-                            "arith-expand,"
-                            "memref-expand,"
-                            "arith-bufferize,"
-                            // "func-bufferize,"
-                            "func.func(empty-tensor-to-alloc-tensor),"
-                            "func.func(scf-bufferize),"
-                            "func.func(tensor-bufferize),"
-                            "func.func(bufferization-bufferize),"
-                            "func.func(linalg-bufferize),"
-                            "func.func(linalg-detensorize),"
-                            "func.func(tensor-bufferize),"
-                            "func.func(finalizing-bufferize),"
-                            "func.func(buffer-deallocation),"
-                            "imex-remove-temporaries,"
-                            "func.func(convert-linalg-to-parallel-loops),"
-                            "func.func(scf-parallel-loop-fusion),"
-                            "canonicalize,"
-                            "fold-memref-alias-ops,"
-                            "expand-strided-metadata,"
-                            "convert-math-to-funcs,"
-                            "lower-affine,"
-                            "convert-scf-to-cf,"
-                            "finalize-memref-to-llvm,"
-                            "convert-math-to-llvm,"
-                            "convert-math-to-libm,"
-                            "convert-func-to-llvm,"
-                            "reconcile-unrealized-casts";
+    getenv("DDPT_PASSES")
+        ? getenv("DDPT_PASSES")
+        : (getenv("DDPT_USE_GPU") ? gpu_pipeline : cpu_pipeline);
+
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
       _verbose(0), _jit_opt_level(3) {
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
-  ::mlir::registerLLVMDialectTranslation(_context);
-  ::mlir::registerBuiltinDialectTranslation(_context);
-  ::mlir::registerOpenMPDialectTranslation(_context);
+  ::mlir::DialectRegistry registry;
+  ::mlir::registerAllDialects(registry);
+  ::mlir::registerAllExtensions(registry);
+  ::imex::registerAllDialects(registry);
+  ::mlir::registerAllToLLVMIRTranslations(registry);
+  _context.appendDialectRegistry(registry);
+
   // load the dialects we use
-  _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
-  _context.getOrLoadDialect<::mlir::func::FuncDialect>();
-  _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
   _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
   _context.getOrLoadDialect<::imex::dist::DistDialect>();
   _context.getOrLoadDialect<::imex::distruntime::DistRuntimeDialect>();
+  _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
+  _context.getOrLoadDialect<::mlir::func::FuncDialect>();
+  _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
   // create the pass pipeline from string
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");
@@ -572,9 +651,24 @@ JIT::JIT()
   mlirRoot = mlirRoot ? mlirRoot : CMAKE_MLIR_ROOT;
   _crunnerlib = std::string(mlirRoot) + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = std::string(mlirRoot) + "/lib/libmlir_runner_utils.so";
+
+  const char *gpuxlibstr = getenv("DDPT_GPUX_SO");
+  if (gpuxlibstr) {
+    _gpulib = std::string(gpuxlibstr);
+  } else {
+    const char *imexRoot = getenv("IMEXROOT");
+    imexRoot = imexRoot ? imexRoot : CMAKE_IMEX_ROOT;
+    _gpulib = std::string(imexRoot) + "/lib/liblevel-zero-runtime.so";
+  }
+
+  // static const char * xxx =
+  // "/home/fschlimb/imex/lib/libimex_runner_utils.so";
+
   const char *idtrlib = getenv("DDPT_IDTR_SO");
   idtrlib = idtrlib ? idtrlib : "libidtr.so";
-  _sharedLibPaths = {idtrlib, _crunnerlib.c_str(), _runnerlib.c_str()};
+
+  _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), // xxx,
+                     idtrlib, _gpulib.c_str()};
 
   // detect target architecture
   auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
@@ -598,53 +692,18 @@ JIT::JIT()
 }
 
 // register dialects and passes
-// adding everything leads to even more excessive compile/link time.
 void init() {
   assert(sizeof(intptr_t) == sizeof(void *));
   assert(sizeof(intptr_t) == sizeof(uint64_t));
-  // ::mlir::registerAllPasses();
-  ::mlir::registerSCFPasses();
-  ::mlir::registerSCFToControlFlowPass();
-  ::mlir::registerConvertSCFToOpenMPPass();
-  ::mlir::registerShapePasses();
-  ::mlir::registerConvertShapeToStandardPass();
-  ::mlir::tensor::registerTensorPasses();
-  ::mlir::registerLinalgPasses();
-  ::mlir::registerTosaToLinalg();
-  ::mlir::registerTosaToTensor();
-  ::mlir::registerConvertMathToFuncs();
-  ::mlir::registerConvertMathToLibm();
-  ::mlir::registerConvertMathToLLVMPass();
-  ::mlir::tosa::registerTosaOptPasses();
-  ::mlir::func::registerFuncPasses();
-  ::mlir::registerConvertFuncToLLVMPass();
-  ::mlir::bufferization::registerBufferizationPasses();
-  ::mlir::arith::registerArithPasses();
-  ::mlir::registerCanonicalizerPass();
-  ::mlir::registerConvertAffineToStandardPass();
-  ::mlir::registerFinalizeMemRefToLLVMConversionPass();
-  ::mlir::registerArithToLLVMConversionPass();
-  ::mlir::registerConvertMathToLLVMPass();
-  ::mlir::registerConvertControlFlowToLLVMPass();
-  ::mlir::registerConvertOpenMPToLLVMPass();
-  ::mlir::memref::registerMemRefPasses();
-  ::mlir::registerReconcileUnrealizedCastsPass();
 
-  ::imex::registerPTensorPasses();
-  ::imex::registerDistPasses();
-  ::imex::registerDistRuntimePasses();
-  ::imex::registerConvertDistToStandard();
-  ::imex::registerConvertPTensorToLinalg();
-
-  ::imex::registerRemoveTemporariesPass();
-
-  // ::mlir::DialectRegistry registry;
-  // ::mlir::registerAllDialects(registry);
-  // ::imex::registerAllDialects(registry);
+  ::mlir::registerAllPasses();
+  ::imex::registerAllPasses();
 
   // Initialize LLVM targets.
+  // llvm::InitLLVM y(0, nullptr);
   ::llvm::InitializeNativeTarget();
   ::llvm::InitializeNativeTargetAsmPrinter();
-  //::llvm::initializeLLVMPasses();
+  ::llvm::InitializeNativeTargetAsmParser();
 }
 } // namespace jit
+} // namespace DDPT

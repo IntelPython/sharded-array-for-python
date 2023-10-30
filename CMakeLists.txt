@@ -68,7 +68,7 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(AddIMEX)
 
 # macro for mlir root directory
-add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}")
+add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}")
 
 #find_package(OpenMP)
 
@@ -106,17 +106,18 @@ set(DDPTSrcs
     ${PROJECT_SOURCE_DIR}/src/Random.cpp
     ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
+    ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
+    ${PROJECT_SOURCE_DIR}/src/Service.cpp
+    ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
 )
 set(RTSrcs
-    ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
-    ${PROJECT_SOURCE_DIR}/src/DDPTensorImpl.cpp
-    ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
-    ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
+    ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
+    ${PROJECT_SOURCE_DIR}/src/DDPTensorImpl.cpp
+    ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
-    ${PROJECT_SOURCE_DIR}/src/Service.cpp
-    ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
+    ${PROJECT_SOURCE_DIR}/src/_deferred.cpp
 )
 set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/idtr.cpp
@@ -143,13 +144,17 @@ include_directories(
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   target_link_options(_ddptensor PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
+  target_link_options(_ddpt_rt PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-ddpt_rt.txt")
+  # target_link_options(idtr PRIVATE "LINKER:-fvisibility=hidden" "LINKER:--exclude-libs,All")
 endif()
 
 #compile_options(_ddptensor PRIVATE -fopenmp)
-get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
-get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
-get_property(mlir_all_libs GLOBAL PROPERTY MLIR_ALL_LIBS)
-get_property(imex_all_libs GLOBAL PROPERTY IMEX_ALL_LIBS)
+get_property(mlir_dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(mlir_conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+get_property(mlir_extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
+get_property(mlir_translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
+get_property(imex_dialect_libs GLOBAL PROPERTY IMEX_DIALECT_LIBS)
+get_property(imex_conversion_libs GLOBAL PROPERTY IMEX_CONVERSION_LIBS)
 
 #llvm_update_compile_flags(_ddpttensor)
 target_link_directories(_ddptensor PRIVATE ${CONDA_PREFIX}/lib)
@@ -159,6 +164,18 @@ target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
 target_link_libraries(_ddptensor PRIVATE
     # ${MKL_LIBRARIES}
     # tbb
+    ${mlir_dialect_libs}
+    ${mlir_conversion_libs}
+    ${mlir_extension_libs}
+    ${mlir_translation_libs}
+    MLIROptLib
+    MLIRExecutionEngine
+    ${imex_dialect_libs}
+    ${imex_conversion_libs}
+    IMEXTransforms
+    IMEXUtil
+    LLVMX86CodeGen
+    LLVMX86AsmParser
     _ddpt_rt
     idtr
 )
@@ -171,71 +188,4 @@ target_link_libraries(_ddpt_rt PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb
-    IMEXPTensorDialect
-    IMEXPTensorTransforms
-    IMEXPTensorToLinalg
-    IMEXDistDialect
-    IMEXDistTransforms
-    IMEXDistToStandard
-    IMEXDistRuntimeDialect
-    IMEXDistRuntimeTransforms
-    IMEXUtil
-    IMEXTransforms
-	  MLIROptLib
-    MLIRExecutionEngine
-    MLIRIR
-    MLIRAffineDialect
-    MLIRAffineToStandard
-    MLIRAffineTransforms
-    MLIRFuncDialect
-    MLIRFuncToLLVM
-    MLIRFuncTransforms
-    MLIRLinalgDialect
-    MLIRLinalgTransforms
-    MLIRLLVMDialect
-    MLIRMathDialect
-    MLIRMathToFuncs
-    MLIRMathToLibm
-    MLIRMathToLLVM
-    MLIRMathTransforms
-    MLIRMemRefDialect
-    MLIRMemRefToLLVM
-    MLIRMemRefTransforms
-    MLIROpenMPDialect
-    MLIROpenMPToLLVM
-    MLIROpenMPToLLVMIRTranslation
-    MLIRReconcileUnrealizedCasts
-    MLIRSCFDialect
-    MLIRSCFToOpenMP
-    MLIRSCFToControlFlow
-    MLIRSCFTransforms
-    MLIRShapeDialect
-    MLIRShapeOpsTransforms
-    MLIRShapeToStandard
-    MLIRTosaDialect
-    MLIRTosaToLinalg
-    MLIRTosaToTensor
-    MLIRTensorTransforms
 )
-    # LLVM${LLVM_NATIVE_ARCH}CodeGen
-    # LLVM${LLVM_NATIVE_ARCH}Desc
-    # LLVMTarget
-    # MLIRAnalysis
-    # MLIRCallInterfaces
-    # MLIRCastInterfaces
-    # MLIRGPUToGPURuntimeTransforms
-    # MLIRGPUToSPIRV
-    # MLIRLLVMCommonConversion
-    # MLIRLLVMToLLVMIRTranslation
-    # MLIRLinalgTransforms
-    # MLIRMathToLibm
-    # MLIRMemRef
-    # MLIRParser
-    # MLIRPass
-    # MLIRReconcileUnrealizedCasts
-    # MLIRSCFToGPU
-    # MLIRSPIRVSerialization
-    # MLIRSPIRVTransforms
-    # MLIRSideEffectInterfaces
-    # MLIRTargetLLVMIRExport
-    # MLIRTransforms

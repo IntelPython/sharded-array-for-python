@@ -6,6 +6,8 @@
 
 #include <ddptensor/Mediator.hpp>
 
+namespace DDPT {
+
 static Mediator *theMediator = nullptr;
 
 void init_mediator(Mediator *t) {
@@ -21,3 +23,4 @@ void fini_mediator() {
 }
 
 Mediator *getMediator() { return theMediator; }
+} // namespace DDPT

@@ -4,6 +4,8 @@
 
 #include "ddptensor/PVSlice.hpp"
 
+namespace DDPT {
+
 using offsets_type = std::vector<uint64_t>;
 
 BasePVSlice::BasePVSlice(const shape_type &shape, int split)
@@ -243,3 +245,4 @@ std::ostream &operator<<(std::ostream &output, const PVSlice &slc) {
          << "offset=" << slc._base->offset() << "}";
   return output;
 }
+} // namespace DDPT

@@ -8,6 +8,7 @@
 
 #include "CppTypes.hpp"
 
+namespace DDPT {
 // Dependent on dt, dispatch arguments to a operation class.
 // The operation must
 //    * be a template class accepting the element type as argument
@@ -124,3 +125,4 @@ auto TypeDispatch(Ts&&... args)
     return OpDispatch::op(std::forward<Ts>(args)...);
 }
 #endif // #if 0
+} // namespace DDPT

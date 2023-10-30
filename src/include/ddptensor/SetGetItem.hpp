@@ -11,6 +11,8 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
+
 struct GetItem {
   using py_promise_type = std::promise<py::object>;
   using py_future_type = std::shared_future<py::object>;
@@ -28,3 +30,4 @@ struct SetItem {
                                 const py::object &b);
   static ddptensor *map(ddptensor &a, py::object &b);
 };
+} // namespace DDPT

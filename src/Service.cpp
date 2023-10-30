@@ -13,6 +13,9 @@
 #include "ddptensor/Registry.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/ddptensor.hpp"
+#include "ddptensor/jit/mlir.hpp"
+
+namespace DDPT {
 
 #if 0
 namespace x {
@@ -63,7 +66,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
     }
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     switch (_op) {
     case DROP:
@@ -105,7 +108,7 @@ struct DeferredReplicate : public Deferred {
     set_value(a);
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -138,3 +141,4 @@ ddptensor *Service::replicate(const ddptensor &a) {
 
 FACTORY_INIT(DeferredService, F_SERVICE);
 FACTORY_INIT(DeferredReplicate, F_REPLICATE);
+} // namespace DDPT

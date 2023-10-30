@@ -26,6 +26,8 @@
 #include <utility>
 #include <vector>
 
+namespace DDPT {
+
 class Transceiver;
 
 namespace jit {
@@ -177,7 +179,7 @@ private:
   bool _useCache;
   int _jit_opt_level;
   ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
-  std::string _crunnerlib, _runnerlib;
+  std::string _crunnerlib, _runnerlib, _gpulib;
 };
 
 // size of memreftype in number of intptr_t's
@@ -187,3 +189,4 @@ inline uint64_t dtensor_sz(int rank) {
 };
 
 } // namespace jit
+} // namespace DDPT

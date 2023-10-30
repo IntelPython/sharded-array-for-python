@@ -46,6 +46,7 @@ using namespace pybind11::literals; // to bring _a
 
 #include <iostream>
 
+namespace DDPT {
 // #########################################################################
 // The following classes are wrappers bridging pybind11 defs to TypeDispatch
 
@@ -79,6 +80,7 @@ void fini() {
 void init(bool cw) {
   if (inited)
     return;
+
   init_transceiver(new MPITransceiver(cw));
   init_mediator(new MPIMediator());
   int cpu = sched_getcpu();
@@ -244,3 +246,4 @@ PYBIND11_MODULE(_ddptensor, m) {
   // py::class_<dpdlpack>(m, "dpdlpack")
   //     .def("__dlpack__", &dpdlpack.__dlpack__);
 }
+} // namespace DDPT

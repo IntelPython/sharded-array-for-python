@@ -11,6 +11,8 @@
 #include "Service.hpp"
 #include "tensor_i.hpp"
 
+namespace DDPT {
+
 class ddptensor {
   tensor_i::future_type _ftx;
 
@@ -33,3 +35,4 @@ public:
     _ftx = std::forward<tensor_i::future_type>(f);
   }
 };
+} // namespace DDPT

@@ -6,6 +6,7 @@
 
 #pragma once
 
+namespace DDPT {
 class Chunker {
 public:
   enum : int { PTR = 0, SLC = 1 };
@@ -67,3 +68,4 @@ public:
 
   Copier end() const { return Copier(); }
 };
+} // namespace DDPT

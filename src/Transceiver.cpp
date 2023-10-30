@@ -6,6 +6,8 @@
 
 #include <ddptensor/Transceiver.hpp>
 
+namespace DDPT {
+
 Transceiver *theTransceiver = nullptr;
 
 void init_transceiver(Transceiver *t) {
@@ -21,3 +23,4 @@ void fini_transceiver() {
 }
 
 Transceiver *getTransceiver() { return theTransceiver; }
+} // namespace DDPT

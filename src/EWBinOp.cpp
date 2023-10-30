@@ -8,16 +8,20 @@
 #include "ddptensor/Broadcast.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/LinAlgOp.hpp"
 #include "ddptensor/Registry.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/TypePromotion.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
+
+namespace DDPT {
 
 // convert id of our binop to id of imex::ptensor binop
 static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop) {
@@ -91,7 +95,7 @@ struct DeferredEWBinOp : public Deferred {
       : Deferred(a.dtype(), broadcast(a.shape(), b.shape()), a.team(), true),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // FIXME the type of the result is based on a only
     auto av = dm.getDependent(builder, _a);
@@ -135,13 +139,20 @@ struct DeferredEWBinOp : public Deferred {
 
 ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
   uint64_t teama = 0, teamb = 0;
-  if (py::isinstance<ddptensor>(a))
-    teama = a.cast<ddptensor *>()->get().team();
-  else if (py::isinstance<ddptensor>(b))
-    teamb = b.cast<ddptensor *>()->get().team();
-  auto team = teama ? teama : teamb;
-  auto bb = Creator::mk_future(b, team);
-  auto aa = Creator::mk_future(a, team);
+  DTypeId dtypea = DTYPE_LAST, dtypeb = DTYPE_LAST;
+
+  if (py::isinstance<ddptensor>(a)) {
+    auto tmp = a.cast<ddptensor *>()->get();
+    teama = tmp.team();
+    dtypea = tmp.dtype();
+  }
+  if (py::isinstance<ddptensor>(b)) {
+    auto tmp = b.cast<ddptensor *>()->get();
+    teamb = tmp.team();
+    dtypeb = tmp.dtype();
+  }
+  auto aa = Creator::mk_future(a, teamb, dtypeb);
+  auto bb = Creator::mk_future(b, teama, dtypea);
   if (bb.first->get().team() != aa.first->get().team()) {
     throw std::runtime_error(
         "teams of operands do not match in binary operation");
@@ -159,3 +170,4 @@ ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
 }
 
 FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);
+} // namespace DDPT

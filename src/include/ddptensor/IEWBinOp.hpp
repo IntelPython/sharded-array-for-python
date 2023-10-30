@@ -10,6 +10,8 @@
 #include "ddptensor.hpp"
 #include "p2c_ids.hpp"
 
+namespace DDPT {
 struct IEWBinOp {
   static ddptensor *op(IEWBinOpId op, ddptensor &a, const py::object &b);
 };
+} // namespace DDPT

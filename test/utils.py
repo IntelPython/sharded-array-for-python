@@ -1,6 +1,7 @@
 import numpy
 import ddptensor
 from ddptensor.numpy import fromfunction
+from os import getenv
 
 ddptensor.fromfunction = fromfunction
 
@@ -15,12 +16,18 @@ def runAndCompare(func, do_gather=True):
 
 
 mpi_dtypes = [
-    ddptensor.float64,
     ddptensor.float32,
-    ddptensor.int64,
-    ddptensor.uint64,
     ddptensor.int32,
-    ddptensor.uint32,
-    ddptensor.int8,
-    ddptensor.uint8,
 ]
+
+on_gpu = getenv("DDPT_USE_GPU", False)
+
+if not on_gpu:
+    mpi_dtypes += [
+        ddptensor.float64,
+        ddptensor.int64,
+        ddptensor.uint64,
+        ddptensor.uint32,
+        ddptensor.int8,
+        ddptensor.uint8,
+    ]

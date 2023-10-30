@@ -6,6 +6,7 @@
 
 #include <vector>
 
+namespace DDPT {
 ///
 /// Multi-dimensional index
 ///
@@ -46,3 +47,4 @@ uint64_t linearize(const std::vector<T> & idx, const std::vector<uint64_t> & tss
     return tidx;
 }
 #endif
+} // namespace DDPT

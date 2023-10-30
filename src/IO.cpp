@@ -15,6 +15,8 @@
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
+namespace DDPT {
+
 // ***************************************************************************
 
 /// @brief form a ddptensor from local numpy arrays (inplace - no copy)
@@ -75,7 +77,7 @@ struct DeferredFromLocal : public Deferred {
     set_value(std::move(res));
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -96,3 +98,4 @@ ddptensor *IO::from_locals(const std::vector<py::array> &a) {
 }
 
 FACTORY_INIT(DeferredFromLocal, F_FROMLOCALS);
+} // namespace DDPT

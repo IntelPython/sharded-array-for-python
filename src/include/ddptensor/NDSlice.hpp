@@ -7,6 +7,7 @@
 #include <bitsery/bitsery.h>
 #include <bitsery/traits/vector.h>
 
+namespace DDPT {
 ///
 /// A slice of n-dimensional range with utility features to extract nd-indices.
 /// Represented as a vector of triplets [start, end, step[.
@@ -503,3 +504,4 @@ public:
         return iterator();
     }
 #endif
+} // namespace DDPT

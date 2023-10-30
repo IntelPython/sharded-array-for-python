@@ -9,6 +9,7 @@
 #include <mutex>
 #include <unordered_map>
 
+namespace DDPT {
 namespace Registry {
 
 using locker = std::lock_guard<std::mutex>;
@@ -48,3 +49,4 @@ void fini() {
   _keeper.clear();
 }
 } // namespace Registry
+} // namespace DDPT

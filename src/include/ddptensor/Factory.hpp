@@ -11,6 +11,8 @@
 #include "CppTypes.hpp"
 #include "Deferred.hpp"
 
+namespace DDPT {
+
 /// Base factory.
 /// Concrete factories derive from here and implement virtual interface.
 /// See FactoryImpl
@@ -60,3 +62,4 @@ template <FactoryId FID = FACTORY_LAST> void initFactories() {
 /// type/id pairs are currently maintained "manually"
 #define FACTORY_INIT(_D, _ID)                                                  \
   template <> void Factory::init<_ID>() { FactoryImpl<_D, _ID>::put(); }
+} // namespace DDPT

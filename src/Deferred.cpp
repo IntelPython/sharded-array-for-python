@@ -13,6 +13,7 @@
 #include "include/ddptensor/Service.hpp"
 #include "include/ddptensor/Transceiver.hpp"
 #include "include/ddptensor/itac.hpp"
+#include "include/ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -24,11 +25,10 @@ namespace py = pybind11;
 
 #include <iostream>
 
-// thread-safe FIFO queue holding deferred objects
-static tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
+namespace DDPT {
 
-// add a deferred object to the queue
-void push_runable(Runable::ptr_type &&r) { _deferred.push(std::move(r)); }
+// thread-safe FIFO queue holding deferred objects
+extern tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
 
 // if needed, object/promise is broadcasted to worker processes
 // (for controller/worker mode)
@@ -180,3 +180,4 @@ void process_promises() {
     }
   } while (!done);
 }
+} // namespace DDPT

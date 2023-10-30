@@ -4,6 +4,8 @@
 
 #pragma once
 
+namespace DDPT {
+
 template <typename T, typename U = void, class Enable = void> struct promote {};
 
 template <> struct promote<float> { using type = double; };
@@ -119,3 +121,4 @@ struct promote<
         (std::is_signed<U>::value && std::is_unsigned<T>::value)>::type> {
   using type = typename promote<U>::type;
 };
+} // namespace DDPT

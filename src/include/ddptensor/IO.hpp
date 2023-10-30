@@ -11,7 +11,9 @@
 namespace py = pybind11;
 #include <vector>
 
+namespace DDPT {
 struct IO {
   static GetItem::py_future_type to_numpy(const ddptensor &a);
   static ddptensor *from_locals(const std::vector<py::array> &a);
 };
+} // namespace DDPT

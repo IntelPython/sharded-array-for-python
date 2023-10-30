@@ -15,6 +15,8 @@
 #include "ddptensor/MPIMediator.hpp"
 #include "ddptensor/MPITransceiver.hpp"
 
+namespace DDPT {
+
 constexpr static int REQ_TAG = 14711;
 constexpr static int PULL_TAG = 14712;
 constexpr static int PUSH_TAG = 14713;
@@ -204,3 +206,4 @@ void MPIMediator::listen() {
   // MPI_Cancel(&request_in);
   // MPI_Wait(&request_out, MPI_STATUS_IGNORE);
 }
+} // namespace DDPT

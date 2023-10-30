@@ -4,7 +4,7 @@ import pytest
 
 class TestTemporaries:
     def test_temp_inline(self):
-        dtyp = dt.float64
+        dtyp = dt.float32
         a = dt.ones((6, 6), dtype=dtyp)
         b = dt.ones((6, 6), dtype=dtyp)
 
@@ -31,7 +31,7 @@ class TestTemporaries:
             c = func(a)
             b[0:5, 0:5] = b[0:5, 0:5] + c
 
-        dtyp = dt.float64
+        dtyp = dt.float32
         a = dt.ones((6, 6), dtype=dtyp)
         b = dt.ones((6, 6), dtype=dtyp)
 

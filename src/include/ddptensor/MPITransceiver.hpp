@@ -9,6 +9,8 @@
 #include "Transceiver.hpp"
 #include <mpi.h>
 
+namespace DDPT {
+
 class MPITransceiver : public Transceiver {
 public:
   MPITransceiver(bool is_cw);
@@ -45,3 +47,4 @@ private:
   MPI_Comm _comm;
   bool _is_cw;
 };
+} // namespace DDPT

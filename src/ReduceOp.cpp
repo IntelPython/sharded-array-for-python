@@ -4,12 +4,16 @@
 
 #include "ddptensor/ReduceOp.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
+
+namespace DDPT {
 
 #if 0
 namespace x {
@@ -115,7 +119,7 @@ struct DeferredReduceOp : public Deferred {
 #endif
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, _a);
@@ -162,3 +166,4 @@ ddptensor *ReduceOp::op(ReduceOpId op, const ddptensor &a,
 }
 
 FACTORY_INIT(DeferredReduceOp, F_REDUCEOP);
+} // namespace DDPT

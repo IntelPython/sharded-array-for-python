@@ -10,6 +10,8 @@
 
 #include "CppTypes.hpp"
 
+namespace DDPT {
+
 class NDSlice;
 
 /// Futures and promises readily provide meta information
@@ -138,3 +140,4 @@ void serialize(S & ser, tensor_i::future_type & f)
     }
 }
 #endif
+} // namespace DDPT

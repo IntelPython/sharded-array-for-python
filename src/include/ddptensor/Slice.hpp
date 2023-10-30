@@ -11,6 +11,7 @@ namespace py = pybind11;
 #endif
 #include <bitsery/bitsery.h>
 
+namespace DDPT {
 ///
 /// A slice of 1-dimensional range with utility features to extract indices.
 /// Represented as a triplet [start, end, step[.
@@ -211,3 +212,4 @@ struct Slice {
     ser.value8b(_step);
   }
 };
+} // namespace DDPT

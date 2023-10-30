@@ -8,6 +8,8 @@
 
 #include <future>
 
+namespace DDPT {
+
 class ddptensor;
 
 struct Service {
@@ -22,3 +24,4 @@ struct Service {
   /// signal that the given ddptensor is no longer needed and can be deleted
   static service_future_type drop(const ddptensor &a);
 };
+} // namespace DDPT

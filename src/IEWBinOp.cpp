@@ -7,15 +7,19 @@
 #include "ddptensor/IEWBinOp.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Registry.hpp"
 #include "ddptensor/TypeDispatch.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
+
+namespace DDPT {
 
 // convert id of our binop to id of imex::ptensor binop
 static ::imex::ptensor::EWBinOpId ddpt2mlir(const IEWBinOpId bop) {
@@ -61,7 +65,7 @@ struct DeferredIEWBinOp : public Deferred {
       : Deferred(a.dtype(), a.shape(), a.team(), a.balanced()), _a(a.guid()),
         _b(b.guid()), _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // FIXME the type of the result is based on a only
     auto av = dm.getDependent(builder, _a);
@@ -106,7 +110,7 @@ struct DeferredIEWBinOp : public Deferred {
 };
 
 ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
-  auto bb = Creator::mk_future(b, a.get().team());
+  auto bb = Creator::mk_future(b, a.get().team(), a.get().dtype());
   auto res =
       new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
   if (bb.second)
@@ -115,3 +119,4 @@ ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
 }
 
 FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);
+} // namespace DDPT

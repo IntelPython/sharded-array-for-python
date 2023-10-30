@@ -19,6 +19,8 @@ print(
 #include <pybind11/stl.h>
 namespace py = pybind11;
 #endif
+
+namespace DDPT {
 """
 )
 
@@ -43,7 +45,7 @@ for cat, lst in api.api_categories.items():
         print(f'        .value("{x.upper()}", {x.upper()})')
     print("        .export_values();\n")
 
-print("}\n#endif\n")
+print("}\n#endif\n} // namespace DDPT")
 
 # Close the file
 sys.stdout.close()

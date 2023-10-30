@@ -9,12 +9,14 @@
 #include "ddptensor/CollComm.hpp"
 #include "ddptensor/Creator.hpp"
 #include "ddptensor/DDPTensorImpl.hpp"
+#include "ddptensor/Deferred.hpp"
 #include "ddptensor/Factory.hpp"
 #include "ddptensor/Mediator.hpp"
 #include "ddptensor/NDSlice.hpp"
 #include "ddptensor/Transceiver.hpp"
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/UtilsAndTypes.hpp"
+#include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
@@ -25,6 +27,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
+
+namespace DDPT {
 
 template <typename T> struct mk_array {
   template <typename C> static py::object op(C &&shp, void *&outPtr) {
@@ -76,7 +80,7 @@ struct DeferredGetLocals
     set_value(py::make_tuple(res));
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -127,7 +131,7 @@ struct DeferredGather
     set_value(res);
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -153,7 +157,7 @@ struct DeferredSetItem : public Deferred {
       : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
         _a(a.guid()), _b(b.guid()), _slc(v) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     const auto dtype = this->dtype();
@@ -235,7 +239,7 @@ struct DeferredMap : public Deferred {
     this->set_value(aa);
   };
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -275,7 +279,7 @@ struct DeferredGetItem : public Deferred {
     // set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, ::mlir::Location loc,
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     const auto dtype = this->dtype();
@@ -356,7 +360,7 @@ GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
 
 ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
                                 const py::object &b) {
-  auto bb = Creator::mk_future(b, a.get().team());
+  auto bb = Creator::mk_future(b, a.get().team(), a.get().dtype());
   a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
   if (bb.second)
     delete bb.first;
@@ -379,3 +383,4 @@ FACTORY_INIT(DeferredSetItem, F_SETITEM);
 FACTORY_INIT(DeferredMap, F_MAP);
 FACTORY_INIT(DeferredGather, F_GATHER);
 FACTORY_INIT(DeferredGetLocals, F_GETLOCALS);
+} // namespace DDPT
