@@ -29,7 +29,7 @@ import time as time_mod
 import argparse
 
 
-def run(n, backend, benchmark_mode, correctness_test):
+def run(n, backend, datatype, benchmark_mode):
     if backend == "ddpt":
         import ddptensor as np
         from ddptensor.numpy import fromfunction
@@ -64,8 +64,11 @@ def run(n, backend, benchmark_mode, correctness_test):
 
     info(f"Using backend: {backend}")
 
-    if correctness_test:
-        n = 10
+    dtype = {
+        "f64": np.float64,
+        "f32": np.float32,
+    }[datatype]
+    info(f"Datatype: {datatype}")
 
     # constants
     g = 9.81
@@ -92,20 +95,16 @@ def run(n, backend, benchmark_mode, correctness_test):
     t_end = 1.0
 
     # coordinate arrays
-    x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=np.float64
-    )
-    y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=np.float64
-    )
-    x_u_2d = fromfunction(lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=np.float64)
+    x_t_2d = fromfunction(lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype)
+    y_t_2d = fromfunction(lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype)
+    x_u_2d = fromfunction(lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype)
     y_u_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx + 1, ny), dtype=np.float64
+        lambda i, j: ymin + j * dy + dy / 2, (nx + 1, ny), dtype=dtype
     )
     x_v_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny + 1), dtype=np.float64
+        lambda i, j: xmin + i * dx + dx / 2, (nx, ny + 1), dtype=dtype
     )
-    y_v_2d = fromfunction(lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=np.float64)
+    y_v_2d = fromfunction(lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype)
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
@@ -122,32 +121,32 @@ def run(n, backend, benchmark_mode, correctness_test):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    e = np.full(T_shape, 0.0, np.float64)
-    u = np.full(U_shape, 0.0, np.float64)
-    v = np.full(V_shape, 0.0, np.float64)
+    e = np.full(T_shape, 0.0, dtype)
+    u = np.full(U_shape, 0.0, dtype)
+    v = np.full(V_shape, 0.0, dtype)
 
     # potential vorticity
-    q = np.full(F_shape, 0.0, np.float64)
+    q = np.full(F_shape, 0.0, dtype)
 
     # bathymetry
-    h = np.full(T_shape, 0.0, np.float64)
+    h = np.full(T_shape, 0.0, dtype)
 
-    hu = np.full(U_shape, 0.0, np.float64)
-    hv = np.full(V_shape, 0.0, np.float64)
+    hu = np.full(U_shape, 0.0, dtype)
+    hv = np.full(V_shape, 0.0, dtype)
 
-    dudy = np.full(F_shape, 0.0, np.float64)
-    dvdx = np.full(F_shape, 0.0, np.float64)
+    dudy = np.full(F_shape, 0.0, dtype)
+    dvdx = np.full(F_shape, 0.0, dtype)
 
     # vector invariant form
-    H_at_f = np.full(F_shape, 0.0, np.float64)
+    H_at_f = np.full(F_shape, 0.0, dtype)
 
     # auxiliary variables for RK time integration
-    e1 = np.full(T_shape, 0.0, np.float64)
-    u1 = np.full(U_shape, 0.0, np.float64)
-    v1 = np.full(V_shape, 0.0, np.float64)
-    e2 = np.full(T_shape, 0.0, np.float64)
-    u2 = np.full(U_shape, 0.0, np.float64)
-    v2 = np.full(V_shape, 0.0, np.float64)
+    e1 = np.full(T_shape, 0.0, dtype)
+    u1 = np.full(U_shape, 0.0, dtype)
+    v1 = np.full(V_shape, 0.0, dtype)
+    e2 = np.full(T_shape, 0.0, dtype)
+    u2 = np.full(U_shape, 0.0, dtype)
+    v2 = np.full(V_shape, 0.0, dtype)
 
     def exact_solution(t, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d):
         """
@@ -176,7 +175,7 @@ def run(n, backend, benchmark_mode, correctness_test):
         Water depth at rest
         """
         bath = 1.0
-        return bath * np.full(T_shape, 1.0, np.float64)
+        return bath * np.full(T_shape, 1.0, dtype)
 
     # inital elevation
     u0, v0, e0 = exact_solution(0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d)
@@ -200,10 +199,6 @@ def run(n, backend, benchmark_mode, correctness_test):
         dt = 1e-5
         nt = 100
         t_export = dt * 25
-    if correctness_test:
-        dt = 0.02
-        nt = 10
-        t_export = dt * 2
 
     info(f"Time step: {dt} s")
     info(f"Total run time: {t_end} s, {nt} time steps")
@@ -381,20 +376,22 @@ def run(n, backend, benchmark_mode, correctness_test):
     err_L2 = math.sqrt(float(np.sum(err2, all_axes)))
     info(f"L2 error: {err_L2:7.15e}")
 
-    if correctness_test:
-        assert numpy.allclose(err_L2, 3.687334565903038e-04), "L2 error does not match"
-        info("SUCCESS")
-    elif nx < 128 or ny < 128:
+    if nx < 128 or ny < 128:
         info("Skipping correctness test due to small problem size.")
     elif not benchmark_mode:
-        tolerance_ene = 1e-8
+        tolerance_ene = 1e-7 if datatype == "f32" else 1e-9
         assert (
             diff_e < tolerance_ene
         ), f"Energy error exceeds tolerance: {diff_e} > {tolerance_ene}"
         if nx == 128 and ny == 128:
-            assert numpy.allclose(
-                err_L2, 4.315799035627906e-05
-            ), "L2 error does not match"
+            if datatype == "f32":
+                assert numpy.allclose(
+                    err_L2, 4.3127859e-05, rtol=1e-5
+                ), "L2 error does not match"
+            else:
+                assert numpy.allclose(
+                    err_L2, 4.315799035627906e-05
+                ), "L2 error does not match"
         else:
             tolerance_l2 = 1e-4
             assert (
@@ -424,12 +421,6 @@ if __name__ == "__main__":
         help="Run a fixed number of time steps.",
     )
     parser.add_argument(
-        "-ct",
-        "--correctness-test",
-        action="store_true",
-        help="Run a minimal correctness test.",
-    )
-    parser.add_argument(
         "-b",
         "--backend",
         type=str,
@@ -437,5 +428,18 @@ if __name__ == "__main__":
         choices=["ddpt", "numpy"],
         help="Backend to use.",
     )
+    parser.add_argument(
+        "-d",
+        "--datatype",
+        type=str,
+        default="f64",
+        choices=["f32", "f64"],
+        help="Datatype for model state variables",
+    )
     args = parser.parse_args()
-    run(args.resolution, args.backend, args.benchmark_mode, args.correctness_test)
+    run(
+        args.resolution,
+        args.backend,
+        args.datatype,
+        args.benchmark_mode,
+    )

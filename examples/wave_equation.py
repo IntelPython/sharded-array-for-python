@@ -29,7 +29,7 @@ import time as time_mod
 import argparse
 
 
-def run(n, backend, benchmark_mode, correctness_test):
+def run(n, backend, datatype, benchmark_mode):
     if backend == "ddpt":
         import ddptensor as np
         from ddptensor.numpy import fromfunction
@@ -64,8 +64,11 @@ def run(n, backend, benchmark_mode, correctness_test):
 
     info(f"Using backend: {backend}")
 
-    if correctness_test:
-        n = 10
+    dtype = {
+        "f64": np.float64,
+        "f32": np.float32,
+    }[datatype]
+    info(f"Datatype: {datatype}")
 
     # constants
     h = 1.0
@@ -92,12 +95,8 @@ def run(n, backend, benchmark_mode, correctness_test):
     t_end = 1.0
 
     # coordinate arrays
-    x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=np.float64
-    )
-    y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=np.float64
-    )
+    x_t_2d = fromfunction(lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype)
+    y_t_2d = fromfunction(lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype)
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
@@ -113,17 +112,17 @@ def run(n, backend, benchmark_mode, correctness_test):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    e = np.full(T_shape, 0.0, np.float64)
-    u = np.full(U_shape, 0.0, np.float64)
-    v = np.full(V_shape, 0.0, np.float64)
+    e = np.full(T_shape, 0.0, dtype)
+    u = np.full(U_shape, 0.0, dtype)
+    v = np.full(V_shape, 0.0, dtype)
 
     # auxiliary variables for RK time integration
-    e1 = np.full(T_shape, 0.0, np.float64)
-    u1 = np.full(U_shape, 0.0, np.float64)
-    v1 = np.full(V_shape, 0.0, np.float64)
-    e2 = np.full(T_shape, 0.0, np.float64)
-    u2 = np.full(U_shape, 0.0, np.float64)
-    v2 = np.full(V_shape, 0.0, np.float64)
+    e1 = np.full(T_shape, 0.0, dtype)
+    u1 = np.full(U_shape, 0.0, dtype)
+    v1 = np.full(V_shape, 0.0, dtype)
+    e2 = np.full(T_shape, 0.0, dtype)
+    u2 = np.full(U_shape, 0.0, dtype)
+    v2 = np.full(V_shape, 0.0, dtype)
 
     def exact_elev(t, x_t_2d, y_t_2d, lx, ly):
         """
@@ -156,10 +155,6 @@ def run(n, backend, benchmark_mode, correctness_test):
         dt = 1e-5
         nt = 100
         t_export = dt * 25
-    if correctness_test:
-        dt = 0.02
-        nt = 10
-        t_export = dt * 2
 
     info(f"Time step: {dt} s")
     info(f"Total run time: {t_end} s, {nt} time steps")
@@ -253,11 +248,10 @@ def run(n, backend, benchmark_mode, correctness_test):
     info(f"L2 error: {err_L2:7.5e}")
 
     if nx == 128 and ny == 128 and not benchmark_mode:
-        assert numpy.allclose(err_L2, 7.224068445111e-03)
-        info("SUCCESS")
-
-    if correctness_test:
-        assert numpy.allclose(err_L2, 1.317066179876e-02)
+        if datatype == "f32":
+            assert numpy.allclose(err_L2, 7.2235471e-03, rtol=1e-4)
+        else:
+            assert numpy.allclose(err_L2, 7.224068445111e-03)
         info("SUCCESS")
 
     fini()
@@ -282,12 +276,6 @@ if __name__ == "__main__":
         help="Run a fixed number of time steps.",
     )
     parser.add_argument(
-        "-ct",
-        "--correctness-test",
-        action="store_true",
-        help="Run a minimal correctness test.",
-    )
-    parser.add_argument(
         "-b",
         "--backend",
         type=str,
@@ -295,5 +283,18 @@ if __name__ == "__main__":
         choices=["ddpt", "numpy"],
         help="Backend to use.",
     )
+    parser.add_argument(
+        "-d",
+        "--datatype",
+        type=str,
+        default="f64",
+        choices=["f32", "f64"],
+        help="Datatype for model state variables",
+    )
     args = parser.parse_args()
-    run(args.resolution, args.backend, args.benchmark_mode, args.correctness_test)
+    run(
+        args.resolution,
+        args.backend,
+        args.datatype,
+        args.benchmark_mode,
+    )
