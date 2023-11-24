@@ -652,23 +652,24 @@ JIT::JIT()
   _crunnerlib = std::string(mlirRoot) + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = std::string(mlirRoot) + "/lib/libmlir_runner_utils.so";
 
-  const char *gpuxlibstr = getenv("DDPT_GPUX_SO");
-  if (gpuxlibstr) {
-    _gpulib = std::string(gpuxlibstr);
-  } else {
-    const char *imexRoot = getenv("IMEXROOT");
-    imexRoot = imexRoot ? imexRoot : CMAKE_IMEX_ROOT;
-    _gpulib = std::string(imexRoot) + "/lib/liblevel-zero-runtime.so";
-  }
-
-  // static const char * xxx =
-  // "/home/fschlimb/imex/lib/libimex_runner_utils.so";
-
   const char *idtrlib = getenv("DDPT_IDTR_SO");
   idtrlib = idtrlib ? idtrlib : "libidtr.so";
 
-  _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), // xxx,
-                     idtrlib, _gpulib.c_str()};
+  auto useGPU = getenv("DDPT_USE_GPU");
+  if (useGPU) {
+    const char *gpuxlibstr = getenv("DDPT_GPUX_SO");
+    if (gpuxlibstr) {
+      _gpulib = std::string(gpuxlibstr);
+    } else {
+      const char *imexRoot = getenv("IMEXROOT");
+      imexRoot = imexRoot ? imexRoot : CMAKE_IMEX_ROOT;
+      _gpulib = std::string(imexRoot) + "/lib/liblevel-zero-runtime.so";
+    }
+    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), idtrlib,
+                       _gpulib.c_str()};
+  } else {
+    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), idtrlib};
+  }
 
   // detect target architecture
   auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
