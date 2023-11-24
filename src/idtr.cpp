@@ -514,7 +514,7 @@ struct UHCache {
   // receive maps
   std::vector<int> _lRecvSize, _rRecvSize, _lRecvOff, _rRecvOff;
   // buffers
-  DDPT::Buffer _recvBuff, _sendLBuff, _sendRBuff;
+  DDPT::Buffer _recvLBuff, _recvRBuff, _sendLBuff, _sendRBuff;
   bool _bufferizeSend, _bufferizeLRecv, _bufferizeRRecv;
   // start and sizes for chunks from remotes if copies are needed
   int64_t _lTotalRecvSize, _rTotalRecvSize, _lTotalSendSize, _rTotalSendSize;
@@ -531,10 +531,10 @@ struct UHCache {
           std::vector<int> &&rSendSize, std::vector<int> &&lSendOff,
           std::vector<int> &&rSendOff, std::vector<int> &&lRecvSize,
           std::vector<int> &&rRecvSize, std::vector<int> &&lRecvOff,
-          DDPT::Buffer &&recvBuff, DDPT::Buffer &&sendLBuff,
-          DDPT::Buffer &&sendRBuff, std::vector<int> &&rRecvOff,
-          bool bufferizeSend, bool bufferizeLRecv, bool bufferizeRRecv,
-          int64_t lTotalRecvSize, int64_t rTotalRecvSize,
+          DDPT::Buffer &&recvLBuff, DDPT::Buffer &&recvRBuff,
+          DDPT::Buffer &&sendLBuff, DDPT::Buffer &&sendRBuff,
+          std::vector<int> &&rRecvOff, bool bufferizeSend, bool bufferizeLRecv,
+          bool bufferizeRRecv, int64_t lTotalRecvSize, int64_t rTotalRecvSize,
           int64_t lTotalSendSize, int64_t rTotalSendSize)
       : _lBufferStart(std::move(lBufferStart)),
         _lBufferSize(std::move(lBufferSize)),
@@ -546,11 +546,12 @@ struct UHCache {
         _lSendOff(std::move(lSendOff)), _rSendOff(std::move(rSendOff)),
         _lRecvSize(std::move(lRecvSize)), _rRecvSize(std::move(rRecvSize)),
         _lRecvOff(std::move(lRecvOff)), _rRecvOff(std::move(rRecvOff)),
-        _recvBuff(std::move(recvBuff)), _sendLBuff(std::move(sendLBuff)),
-        _sendRBuff(std::move(sendRBuff)), _bufferizeSend(bufferizeSend),
-        _bufferizeLRecv(bufferizeLRecv), _bufferizeRRecv(bufferizeRRecv),
-        _lTotalRecvSize(lTotalRecvSize), _rTotalRecvSize(rTotalRecvSize),
-        _lTotalSendSize(lTotalSendSize), _rTotalSendSize(rTotalSendSize) {}
+        _recvLBuff(std::move(recvLBuff)), _recvRBuff(std::move(recvRBuff)),
+        _sendLBuff(std::move(sendLBuff)), _sendRBuff(std::move(sendRBuff)),
+        _bufferizeSend(bufferizeSend), _bufferizeLRecv(bufferizeLRecv),
+        _bufferizeRRecv(bufferizeRRecv), _lTotalRecvSize(lTotalRecvSize),
+        _rTotalRecvSize(rTotalRecvSize), _lTotalSendSize(lTotalSendSize),
+        _rTotalSendSize(rTotalSendSize) {}
   UHCache &operator=(const UHCache &) = delete;
   UHCache &operator=(UHCache &&) = default;
 };
@@ -748,20 +749,22 @@ void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
   }
   cache = &(cIt->second);
 
-  if (cache->_bufferizeLRecv || cache->_bufferizeRRecv) {
-    cache->_recvBuff.resize(
-        std::max(cache->_lTotalRecvSize, cache->_rTotalRecvSize) *
-        sizeof_dtype(ddpttype));
+  auto nbytes = sizeof_dtype(ddpttype);
+  if (cache->_bufferizeLRecv) {
+    cache->_recvLBuff.resize(cache->_lTotalRecvSize * nbytes);
+  }
+  if (cache->_bufferizeRRecv) {
+    cache->_recvRBuff.resize(cache->_rTotalRecvSize * nbytes);
   }
   if (cache->_bufferizeSend) {
-    cache->_sendLBuff.resize(cache->_lTotalSendSize * sizeof_dtype(ddpttype));
-    cache->_sendRBuff.resize(cache->_rTotalSendSize * sizeof_dtype(ddpttype));
+    cache->_sendLBuff.resize(cache->_lTotalSendSize * nbytes);
+    cache->_sendRBuff.resize(cache->_rTotalSendSize * nbytes);
   }
 
   void *lRecvData =
-      cache->_bufferizeLRecv ? cache->_recvBuff.data() : leftHaloData;
+      cache->_bufferizeLRecv ? cache->_recvLBuff.data() : leftHaloData;
   void *rRecvData =
-      cache->_bufferizeRRecv ? cache->_recvBuff.data() : rightHaloData;
+      cache->_bufferizeRRecv ? cache->_recvRBuff.data() : rightHaloData;
   void *lSendData =
       cache->_bufferizeSend ? cache->_sendLBuff.data() : ownedData;
   void *rSendData =
