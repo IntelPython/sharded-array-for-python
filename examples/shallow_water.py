@@ -215,73 +215,63 @@ def run(n, backend, datatype, benchmark_mode):
         H = e + h
 
         # volume flux divergence -div(H u)
-        hu[1:nx, :] = 0.5 * (H[0 : nx - 1, :] + H[1:nx, :]) * u[1:nx, :]
-        hv[:, 1:ny] = 0.5 * (H[:, 0 : ny - 1] + H[:, 1:ny]) * v[:, 1:ny]
+        hu[1:-1, :] = 0.5 * (H[:-1, :] + H[1:, :]) * u[1:-1, :]
+        hv[:, 1:-1] = 0.5 * (H[:, :-1] + H[:, 1:]) * v[:, 1:-1]
 
-        dedt = -1.0 * (
-            (hu[1 : nx + 1, :] - hu[0:nx, :]) / dx
-            + (hv[:, 1 : ny + 1] - hv[:, 0:ny]) / dy
-        )
+        dedt = -1.0 * ((hu[1:, :] - hu[:-1, :]) / dx + (hv[:, 1:] - hv[:, :-1]) / dy)
 
         # total depth at F points
-        H_at_f[1:nx, 1:ny] = 0.25 * (
-            H[1:nx, 1:ny]
-            + H[0 : nx - 1, 1:ny]
-            + H[1:nx, 0 : ny - 1]
-            + H[0 : nx - 1, 0 : ny - 1]
-        )
-        H_at_f[0, 1:ny] = 0.5 * (H[0, 1:ny] + H[0, 0 : ny - 1])
-        H_at_f[nx, 1:ny] = 0.5 * (H[nx - 1, 1:ny] + H[nx - 1, 0 : ny - 1])
-        H_at_f[1:nx, 0] = 0.5 * (H[1:nx, 0] + H[0 : nx - 1, 0])
-        H_at_f[1:nx, ny] = 0.5 * (H[1:nx, ny - 1] + H[0 : nx - 1, ny - 1])
+        H_at_f[1:-1, 1:-1] = 0.25 * (H[1:, 1:] + H[:-1, 1:] + H[1:, :-1] + H[:-1, :-1])
+        H_at_f[0, 1:-1] = 0.5 * (H[0, 1:] + H[0, :-1])
+        H_at_f[-1, 1:-1] = 0.5 * (H[-1, 1:] + H[-1, :-1])
+        H_at_f[1:-1, 0] = 0.5 * (H[1:, 0] + H[:-1, 0])
+        H_at_f[1:-1, -1] = 0.5 * (H[1:, -1] + H[:-1, -1])
         H_at_f[0, 0] = H[0, 0]
-        H_at_f[0, ny] = H[0, ny - 1]
-        H_at_f[nx, 0] = H[nx - 1, 0]
-        H_at_f[nx, ny] = H[nx - 1, ny - 1]
+        H_at_f[0, -1] = H[0, -1]
+        H_at_f[-1, 0] = H[-1, 0]
+        H_at_f[-1, -1] = H[-1, -1]
 
         # potential vorticity
-        dudy[:, 1:ny] = (u[:, 1:ny] - u[:, 0 : ny - 1]) / dy
-        dvdx[1:nx, :] = (v[1:nx, :] - v[0 : nx - 1, :]) / dx
+        dudy[:, 1:-1] = (u[:, 1:] - u[:, :-1]) / dy
+        dvdx[1:-1, :] = (v[1:, :] - v[:-1, :]) / dx
         q[:, :] = (dvdx - dudy + coriolis) / H_at_f
 
         # Advection of potential vorticity, Arakawa and Hsu (1990)
         # Define alpha, beta, gamma, delta for each cell in T points
         w = 1.0 / 12
-        q_a = w * (q[0:nx, 1 : ny + 1] + q[0:nx, 0:ny] + q[1 : nx + 1, 1 : ny + 1])
-        q_b = w * (
-            q[1 : nx + 1, 1 : ny + 1] + q[1 : nx + 1, 0:ny] + q[0:nx, 1 : ny + 1]
-        )
-        q_g = w * (q[1 : nx + 1, 0:ny] + q[1 : nx + 1, 1 : ny + 1] + q[0:nx, 0:ny])
-        q_d = w * (q[0:nx, 0:ny] + q[0:nx, 1 : ny + 1] + q[1 : nx + 1, 0:ny])
+        q_a = w * (q[:-1, 1:] + q[:-1, :-1] + q[1:, 1:])
+        q_b = w * (q[1:, 1:] + q[1:, :-1] + q[:-1, 1:])
+        q_g = w * (q[1:, :-1] + q[1:, 1:] + q[:-1, :-1])
+        q_d = w * (q[:-1, :-1] + q[:-1, 1:] + q[1:, :-1])
 
         # kinetic energy
         u2 = u * u
         v2 = v * v
-        u2_at_t = 0.5 * (u2[1 : nx + 1, :] + u2[0:nx, :])
-        v2_at_t = 0.5 * (v2[:, 1 : ny + 1] + v2[:, 0:ny])
+        u2_at_t = 0.5 * (u2[1:, :] + u2[:-1, :])
+        v2_at_t = 0.5 * (v2[:, 1:] + v2[:, :-1])
         ke = 0.5 * (u2_at_t + v2_at_t)
 
         dudt = (
             # pressure gradient -g grad(elev)
-            -g * (e[1:nx, :] - e[0 : nx - 1, :]) / dx
+            -g * (e[1:, :] - e[:-1, :]) / dx
             # kinetic energy gradient
-            - (ke[1:nx, :] - ke[0 : nx - 1, :]) / dx
+            - (ke[1:, :] - ke[:-1, :]) / dx
             # potential vorticity advection terms
-            + q_a[1:nx, :] * hv[1:nx, 1 : ny + 1]
-            + q_b[0 : nx - 1, :] * hv[0 : nx - 1, 1 : ny + 1]
-            + q_g[0 : nx - 1, :] * hv[0 : nx - 1, 0:ny]
-            + q_d[1:nx, :] * hv[1:nx, 0:ny]
+            + q_a[1:, :] * hv[1:, 1:]
+            + q_b[:-1, :] * hv[:-1, 1:]
+            + q_g[:-1, :] * hv[:-1, :-1]
+            + q_d[1:, :] * hv[1:, :-1]
         )
         dvdt = (
             # pressure gradient -g grad(elev)
-            -g * (e[:, 1:ny] - e[:, 0 : ny - 1]) / dy
+            -g * (e[:, 1:] - e[:, :-1]) / dy
             # kinetic energy gradient
-            - (ke[:, 1:ny] - ke[:, 0 : ny - 1]) / dy
+            - (ke[:, 1:] - ke[:, :-1]) / dy
             # potential vorticity advection terms
-            - q_g[:, 1:ny] * hu[1 : nx + 1, 1:ny]
-            - q_d[:, 1:ny] * hu[0:nx, 1:ny]
-            - q_a[:, 0 : ny - 1] * hu[0:nx, 0 : ny - 1]
-            - q_b[:, 0 : ny - 1] * hu[1 : nx + 1, 0 : ny - 1]
+            - q_g[:, 1:] * hu[1:, 1:]
+            - q_d[:, 1:] * hu[:-1, 1:]
+            - q_a[:, :-1] * hu[:-1, :-1]
+            - q_b[:, :-1] * hu[1:, :-1]
         )
 
         return dudt, dvdt, dedt
@@ -291,18 +281,18 @@ def run(n, backend, datatype, benchmark_mode):
         Execute one SSPRK(3,3) time step
         """
         dudt, dvdt, dedt = rhs(u, v, e)
-        u1[1:nx, :] = u[1:nx, :] + dt * dudt
-        v1[:, 1:ny] = v[:, 1:ny] + dt * dvdt
+        u1[1:-1, :] = u[1:-1, :] + dt * dudt
+        v1[:, 1:-1] = v[:, 1:-1] + dt * dvdt
         e1[:, :] = e[:, :] + dt * dedt
 
         dudt, dvdt, dedt = rhs(u1, v1, e1)
-        u2[1:nx, :] = 0.75 * u[1:nx, :] + 0.25 * (u1[1:nx, :] + dt * dudt)
-        v2[:, 1:ny] = 0.75 * v[:, 1:ny] + 0.25 * (v1[:, 1:ny] + dt * dvdt)
+        u2[1:-1, :] = 0.75 * u[1:-1, :] + 0.25 * (u1[1:-1, :] + dt * dudt)
+        v2[:, 1:-1] = 0.75 * v[:, 1:-1] + 0.25 * (v1[:, 1:-1] + dt * dvdt)
         e2[:, :] = 0.75 * e[:, :] + 0.25 * (e1[:, :] + dt * dedt)
 
         dudt, dvdt, dedt = rhs(u2, v2, e2)
-        u[1:nx, :] = u[1:nx, :] / 3.0 + 2.0 / 3.0 * (u2[1:nx, :] + dt * dudt)
-        v[:, 1:ny] = v[:, 1:ny] / 3.0 + 2.0 / 3.0 * (v2[:, 1:ny] + dt * dvdt)
+        u[1:-1, :] = u[1:-1, :] / 3.0 + 2.0 / 3.0 * (u2[1:-1, :] + dt * dudt)
+        v[:, 1:-1] = v[:, 1:-1] / 3.0 + 2.0 / 3.0 * (v2[:, 1:-1] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
 
     t = 0
@@ -328,8 +318,8 @@ def run(n, backend, datatype, benchmark_mode):
             # kinetic energy
             u2 = u * u
             v2 = v * v
-            u2_at_t = 0.5 * (u2[1 : nx + 1, :] + u2[0:nx, :])
-            v2_at_t = 0.5 * (v2[:, 1 : ny + 1] + v2[:, 0:ny])
+            u2_at_t = 0.5 * (u2[1:, :] + u2[:-1, :])
+            v2_at_t = 0.5 * (v2[:, 1:] + v2[:, :-1])
             _ke = 0.5 * (u2_at_t + v2_at_t) * (e + h)
             _total_ke = np.sum(_ke, all_axes)
 
