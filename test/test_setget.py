@@ -90,3 +90,53 @@ class TestSetGet:
         a[:, :] = b[:, :]
         r1 = dt.sum(a)
         assert float(r1) == 0
+
+    def test_neg_last(self):
+        a = dt.arange(0, 16, 1, dt.int64)
+        b = a[-1]
+        assert int(b) == 15
+
+    def test_neg_end(self):
+        def doit(aapi):
+            a = aapi.arange(0, 16, 1, aapi.int64)
+            b = aapi.arange(2, 18, 1, aapi.int64)
+            a[0:10] = b[:-6]
+            return a
+
+        assert runAndCompare(doit)
+
+    def test_neg_start(self):
+        def doit(aapi):
+            a = aapi.arange(0, 16, 1, aapi.int64)
+            b = aapi.arange(2, 18, 1, aapi.int64)
+            a[0:4] = b[-4:]
+            return a
+
+        assert runAndCompare(doit)
+
+    def test_neg_slice(self):
+        def doit(aapi):
+            a = aapi.ones((16, 16), aapi.float64)
+            b = aapi.zeros((16, 16), aapi.float64)
+            a[:-1, 0:3] = b[:-1, -4:-1]
+            return a
+
+        assert runAndCompare(doit)
+
+    @pytest.mark.skip(reason="FIXME multi-proc")
+    def test_neg_stride(self):
+        def doit(aapi):
+            a = aapi.arange(0, 8, 1, aapi.int64)
+            b = a[8:0:-1]
+            return b
+
+        assert runAndCompare(doit)
+
+    @pytest.mark.skip(reason="FIXME")
+    def test_reverse(self):
+        def doit(aapi):
+            a = aapi.arange(0, 8, 1, aapi.int64)
+            b = a[::-1]
+            return b
+
+        assert runAndCompare(doit)

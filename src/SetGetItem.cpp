@@ -155,7 +155,7 @@ struct DeferredSetItem : public Deferred {
                   const tensor_i::future_type &b,
                   const std::vector<py::slice> &v)
       : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
-        _a(a.guid()), _b(b.guid()), _slc(v) {}
+        _a(a.guid()), _b(b.guid()), _slc(v, a.shape()) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
@@ -173,12 +173,7 @@ struct DeferredSetItem : public Deferred {
     std::vector<::mlir::Value> stridesV(nd);
     for (auto i = 0; i < nd; ++i) {
       offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-      if (sizes[i] == ALL_SIZE) {
-        sizesV[i] =
-            builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
-      } else {
-        sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
-      }
+      sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
       stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
     }
     // insertsliceop has no return value, so we just create the op...
@@ -259,19 +254,9 @@ struct DeferredGetItem : public Deferred {
   id_type _a;
   NDSlice _slc;
 
-  static shape_type mkShape(const tensor_i::future_type &a,
-                            const NDSlice &slc) {
-    shape_type shape;
-    for (auto i = 0; i < slc.sizes().size(); ++i) {
-      auto s = slc.sizes()[i];
-      shape.emplace_back(s == ALL_SIZE ? a.shape()[i] : s);
-    }
-    return shape;
-  }
-
   DeferredGetItem() = default;
   DeferredGetItem(const tensor_i::future_type &a, NDSlice &&v)
-      : Deferred(a.dtype(), std::move(mkShape(a, v)), a.team(), false),
+      : Deferred(a.dtype(), std::move(shape_type(v.sizes())), a.team(), false),
         _a(a.guid()), _slc(std::move(v)) {}
 
   void run() {
@@ -285,8 +270,7 @@ struct DeferredGetItem : public Deferred {
     const auto dtype = this->dtype();
     auto av = dm.getDependent(builder, _a);
     const auto &offs = _slc.offsets();
-    const auto &sizes =
-        shape(); // we already converted ALL_SIZE as much as posible
+    const auto &sizes = shape();
     const auto &strides = _slc.strides();
     auto nd = offs.size();
     // convert C++ slices into vectors of MLIR Values
@@ -346,8 +330,9 @@ struct DeferredGetItem : public Deferred {
 
 ddptensor *GetItem::__getitem__(const ddptensor &a,
                                 const std::vector<py::slice> &v) {
-  NDSlice slc(v);
-  return new ddptensor(defer<DeferredGetItem>(a.get(), std::move(slc)));
+  auto afut = a.get();
+  NDSlice slc(v, afut.shape());
+  return new ddptensor(defer<DeferredGetItem>(afut, std::move(slc)));
 }
 
 GetItem::py_future_type GetItem::get_locals(const ddptensor &a, py::handle h) {

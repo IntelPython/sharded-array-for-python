@@ -14,7 +14,7 @@ namespace DDPT {
 ///
 class NDSlice {
 public:
-  using vec_t = std::vector<uint64_t>;
+  using vec_t = std::vector<int64_t>;
 
 private:
   // vector with offsets per dimension
@@ -31,12 +31,15 @@ public:
   // assumes a function exists to extract values per slice (compute_slice(T,
   // ...))
   template <typename T>
-  NDSlice(const std::vector<T> &v)
+  NDSlice(const std::vector<T> &v, const shape_type &shape)
       : _offsets(v.size()), _sizes(v.size()), _strides(v.size()) {
     auto nd = v.size();
     auto i = 0;
     for (auto s : v) {
-      compute_slice(s, _offsets[i], _sizes[i], _strides[i]);
+      compute_slice(s, shape[i], _offsets[i], _sizes[i], _strides[i]);
+      if (_strides[i] < 0) {
+        throw std::runtime_error("Negative stride is not supported");
+      }
       ++i;
     };
   }

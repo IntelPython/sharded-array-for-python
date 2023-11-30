@@ -10,6 +10,14 @@ from . import _ddptensor as _cdt
 from . import array_api as api
 
 
+def slicefy(x):
+    if isinstance(x, slice):
+        return x
+    # slice that extracts a single element at index x
+    next_val = None if x == -1 else x + 1
+    return slice(x, next_val, 1)
+
+
 class dtensor:
     def __init__(self, t):
         self._t = t
@@ -46,10 +54,10 @@ class dtensor:
 
     def __getitem__(self, key):
         key = key if isinstance(key, tuple) else (key,)
-        key = [x if isinstance(x, slice) else slice(x, x + 1, 1) for x in key]
+        key = [slicefy(x) for x in key]
         return dtensor(self._t.__getitem__(key))
 
     def __setitem__(self, key, value):
         key = key if isinstance(key, tuple) else (key,)
-        key = [x if isinstance(x, slice) else slice(x, x + 1, 1) for x in key]
+        key = [slicefy(x) for x in key]
         self._t.__setitem__(key, value._t if isinstance(value, dtensor) else value)
