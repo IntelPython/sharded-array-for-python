@@ -116,7 +116,7 @@ private:
   using IdValueMap = std::map<id_type, ::mlir::Value>;
   using IdCallbackMap = std::map<id_type, SetResFunc>;
   using IdReadyMap = std::map<id_type, std::vector<ReadyFunc>>;
-  using IdRankMap = std::map<id_type, int>;
+  using IdRankMap = std::map<id_type, std::pair<int, bool>>;
   // here we store the future (and not the guid) to keep it alive long enough
   using ArgList = std::vector<std::pair<id_type, tensor_i::future_type>>;
 
@@ -124,7 +124,7 @@ private:
   IdValueMap _ivm;             // guid -> mlir::Value
   IdCallbackMap _icm;          // guid -> deliver-callback
   IdReadyMap _icr;             // guid -> ready-callback
-  IdRankMap _irm;              // guid -> rank as computed in MLIR
+  IdRankMap _irm;              // guid -> rank/isDist fo return values
   ArgList _args;               // input arguments of the generated function
 
 public:
@@ -182,11 +182,10 @@ private:
   std::string _crunnerlib, _runnerlib, _gpulib;
 };
 
-// size of memreftype in number of intptr_t's
-inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
-inline uint64_t dtensor_sz(int rank) {
-  return 2 * memref_sz(1) + memref_sz(rank) + 1;
-};
+::mlir::SmallVector<::mlir::Attribute> mkEnvs(::mlir::Builder &builder,
+                                              int64_t rank,
+                                              const std::string &device,
+                                              uint64_t team);
 
 } // namespace jit
 } // namespace DDPT

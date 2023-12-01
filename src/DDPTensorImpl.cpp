@@ -22,12 +22,12 @@ DDPTensorImpl::DDPTensorImpl(
     uint64_t *lo_allocated, uint64_t *lo_aligned, rank_type owner)
     : _owner(owner), _transceiver(transceiver), _gShape(gShape),
       _lo_allocated(lo_allocated), _lo_aligned(lo_aligned),
-      _lhsHalo(gShape.size(), l_allocated, l_aligned, l_offset, l_sizes,
-               l_strides),
-      _lData(gShape.size(), o_allocated, o_aligned, o_offset, o_sizes,
-             o_strides),
-      _rhsHalo(gShape.size(), r_allocated, r_aligned, r_offset, r_sizes,
-               r_strides),
+      _lhsHalo(l_allocated ? gShape.size() : 0, l_allocated, l_aligned,
+               l_offset, l_sizes, l_strides),
+      _lData(o_allocated ? gShape.size() : 0, o_allocated, o_aligned, o_offset,
+             o_sizes, o_strides),
+      _rhsHalo(r_allocated ? gShape.size() : 0, r_allocated, r_aligned,
+               r_offset, r_sizes, r_strides),
       _dtype(dtype) {
   if (ndims() == 0) {
     _owner = REPLICATED;
@@ -183,7 +183,7 @@ int64_t DDPTensorImpl::__int__() const {
 void DDPTensorImpl::add_to_args(std::vector<void *> &args) {
   int ndims = this->ndims();
   auto storeMR = [ndims](DynMemRef &mr) -> intptr_t * {
-    intptr_t *buff = new intptr_t[dtensor_sz(ndims)];
+    intptr_t *buff = new intptr_t[memref_sz(ndims)];
     buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
     buff[1] = reinterpret_cast<intptr_t>(mr._aligned);
     buff[2] = static_cast<intptr_t>(mr._offset);
@@ -192,29 +192,22 @@ void DDPTensorImpl::add_to_args(std::vector<void *> &args) {
     return buff;
   }; // FIXME memory leak?
 
-  if (_transceiver == nullptr) {
+  if (_transceiver == nullptr || ndims == 0) {
     // no-dist-mode
     args.push_back(storeMR(_lData));
   } else {
-    // transceiver/team first
-    // args.push_back(_transceiver);
-    // local tensor first
-    if (ndims > 0) {
-      args.push_back(storeMR(_lhsHalo));
-      args.push_back(storeMR(_lData));
-      args.push_back(storeMR(_rhsHalo));
-      assert(5 == memref_sz(1));
-      // local offsets last
-      auto buff = new intptr_t[dtensor_sz(1)];
-      buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
-      buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
-      buff[2] = 0;
-      buff[3] = ndims;
-      buff[4] = 1;
-      args.push_back(buff);
-    } else {
-      args.push_back(storeMR(_lData));
-    }
+    args.push_back(storeMR(_lhsHalo));
+    args.push_back(storeMR(_lData));
+    args.push_back(storeMR(_rhsHalo));
+    // local offsets last
+    auto buff = new intptr_t[memref_sz(1)];
+    assert(5 == memref_sz(1));
+    buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
+    buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
+    buff[2] = 0;
+    buff[3] = ndims;
+    buff[4] = 1;
+    args.push_back(buff);
   }
 }
 

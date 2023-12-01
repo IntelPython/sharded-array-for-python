@@ -92,7 +92,8 @@ struct DeferredEWBinOp : public Deferred {
   DeferredEWBinOp() = default;
   DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type &a,
                   const tensor_i::future_type &b)
-      : Deferred(a.dtype(), broadcast(a.shape(), b.shape()), a.team(), true),
+      : Deferred(a.dtype(), broadcast(a.shape(), b.shape()), a.device(),
+                 a.team()),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
@@ -101,14 +102,12 @@ struct DeferredEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto outTyp = ::imex::ptensor::PTensorType::get(
-        shape(), ::imex::dist::getElementType(av));
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
-    // auto bop =
-    //     builder.create<::imex::ptensor::EWBinOp>(loc, ddpt2mlir(_op), av,
-    //     bv);
+
     dm.addVal(this->guid(), bop,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,
@@ -138,21 +137,28 @@ struct DeferredEWBinOp : public Deferred {
 };
 
 ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
+  std::string deva, devb;
   uint64_t teama = 0, teamb = 0;
   DTypeId dtypea = DTYPE_LAST, dtypeb = DTYPE_LAST;
 
   if (py::isinstance<ddptensor>(a)) {
     auto tmp = a.cast<ddptensor *>()->get();
+    deva = tmp.device();
     teama = tmp.team();
     dtypea = tmp.dtype();
   }
   if (py::isinstance<ddptensor>(b)) {
     auto tmp = b.cast<ddptensor *>()->get();
+    devb = tmp.device();
     teamb = tmp.team();
     dtypeb = tmp.dtype();
   }
-  auto aa = Creator::mk_future(a, teamb, dtypeb);
-  auto bb = Creator::mk_future(b, teama, dtypea);
+  auto aa = Creator::mk_future(a, devb, teamb, dtypeb);
+  auto bb = Creator::mk_future(b, deva, teama, dtypea);
+  if (bb.first->get().device() != aa.first->get().device()) {
+    throw std::runtime_error(
+        "devices of operands do not match in binary operation");
+  }
   if (bb.first->get().team() != aa.first->get().team()) {
     throw std::runtime_error(
         "teams of operands do not match in binary operation");

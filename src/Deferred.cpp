@@ -43,8 +43,8 @@ Deferred::future_type Deferred::get_future() {
           _guid,
           _dtype,
           _shape,
-          _team,
-          _balanced};
+          _device,
+          _team};
 }
 
 // defer a tensor-producing computation by adding it to the queue.

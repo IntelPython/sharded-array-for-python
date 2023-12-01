@@ -25,7 +25,8 @@ struct DeferredReshape : public Deferred {
   DeferredReshape() = default;
   DeferredReshape(const tensor_i::future_type &a, const shape_type &shape,
                   CopyMode copy)
-      : Deferred(a.dtype(), shape, a.team(), true), _a(a.guid()), _copy(copy) {}
+      : Deferred(a.dtype(), shape, a.device(), a.team()), _a(a.guid()),
+        _copy(copy) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
@@ -39,8 +40,9 @@ struct DeferredReshape : public Deferred {
             ? ::mlir::IntegerAttr()
             : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
 
-    auto outTyp = ::imex::ptensor::PTensorType::get(
-        shape(), ::imex::dist::getElementType(av));
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
+
     auto op =
         builder.create<::imex::ptensor::ReshapeOp>(loc, outTyp, av, shp, copyA);
 

@@ -19,6 +19,7 @@
 #include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
 #include <mlir/Dialect/Linalg/Utils/Utils.h>
@@ -154,7 +155,7 @@ struct DeferredSetItem : public Deferred {
   DeferredSetItem(const tensor_i::future_type &a,
                   const tensor_i::future_type &b,
                   const std::vector<py::slice> &v)
-      : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
         _a(a.guid()), _b(b.guid()), _slc(v, a.shape()) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
@@ -167,18 +168,10 @@ struct DeferredSetItem : public Deferred {
     auto &sizes = _slc.sizes();
     auto &strides = _slc.strides();
     auto nd = offs.size();
-    // convert C++ slices into vectors of MLIR Values
-    std::vector<::mlir::Value> offsV(nd);
-    std::vector<::mlir::Value> sizesV(nd);
-    std::vector<::mlir::Value> stridesV(nd);
-    for (auto i = 0; i < nd; ++i) {
-      offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-      sizesV[i] = ::imex::createIndex(loc, builder, sizes[i]);
-      stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-    }
+
     // insertsliceop has no return value, so we just create the op...
-    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offsV,
-                                                         sizesV, stridesV);
+    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offs,
+                                                         sizes, strides);
     // ... and use av as to later create the ptensor
     dm.addReady(this->guid(), [this](id_type guid) {
       assert(this->guid() == guid);
@@ -204,7 +197,7 @@ struct DeferredMap : public Deferred {
 
   DeferredMap() = default;
   DeferredMap(const tensor_i::future_type &a, py::object &func)
-      : Deferred(a.guid(), a.dtype(), a.shape(), a.team(), a.balanced()),
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
         _a(a.guid()), _func(func) {}
 
   void run() override {
@@ -221,7 +214,7 @@ struct DeferredMap : public Deferred {
           0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), nd, lIdx,
           [&](const std::vector<int64_t> &idx, auto *elPtr) {
             for (auto i = 0; i < nd; ++i) {
-              gIdx[i] = idx[i] + lOffs[i];
+              gIdx[i] = lOffs ? idx[i] + lOffs[i] : idx[i];
             }
             auto pyIdx = _make_tuple(gIdx);
             *elPtr =
@@ -256,7 +249,8 @@ struct DeferredGetItem : public Deferred {
 
   DeferredGetItem() = default;
   DeferredGetItem(const tensor_i::future_type &a, NDSlice &&v)
-      : Deferred(a.dtype(), std::move(shape_type(v.sizes())), a.team(), false),
+      : Deferred(a.dtype(), std::move(shape_type(v.sizes())), a.device(),
+                 a.team()),
         _a(a.guid()), _slc(std::move(v)) {}
 
   void run() {
@@ -273,27 +267,12 @@ struct DeferredGetItem : public Deferred {
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
     auto nd = offs.size();
-    // convert C++ slices into vectors of MLIR Values
-    std::vector<::mlir::OpFoldResult> offsV(nd);
-    std::vector<::mlir::OpFoldResult> sizesV(nd);
-    std::vector<::mlir::OpFoldResult> stridesV(nd);
-    for (auto i = 0; i < nd; ++i) {
-      offsV[i] = ::imex::createIndex(loc, builder, offs[i]);
-      stridesV[i] = ::imex::createIndex(loc, builder, strides[i]);
-      if (sizes[i] < 0) {
-        sizesV[i] =
-            builder.create<::imex::ptensor::DimOp>(loc, av, i).getResult();
-      } else {
-        sizesV[i] = builder.getIndexAttr(sizes[i]);
-      }
-    }
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
 
-    // auto outnd = nd == 0 || _slc.size() == 1 ? 0 : nd;
-    auto outTyp = ::imex::ptensor::PTensorType::get(
-        shape(), ::imex::dist::getElementType(av));
     // now we can create the PTensor op using the above Values
-    auto res = builder.create<::imex::ptensor::SubviewOp>(
-        loc, outTyp, av, offsV, sizesV, stridesV);
+    auto res = builder.create<::imex::ptensor::SubviewOp>(loc, outTyp, av, offs,
+                                                          sizes, strides);
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
@@ -345,7 +324,8 @@ GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
 
 ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
                                 const py::object &b) {
-  auto bb = Creator::mk_future(b, a.get().team(), a.get().dtype());
+  auto bb =
+      Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
   a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
   if (bb.second)
     delete bb.first;

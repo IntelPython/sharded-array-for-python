@@ -9,6 +9,7 @@
 #include "ddptensor/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
@@ -109,7 +110,7 @@ struct DeferredReduceOp : public Deferred {
   DeferredReduceOp() = default;
   DeferredReduceOp(ReduceOpId op, const tensor_i::future_type &a,
                    const dim_vec_type &dim)
-      : Deferred(a.dtype(), {}, a.team(), true), // FIXME rank
+      : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
   void run() {
@@ -123,31 +124,32 @@ struct DeferredReduceOp : public Deferred {
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, _a);
-    ::mlir::Type dtype = ::imex::dist::getElementType(av);
+    ::mlir::Type dtype =
+        av.getType().cast<::imex::ptensor::PTensorType>().getElementType();
     // return type 0d with same dtype as input
-    auto retPtTyp = ::imex::ptensor::PTensorType::get(shape(), dtype);
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
     // reduction op
     auto mop = ddpt2mlir(_op);
     auto op =
         builder.getIntegerAttr(builder.getIntegerType(sizeof(mop) * 8), mop);
-    dm.addVal(
-        this->guid(),
-        builder.create<::imex::ptensor::ReductionOp>(loc, retPtTyp, op, av),
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, uint64_t *lo_allocated,
-               uint64_t *lo_aligned) {
-          this->set_value(std::move(
-              mk_tnsr(reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                      this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                      l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                      o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                      r_strides, lo_allocated, lo_aligned)));
-        });
+    dm.addVal(this->guid(),
+              builder.create<::imex::ptensor::ReductionOp>(loc, outTyp, op, av),
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                this->set_value(std::move(mk_tnsr(
+                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                    r_strides, lo_allocated, lo_aligned)));
+              });
     return false;
   }
 

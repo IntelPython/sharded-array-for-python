@@ -69,27 +69,27 @@ for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func == "full":
         exec(
-            f"{func} = lambda shape, val, dtype, team=1: dtensor(_cdt.Creator.full(shape, val, dtype, team))"
+            f"{func} = lambda shape, val, dtype=float64, device='', team=1: dtensor(_cdt.Creator.full(shape, val, dtype, device, team))"
         )
     elif func == "empty":
         exec(
-            f"{func} = lambda shape, dtype, team=1: dtensor(_cdt.Creator.full(shape, None, dtype, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: dtensor(_cdt.Creator.full(shape, None, dtype, device, team))"
         )
     elif func == "ones":
         exec(
-            f"{func} = lambda shape, dtype, team=1: dtensor(_cdt.Creator.full(shape, 1, dtype, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: dtensor(_cdt.Creator.full(shape, 1, dtype, device, team))"
         )
     elif func == "zeros":
         exec(
-            f"{func} = lambda shape, dtype, team=1: dtensor(_cdt.Creator.full(shape, 0, dtype, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: dtensor(_cdt.Creator.full(shape, 0, dtype, device, team))"
         )
     elif func == "arange":
         exec(
-            f"{func} = lambda start, end, step, dtype, team=1: dtensor(_cdt.Creator.arange(start, end, step, dtype, team))"
+            f"{func} = lambda start, end, step, dtype=int64, device='', team=1: dtensor(_cdt.Creator.arange(start, end, step, dtype, device, team))"
         )
     elif func == "linspace":
         exec(
-            f"{func} = lambda start, end, step, endpoint, dtype, team=1: dtensor(_cdt.Creator.linspace(start, end, step, endpoint, dtype, team))"
+            f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=1: dtensor(_cdt.Creator.linspace(start, end, step, endpoint, dtype, device, team))"
         )
 
 for func in api.api_categories["ReduceOp"]:

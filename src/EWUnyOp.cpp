@@ -203,17 +203,19 @@ struct DeferredEWUnyOp : public Deferred {
 
   DeferredEWUnyOp() = default;
   DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
-      : Deferred(a.dtype(), a.shape(), a.team(), true), _a(a.guid()), _op(op) {}
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
+        _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, _a);
 
-    auto outTyp = ::imex::ptensor::PTensorType::get(
-        shape(), ::imex::dist::getElementType(av));
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto uop = builder.create<::imex::ptensor::EWUnyOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av);
+
     dm.addVal(this->guid(), uop,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,

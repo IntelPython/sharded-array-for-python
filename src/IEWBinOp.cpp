@@ -62,7 +62,7 @@ struct DeferredIEWBinOp : public Deferred {
   DeferredIEWBinOp() = default;
   DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
                    const tensor_i::future_type &b)
-      : Deferred(a.dtype(), a.shape(), a.team(), a.balanced()), _a(a.guid()),
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
@@ -71,8 +71,8 @@ struct DeferredIEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto outTyp = ::imex::ptensor::PTensorType::get(
-        shape(), ::imex::dist::getElementType(av));
+    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto binop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
@@ -110,7 +110,8 @@ struct DeferredIEWBinOp : public Deferred {
 };
 
 ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
-  auto bb = Creator::mk_future(b, a.get().team(), a.get().dtype());
+  auto bb =
+      Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
   auto res =
       new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
   if (bb.second)

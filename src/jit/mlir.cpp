@@ -89,6 +89,7 @@
 
 #include <llvm/Support/raw_sha1_ostream.h>
 
+#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/InitIMEXDialects.h>
 #include <imex/InitIMEXPasses.h>
@@ -123,13 +124,30 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
   return type;
 }
 
+::mlir::SmallVector<::mlir::Attribute> mkEnvs(::mlir::Builder &builder,
+                                              int64_t rank,
+                                              const std::string &device,
+                                              uint64_t team) {
+  ::mlir::SmallVector<::mlir::Attribute> envs;
+  if (team) {
+    envs.emplace_back(
+        ::imex::dist::DistEnvAttr::get(builder.getI64IntegerAttr(team), rank));
+  }
+  if (!device.empty()) {
+    envs.emplace_back(
+        ::imex::ptensor::GPUEnvAttr::get(builder.getStringAttr(device)));
+  }
+  return envs;
+}
+
 // convert ddpt's DTYpeId into MLIR type
 static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
                              const ::mlir::SmallVector<int64_t> &gShape,
                              const ::mlir::SmallVector<int64_t> &lhShape,
                              const ::mlir::SmallVector<int64_t> &ownShape,
                              const ::mlir::SmallVector<int64_t> &rhShape,
-                             uint64_t team, const uint64_t *lOffs) {
+                             const std::string &device, uint64_t team,
+                             const uint64_t *lOffs) {
   ::mlir::Type etyp;
 
   switch (dtype) {
@@ -162,19 +180,23 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     throw std::runtime_error("unknown dtype");
   };
 
+  auto rank = gShape.size();
+  auto envs = mkEnvs(builder, rank, device, 0);
   if (team) {
-    if (gShape.size()) {
-      return ::imex::dist::DistTensorType::get(
-          gShape, etyp, team,
+    if (rank) {
+      envs.emplace_back(::imex::dist::DistEnvAttr::get(
+          builder.getI64IntegerAttr(team),
           ::llvm::ArrayRef<int64_t>(reinterpret_cast<const int64_t *>(lOffs),
-                                    gShape.size()),
-          {lhShape, ownShape, rhShape});
+                                    rank),
+          {lhShape, ownShape, rhShape}));
+      return ::imex::ptensor::PTensorType::get(gShape, etyp, envs);
     } else {
-      auto eShp = ::mlir::SmallVector<int64_t>();
-      return ::imex::dist::DistTensorType::get(eShp, etyp, team, {}, {eShp});
+      envs.emplace_back(
+          ::imex::dist::DistEnvAttr::get(builder.getI64IntegerAttr(team), 0));
+      return ::imex::ptensor::PTensorType::get({}, etyp, envs);
     }
   } else {
-    return ::imex::ptensor::PTensorType::get(ownShape, etyp);
+    return ::imex::ptensor::PTensorType::get(ownShape, etyp, envs);
   }
 }
 
@@ -196,7 +218,8 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     auto typ = getTType(
         builder, impl->dtype(),
         ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
-        lhShape, ownShape, rhShape, fut.team(), impl->local_offsets());
+        lhShape, ownShape, rhShape, fut.device(), fut.team(),
+        impl->local_offsets());
     _func.insertArgument(idx, typ, {}, loc);
     auto val = _func.getArgument(idx);
     _args.push_back({guid, std::move(fut)});
@@ -254,16 +277,13 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   unsigned idx = 0;
   for (auto &v : _ivm) {
     ::mlir::Value value = v.second;
-    // append the type and array/value
-    if (!value.getType().isa<::imex::dist::DistTensorType>()) {
-      value = builder.create<::imex::dist::CastOp>(loc, value);
-    }
+    bool isDist = ::imex::dist::isDist(value.getType());
     ret_values[idx] = value;
     _func.insertResult(idx, value.getType(), {});
-    auto rank = value.getType().cast<::imex::dist::DistTensorType>().getRank();
-    _irm[v.first] = rank;
-    // add sizes of dtensor (3 memrefs + team + balanced) to sz
-    sz += dtensor_sz(rank);
+    auto rank = value.getType().cast<::imex::ptensor::PTensorType>().getRank();
+    _irm[v.first] = std::make_pair(rank, isDist);
+    // add sizes of tensor
+    sz += ptensor_sz(rank, isDist);
     // clear reference to MLIR value
     v.second = nullptr;
     ++idx;
@@ -313,17 +333,16 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
     auto guid = r.first;
     if (auto v = _icm.find(guid); v != _icm.end()) {
       assert(v->first == guid);
-      auto rank = _irm[guid];
-      // first extract team
-      // auto team = output[pos];
-      // pos += 1;
-      // then tensors
+      auto tmp = _irm[guid];
+      auto rank = tmp.first;
+      auto isDist = tmp.second;
       void *t_allocated[3];
       void *t_aligned[3];
       intptr_t t_offset[3];
       intptr_t *t_sizes[3];
       intptr_t *t_strides[3];
-      if (rank > 0) {
+
+      if (rank > 0 && isDist) {
         for (auto t = 0; t < 3; ++t) {
           pos += getMR(rank, &output[pos], t_allocated[t], t_aligned[t],
                        t_offset[t], t_sizes[t], t_strides[t]);
@@ -345,7 +364,7 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
             lo_allocated,
             lo_aligned + lo_offset // local offset is 1d tensor of uint64_t
         );
-      } else { // 0d tensor
+      } else { // 0d tensor or non-dist
         pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
                      t_offset[1], t_sizes[1], t_strides[1]);
         v->second(rank, nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo

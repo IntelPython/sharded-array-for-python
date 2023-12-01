@@ -62,46 +62,35 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 
   DeferredT() = default;
   DeferredT(const DeferredT<P, F> &) = delete;
-  DeferredT(id_type guid, DTypeId dt, shape_type &&shape, uint64_t team,
-            bool balanced)
+  DeferredT(DTypeId dt, shape_type &&shape, std::string &&device, uint64_t team,
+            id_type guid = Registry::NOGUID)
       : P(guid, dt, std::forward<shape_type>(shape),
-          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0, balanced),
+          std::forward<std::string>(device),
+          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
         Runable() {}
-  DeferredT(id_type guid, DTypeId dt, const shape_type &shape, uint64_t team,
-            bool balanced)
-      : P(guid, dt, shape,
-          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0, balanced),
+  DeferredT(DTypeId dt, shape_type &&shape, const std::string &device,
+            uint64_t team, id_type guid = Registry::NOGUID)
+      : P(guid, dt, std::forward<shape_type>(shape), device,
+          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
+        Runable() {}
+  DeferredT(DTypeId dt, const shape_type &shape = {},
+            const std::string &device = {}, uint64_t team = 0,
+            id_type guid = Registry::NOGUID)
+      : P(guid, dt, shape, device,
+          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
         Runable() {}
 };
 
 /// Deferred operation returning/producing a tensor
-/// holds a guid as well as shape, dtype and balanced-flag of future tensor
+/// holds a guid as well as shape, dtype, device and team of future tensor
 class Deferred
     : public DeferredT<tensor_i::promise_type, tensor_i::future_type> {
 public:
   using ptr_type = std::unique_ptr<Deferred>;
+  using DeferredT<tensor_i::promise_type, tensor_i::future_type>::DeferredT;
 
-  Deferred(DTypeId dt, shape_type &&shape, uint64_t team, bool balanced)
-      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            Registry::NOGUID, // might be set later
-            dt, std::forward<shape_type>(shape), team, balanced) {}
-  Deferred(id_type guid, DTypeId dt, shape_type &&shape, uint64_t team,
-           bool balanced)
-      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            guid, dt, std::forward<shape_type>(shape), team, balanced) {}
-  Deferred(DTypeId dt, const shape_type &shape, uint64_t team, bool balanced)
-      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            Registry::NOGUID, // might be set later
-            dt, shape, team, balanced) {}
-  Deferred(id_type guid, DTypeId dt, const shape_type &shape, uint64_t team,
-           bool balanced)
-      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            guid, dt, shape, team, balanced) {}
   // FIXME we should not allow default values for dtype and shape
   // we should need this only while we are gradually moving to mlir
-  Deferred()
-      : DeferredT<tensor_i::promise_type, tensor_i::future_type>(
-            Registry::NOGUID, DTYPE_LAST, {}, 0, true) {}
   Deferred(const Deferred &) = delete;
   Deferred(Deferred &&) = delete;
 

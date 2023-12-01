@@ -84,7 +84,7 @@ jobs:
           git remote add origin https://github.com/llvm/llvm-project || exit 1
           git fetch origin ${{ env.LLVM_SHA }} || exit 1
           git reset --hard FETCH_HEAD || exit 1
-          if [ -d "$GITHUB_WORKSPACE/third_party/imex/build_tools/patches" ]; then git apply $GITHUB_WORKSPACE/third_party/imex/build_tools/patches/*.patch; fi
+          # FIXME if [ -d "$GITHUB_WORKSPACE/third_party/imex/build_tools/patches" ]; then git apply $GITHUB_WORKSPACE/third_party/imex/build_tools/patches/*.patch; fi
           cd -
           mkdir -p build/llvm-mlir || exit 1
           cd build/llvm-mlir || exit 1

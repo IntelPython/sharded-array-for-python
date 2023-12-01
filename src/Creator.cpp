@@ -10,6 +10,7 @@
 #include "ddptensor/TypeDispatch.hpp"
 #include "ddptensor/jit/mlir.hpp"
 
+#include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <imex/Utils/PassUtils.h>
 
@@ -35,8 +36,8 @@ struct DeferredFull : public Deferred {
 
   DeferredFull() = default;
   DeferredFull(const shape_type &shape, PyScalar val, DTypeId dtype,
-               uint64_t team)
-      : Deferred(dtype, shape, team, true), _val(val) {}
+               const std::string &device, uint64_t team)
+      : Deferred(dtype, shape, device, team), _val(val) {}
 
   template <typename T> struct ValAndDType {
     static ::mlir::Value op(::mlir::OpBuilder &builder,
@@ -67,35 +68,27 @@ struct DeferredFull : public Deferred {
 
     ::imex::ptensor::DType dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
+    auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
-    auto transceiver = getTransceiver();
-    auto teamV = team() == 0
-                     ? ::mlir::Value()
-                     : ::imex::createIndex(loc, builder,
-                                           reinterpret_cast<uint64_t>(team()));
-
-    auto rTyp = ::imex::ptensor::PTensorType::get(
-        shape(), imex::ptensor::toMLIR(builder, dtyp));
-
-    dm.addVal(this->guid(),
-              builder.create<::imex::ptensor::CreateOp>(loc, rTyp, shp, dtyp,
-                                                        val, nullptr, teamV),
-              [this](uint64_t rank, void *l_allocated, void *l_aligned,
-                     intptr_t l_offset, const intptr_t *l_sizes,
-                     const intptr_t *l_strides, void *o_allocated,
-                     void *o_aligned, intptr_t o_offset,
-                     const intptr_t *o_sizes, const intptr_t *o_strides,
-                     void *r_allocated, void *r_aligned, intptr_t r_offset,
-                     const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                assert(rank == this->rank());
-                this->set_value(std::move(mk_tnsr(
-                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                    r_strides, lo_allocated, lo_aligned)));
-              });
+    dm.addVal(
+        this->guid(),
+        builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, envs),
+        [this](uint64_t rank, void *l_allocated, void *l_aligned,
+               intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, uint64_t *lo_allocated,
+               uint64_t *lo_aligned) {
+          assert(rank == this->rank());
+          this->set_value(std::move(
+              mk_tnsr(reinterpret_cast<Transceiver *>(this->team()), _dtype,
+                      this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
+                      l_strides, o_allocated, o_aligned, o_offset, o_sizes,
+                      o_strides, r_allocated, r_aligned, r_offset, r_sizes,
+                      r_strides, lo_allocated, lo_aligned)));
+        });
     return false;
   }
 
@@ -109,9 +102,11 @@ struct DeferredFull : public Deferred {
 };
 
 ddptensor *Creator::full(const shape_type &shape, const py::object &val,
-                         DTypeId dtype, uint64_t team) {
+                         DTypeId dtype, const std::string &device,
+                         uint64_t team) {
   auto v = mk_scalar(val, dtype);
-  return new ddptensor(defer<DeferredFull>(shape, v, dtype, mkTeam(team)));
+  return new ddptensor(
+      defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
 }
 
 // ***************************************************************************
@@ -121,33 +116,25 @@ struct DeferredArange : public Deferred {
 
   DeferredArange() = default;
   DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype,
-                 uint64_t team)
+                 const std::string &device, uint64_t team)
       : Deferred(dtype,
                  {static_cast<shape_type::value_type>(
                      (end - start + step + (step < 0 ? 1 : -1)) / step)},
-                 team, true),
+                 device, team),
         _start(start), _end(end), _step(step) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    // ::mlir::Value
-    auto transceiver = getTransceiver();
-    auto teamV = team() == 0
-                     ? ::mlir::Value()
-                     : ::imex::createIndex(loc, builder,
-                                           reinterpret_cast<uint64_t>(team()));
-
     auto _num = shape()[0];
-
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _start + _num * _step);
     auto num = ::imex::createIndex(loc, builder, _num);
-    auto rTyp = ::imex::ptensor::PTensorType::get(
-        shape(), imex::ptensor::toMLIR(builder, jit::getPTDType(_dtype)));
+    auto dtyp = jit::getPTDType(dtype());
+    auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
     dm.addVal(this->guid(),
-              builder.create<::imex::ptensor::LinSpaceOp>(
-                  loc, rTyp, start, stop, num, false, nullptr, teamV),
+              builder.create<::imex::ptensor::LinSpaceOp>(loc, start, stop, num,
+                                                          false, dtyp, envs),
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,
                      const intptr_t *l_strides, void *o_allocated,
@@ -157,7 +144,7 @@ struct DeferredArange : public Deferred {
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
                 assert(rank == 1);
-                assert(l_strides[0] == 1);
+                assert(o_strides[0] == 1);
                 this->set_value(std::move(mk_tnsr(
                     reinterpret_cast<Transceiver *>(this->team()), _dtype,
                     this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
@@ -178,9 +165,10 @@ struct DeferredArange : public Deferred {
 };
 
 ddptensor *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
-                           DTypeId dtype, uint64_t team) {
+                           DTypeId dtype, const std::string &device,
+                           uint64_t team) {
   return new ddptensor(
-      defer<DeferredArange>(start, end, step, dtype, mkTeam(team)));
+      defer<DeferredArange>(start, end, step, dtype, device, mkTeam(team)));
 }
 
 // ***************************************************************************
@@ -192,27 +180,22 @@ struct DeferredLinspace : public Deferred {
 
   DeferredLinspace() = default;
   DeferredLinspace(double start, double end, uint64_t num, bool endpoint,
-                   DTypeId dtype, uint64_t team)
-      : Deferred(dtype, {static_cast<shape_type::value_type>(num)}, team, true),
+                   DTypeId dtype, const std::string &device, uint64_t team)
+      : Deferred(dtype, {static_cast<shape_type::value_type>(num)}, device,
+                 team),
         _start(start), _end(end), _num(num), _endpoint(endpoint) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    // ::mlir::Value
-    auto teamV = team() == 0
-                     ? ::mlir::Value()
-                     : ::imex::createIndex(loc, builder,
-                                           reinterpret_cast<uint64_t>(team()));
-
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _end);
     auto num = ::imex::createIndex(loc, builder, _num);
-    auto rTyp = ::imex::ptensor::PTensorType::get(
-        shape(), imex::ptensor::toMLIR(builder, jit::getPTDType(_dtype)));
+    auto dtyp = jit::getPTDType(dtype());
+    auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
     dm.addVal(this->guid(),
               builder.create<::imex::ptensor::LinSpaceOp>(
-                  loc, rTyp, start, stop, num, _endpoint, nullptr, teamV),
+                  loc, start, stop, num, _endpoint, dtyp, envs),
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,
                      const intptr_t *l_strides, void *o_allocated,
@@ -244,9 +227,10 @@ struct DeferredLinspace : public Deferred {
 };
 
 ddptensor *Creator::linspace(double start, double end, uint64_t num,
-                             bool endpoint, DTypeId dtype, uint64_t team) {
-  return new ddptensor(
-      defer<DeferredLinspace>(start, end, num, endpoint, dtype, mkTeam(team)));
+                             bool endpoint, DTypeId dtype,
+                             const std::string &device, uint64_t team) {
+  return new ddptensor(defer<DeferredLinspace>(start, end, num, endpoint, dtype,
+                                               device, mkTeam(team)));
 }
 
 // ***************************************************************************
@@ -255,11 +239,12 @@ extern DTypeId DEFAULT_FLOAT;
 extern DTypeId DEFAULT_INT;
 
 std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
+                                                const std::string &device,
                                                 uint64_t team, DTypeId dtype) {
   if (py::isinstance<ddptensor>(b)) {
     return {b.cast<ddptensor *>(), false};
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
-    return {Creator::full({}, b, dtype, team), true};
+    return {Creator::full({}, b, dtype, device, team), true};
   }
   throw std::runtime_error(
       "Invalid right operand to elementwise binary operation");

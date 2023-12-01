@@ -18,25 +18,24 @@ class NDSlice;
 ///   - id
 ///   - dtype (element type)
 ///   - shape (dim is unknown if < 0)
+///   - device
 ///   - team
-///   - balanced (flag indicating if tensor's partitions are balanced)
 class TensorMeta {
 protected:
   id_type _guid = -1;
   DTypeId _dtype = DTYPE_LAST;
   shape_type _shape = {};
+  std::string _device;
   uint64_t _team;
-  bool _balanced = true;
 
 public:
-  TensorMeta(id_type id, DTypeId dt, const shape_type &shape, uint64_t team,
-             bool balanced)
-      : _guid(id), _dtype(dt), _shape(shape), _team(team), _balanced(balanced) {
-  }
-  TensorMeta(id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
-             bool balanced)
+  TensorMeta(id_type id, DTypeId dt, const shape_type &shape,
+             const std::string &device, uint64_t team)
+      : _guid(id), _dtype(dt), _shape(shape), _device(device), _team(team) {}
+  TensorMeta(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
+             uint64_t team)
       : _guid(id), _dtype(dt), _shape(std::forward<shape_type>(shape)),
-        _team(team), _balanced(balanced) {}
+        _device(std::forward<std::string>(device)), _team(team) {}
   TensorMeta() = default;
 
   /// @return globally unique id
@@ -51,11 +50,11 @@ public:
   /// @return rank of tensor (num of dims)
   rank_type rank() const { return _shape.size(); }
 
+  // @ return device string, empty string means default
+  const std::string &device() const { return _device; }
+
   // @ return team, 0 means non-distributed
   uint64_t team() const { return _team; }
-
-  /// @return if future tensor will have balanced partitions
-  int balanced() const { return _balanced; }
 
   void set_guid(id_type guid) { _guid = guid; }
 };
@@ -76,24 +75,24 @@ public:
   ///   - id
   ///   - dtype (element type)
   ///   - shape
-  ///   - balanced (flag indicating if tensor's partitions are balanced)
+  ///   - device and team
   template <typename T> class Metaified : public T, public TensorMeta {
   public:
     Metaified() = default;
-    Metaified(T &&f, id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
-              bool balanced)
+    Metaified(T &&f, id_type id, DTypeId dt, shape_type &&shape,
+              std::string &&device, uint64_t team)
         : T(std::move(f)),
-          TensorMeta(id, dt, std::move(shape), team, balanced) {}
+          TensorMeta(id, dt, std::move(shape), std::move(device), team) {}
     Metaified(T &&f, id_type id, DTypeId dt, const shape_type &shape,
-              uint64_t team, bool balanced)
-        : T(std::move(f)), TensorMeta(id, dt, shape, team, balanced) {}
-    Metaified(id_type id, DTypeId dt, const shape_type &shape, uint64_t team,
-              bool balanced)
-        : T(), TensorMeta(id, dt, shape, team, balanced) {}
-    Metaified(id_type id, DTypeId dt, shape_type &&shape, uint64_t team,
-              bool balanced)
-        : T(),
-          TensorMeta(id, dt, std::forward<shape_type>(shape), team, balanced) {}
+              const std::string &device, uint64_t team)
+        : T(std::move(f)), TensorMeta(id, dt, shape, device, team) {}
+    Metaified(id_type id, DTypeId dt, const shape_type &shape,
+              const std::string &device, uint64_t team)
+        : T(), TensorMeta(id, dt, shape, device, team) {}
+    Metaified(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
+              uint64_t team)
+        : T(), TensorMeta(id, dt, std::forward<shape_type>(shape),
+                          std::move(device), team) {}
     ~Metaified() {}
   };
 
