@@ -92,18 +92,20 @@ struct DeferredEWBinOp : public Deferred {
   DeferredEWBinOp() = default;
   DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type &a,
                   const tensor_i::future_type &b)
-      : Deferred(a.dtype(), broadcast(a.shape(), b.shape()), a.device(),
-                 a.team()),
+      : Deferred(promoted_dtype(a.dtype(), b.dtype()),
+                 broadcast(a.shape(), b.shape()), a.device(), a.team()),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    // FIXME the type of the result is based on a only
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
     auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
-    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
+    auto bTyp = bv.getType().cast<::imex::ptensor::PTensorType>();
+    auto outElemType =
+        ::imex::ptensor::toMLIR(builder, DDPT::jit::getPTDType(_dtype));
+    auto outTyp = aTyp.cloneWith(shape(), outElemType);
 
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);

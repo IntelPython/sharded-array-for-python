@@ -1,4 +1,5 @@
 import ddptensor as dt
+import numpy
 from utils import runAndCompare, mpi_dtypes, on_gpu
 import pytest
 
@@ -162,3 +163,22 @@ class TestEWB:
             r1 = dt.sum(c, [0, 1])
             v = 6 * 6 * 2
             assert float(r1) == v
+
+    def test_add_typecast(self):
+        type_list = [
+            (dt.int8, dt.int64, dt.int64),
+            (dt.int64, dt.int8, dt.int64),
+            (dt.int8, dt.float64, dt.float64),
+            (dt.float64, dt.int8, dt.float64),
+            (dt.float32, dt.float64, dt.float64),
+            (dt.float32, dt.int64, dt.float64),
+            (dt.int32, dt.uint32, dt.int64),
+            (dt.int32, dt.uint64, dt.int64),
+        ]
+        for atype, btype, ctype in type_list:
+            a = dt.arange(0, 8, 1, dtype=atype)
+            b = dt.ones((8,), dtype=btype)
+            c = a + b
+            assert c.dtype == ctype
+            c2 = dt.to_numpy(c)
+            assert numpy.allclose(c2, [1, 2, 3, 4, 5, 6, 7, 8])

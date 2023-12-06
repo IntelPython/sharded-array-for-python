@@ -135,7 +135,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
   }
   if (!device.empty()) {
     envs.emplace_back(
-        ::imex::ptensor::GPUEnvAttr::get(builder.getStringAttr(device)));
+        ::imex::region::GPUEnvAttr::get(builder.getStringAttr(device)));
   }
   return envs;
 }

@@ -156,6 +156,113 @@ static size_t sizeof_dtype(const DTypeId dt) {
   };
 };
 
+static bool is_float(DTypeId t) {
+  switch (t) {
+  case DDPT::DTypeId::FLOAT64:
+  case DDPT::DTypeId::FLOAT32:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool is_int(DTypeId t) {
+  switch (t) {
+  case DDPT::DTypeId::INT64:
+  case DDPT::DTypeId::INT32:
+  case DDPT::DTypeId::INT16:
+  case DDPT::DTypeId::INT8:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool is_uint(DTypeId t) {
+  switch (t) {
+  case DDPT::DTypeId::UINT64:
+  case DDPT::DTypeId::UINT32:
+  case DDPT::DTypeId::UINT16:
+  case DDPT::DTypeId::UINT8:
+  case DDPT::DTypeId::BOOL:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static size_t dtype_bitwidth(DTypeId t) {
+  switch (t) {
+  case DDPT::DTypeId::FLOAT64:
+  case DDPT::DTypeId::INT64:
+  case DDPT::DTypeId::UINT64:
+    return 64;
+  case DDPT::DTypeId::FLOAT32:
+  case DDPT::DTypeId::INT32:
+  case DDPT::DTypeId::UINT32:
+    return 32;
+  case DDPT::DTypeId::INT16:
+  case DDPT::DTypeId::UINT16:
+    return 16;
+  case DDPT::DTypeId::INT8:
+  case DDPT::DTypeId::UINT8:
+    return 8;
+  case DDPT::DTypeId::BOOL:
+    return 1;
+  default:
+    assert(!"Unknown DTypeId");
+  }
+}
+
+static DTypeId get_float_dtype(size_t bitwidth) {
+  switch (bitwidth) {
+  case 64:
+    return DDPT::DTypeId::FLOAT64;
+  case 32:
+    return DDPT::DTypeId::FLOAT32;
+  default:
+    assert(!"Unknown bitwidth");
+  }
+}
+
+static DTypeId get_int_dtype(size_t bitwidth) {
+  switch (bitwidth) {
+  case 64:
+    return DDPT::DTypeId::INT64;
+  case 32:
+    return DDPT::DTypeId::INT32;
+  case 16:
+    return DDPT::DTypeId::INT16;
+  case 8:
+    return DDPT::DTypeId::INT8;
+  default:
+    assert(!"Unknown bitwidth");
+  }
+}
+
+static DTypeId promoted_dtype(DTypeId a, DTypeId b) {
+  if ((is_float(a) && is_float(b)) || (is_int(a) && is_int(b)) ||
+      (is_uint(a) && is_uint(b))) {
+    return dtype_bitwidth(a) > dtype_bitwidth(b) ? a : b;
+  }
+  if (is_float(a) || is_float(b)) {
+    return get_float_dtype(std::max(dtype_bitwidth(a), dtype_bitwidth(b)));
+  }
+  // mixed signed/unsigned int case
+  size_t si_width, ui_width, max_width = 64;
+  if (is_uint(a)) {
+    ui_width = dtype_bitwidth(a);
+    si_width = dtype_bitwidth(b);
+  } else {
+    ui_width = dtype_bitwidth(b);
+    si_width = dtype_bitwidth(a);
+  }
+  if (ui_width < si_width) {
+    return get_int_dtype(si_width);
+  }
+  return get_int_dtype(std::min(2 * ui_width, max_width));
+}
+
 using RedOpType = ReduceOpId;
 
 inline RedOpType red_op(const char *op) {

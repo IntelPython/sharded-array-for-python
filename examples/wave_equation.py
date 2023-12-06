@@ -75,11 +75,10 @@ def run(n, backend, datatype, benchmark_mode):
     g = 9.81
 
     # domain extent
-    # NOTE need to be floats
-    xmin = -1.0
-    xmax = 1.0
-    ymin = -1.0
-    ymax = 1.0
+    xmin = -1
+    xmax = 1
+    ymin = -1
+    ymax = 1
     lx = xmax - xmin
     ly = ymax - ymin
 
