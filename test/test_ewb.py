@@ -182,3 +182,17 @@ class TestEWB:
             assert c.dtype == ctype
             c2 = dt.to_numpy(c)
             assert numpy.allclose(c2, [1, 2, 3, 4, 5, 6, 7, 8])
+
+    def test_reflected_sub(self):
+        a = dt.full((4,), 4, dtype=dt.float64)
+        b = 10.0
+        c = b - a
+        c2 = dt.to_numpy(c)
+        assert numpy.allclose(c2, [6, 6, 6, 6])
+
+    def test_reflected_div(self):
+        a = dt.full((4,), 2, dtype=dt.float64)
+        b = 10.0
+        c = b / a
+        c2 = dt.to_numpy(c)
+        assert numpy.allclose(c2, [5, 5, 5, 5])

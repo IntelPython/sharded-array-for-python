@@ -84,6 +84,26 @@ static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop) {
   }
 }
 
+bool is_reflected_op(EWBinOpId op) {
+  switch (op) {
+  case __RADD__:
+  case __RAND__:
+  case __RFLOORDIV__:
+  case __RLSHIFT__:
+  case __RMOD__:
+  case __RMUL__:
+  case __ROR__:
+  case __RPOW__:
+  case __RRSHIFT__:
+  case __RSUB__:
+  case __RTRUEDIV__:
+  case __RXOR__:
+    return true;
+  default:
+    return false;
+  }
+}
+
 struct DeferredEWBinOp : public Deferred {
   id_type _a;
   id_type _b;
@@ -107,8 +127,16 @@ struct DeferredEWBinOp : public Deferred {
         ::imex::ptensor::toMLIR(builder, DDPT::jit::getPTDType(_dtype));
     auto outTyp = aTyp.cloneWith(shape(), outElemType);
 
+    ::mlir::Value one, two;
+    if (is_reflected_op(_op)) {
+      one = bv;
+      two = av;
+    } else {
+      one = av;
+      two = bv;
+    }
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
-        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
+        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), one, two);
 
     dm.addVal(this->guid(), bop,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,

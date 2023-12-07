@@ -233,7 +233,7 @@ def run(n, backend, datatype, benchmark_mode):
         # potential vorticity
         dudy[:, 1:-1] = (u[:, 1:] - u[:, :-1]) / dy
         dvdx[1:-1, :] = (v[1:, :] - v[:-1, :]) / dx
-        q[:, :] = (dvdx - dudy + coriolis) / H_at_f
+        q[:, :] = (coriolis - dudy + dvdx) / H_at_f
 
         # Advection of potential vorticity, Arakawa and Hsu (1990)
         # Define alpha, beta, gamma, delta for each cell in T points
