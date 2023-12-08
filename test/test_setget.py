@@ -80,6 +80,21 @@ class TestSetGet:
 
             b[1:n, 1:n] = a[1:n, 1:n]
             b[0, 1:n] = a[0, 1:n]
+
+            return b
+
+        assert runAndCompare(doit)
+
+    def test_setitem8(self):
+        # Note: assert halo does not segfault
+        def doit(aapi):
+            n = 1024
+            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float64)
+            b = aapi.zeros((n, n), aapi.float64)
+
+            b[0, 1:n] = 1.0 * a[0, 1:n]
+            b[1 : n - 1, 1:n] = 1.0 * a[1 : n - 1, 1:n]
+            b[n - 1, 1:n] = 1.0 * a[n - 1, 1:n]
             return b
 
         assert runAndCompare(doit)
