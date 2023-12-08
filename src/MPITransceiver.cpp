@@ -57,9 +57,9 @@ MPITransceiver::MPITransceiver(bool is_cw)
                                    "'SHARPY_MPI_EXECUTABLE' or 'PYTHON_EXE'");
         clientExe = _tmp;
         // 2. arguments
-        _tmp = "-c import FutureArray as dt; dt.init(True)";
+        _tmp = "-c import sharpy as sp; sp.init(True)";
         args.push_back("-c");
-        args.push_back("import FutureArray as dt; dt.init(True)");
+        args.push_back("import sharpy as sp; sp.init(True)");
       } else {
         clientExe = _tmp;
         // 2. arguments

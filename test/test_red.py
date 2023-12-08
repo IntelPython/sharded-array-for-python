@@ -1,4 +1,4 @@
-import sharpy as dt
+import sharpy as sp
 from utils import runAndCompare
 import pytest
 
