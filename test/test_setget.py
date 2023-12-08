@@ -1,4 +1,4 @@
-import ddptensor as dt
+import sharpy as sp
 from utils import runAndCompare
 import pytest
 
@@ -85,14 +85,14 @@ class TestSetGet:
         assert runAndCompare(doit)
 
     def test_colon(self):
-        a = dt.ones((16, 16), dt.float32)
-        b = dt.zeros((16, 16), dt.float32)
+        a = sp.ones((16, 16), sp.float32)
+        b = sp.zeros((16, 16), sp.float32)
         a[:, :] = b[:, :]
-        r1 = dt.sum(a)
+        r1 = sp.sum(a)
         assert float(r1) == 0
 
     def test_neg_last(self):
-        a = dt.arange(0, 16, 1, dt.int64)
+        a = sp.arange(0, 16, 1, sp.int64)
         b = a[-1]
         assert int(b) == 15
 

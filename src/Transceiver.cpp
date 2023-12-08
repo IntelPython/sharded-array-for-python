@@ -4,9 +4,9 @@
   Initing and Finalizing transceiver singleton.
 */
 
-#include <ddptensor/Transceiver.hpp>
+#include <sharpy/Transceiver.hpp>
 
-namespace DDPT {
+namespace SHARPY {
 
 Transceiver *theTransceiver = nullptr;
 
@@ -23,4 +23,4 @@ void fini_transceiver() {
 }
 
 Transceiver *getTransceiver() { return theTransceiver; }
-} // namespace DDPT
+} // namespace SHARPY

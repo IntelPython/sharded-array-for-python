@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "ddptensor/CollComm.hpp"
+#include "sharpy/CollComm.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
-void bufferize(DDPTensorImpl::ptr_type a_ptr, void *outPtr) {
+void bufferize(NDArray::ptr_type a_ptr, void *outPtr) {
   dispatch(a_ptr->dtype(), a_ptr->data(), [&a_ptr, outPtr](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(outPtr);
     auto shp = a_ptr->local_shape();
@@ -22,7 +22,7 @@ void bufferize(DDPTensorImpl::ptr_type a_ptr, void *outPtr) {
 
 // @param outPtr touched only if on root and/or root==REPLICATED or if not
 // distributed
-void gather_tensor(DDPTensorImpl::ptr_type a_ptr, rank_type root,
+void gather_array(NDArray::ptr_type a_ptr, rank_type root,
                    void *outPtr) {
   auto trscvr = a_ptr->transceiver();
 
@@ -155,4 +155,4 @@ std::vector<std::vector<int>> CollComm::map(const PVSlice &n_slc,
 #endif // if 0
   return {};
 }
-} // namespace DDPT
+} // namespace SHARPY

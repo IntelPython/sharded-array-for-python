@@ -54,11 +54,11 @@ class build_ext(build_ext_orig):
 
 
 setup(
-    name="ddptensor",
+    name="sharpy",
     version="0.1",
-    description="Distributed Tensor and more",
-    packages=["ddptensor", "ddptensor.numpy"],  # "ddptensor.torch"],
-    ext_modules=[CMakeExtension("ddptensor/_ddptensor")],
+    description="Distributed array and more",
+    packages=["sharpy", "sharpy.numpy"],  # "sharpy.torch"],
+    ext_modules=[CMakeExtension("sharpy/_sharpy")],
     cmdclass=dict(
         # Enable the CMakeExtension entries defined above
         build_ext=build_ext  # cmake_build_extension.BuildExtension,

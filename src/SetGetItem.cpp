@@ -5,18 +5,18 @@
   Also adds SPMD-like access to data.
 */
 
-#include "ddptensor/SetGetItem.hpp"
-#include "ddptensor/CollComm.hpp"
-#include "ddptensor/Creator.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/Mediator.hpp"
-#include "ddptensor/NDSlice.hpp"
-#include "ddptensor/Transceiver.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/UtilsAndTypes.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/SetGetItem.hpp"
+#include "sharpy/CollComm.hpp"
+#include "sharpy/Creator.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/Mediator.hpp"
+#include "sharpy/NDSlice.hpp"
+#include "sharpy/Transceiver.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/UtilsAndTypes.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/Dist/Utils/Utils.h>
@@ -29,7 +29,7 @@
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
-namespace DDPT {
+namespace SHARPY {
 
 template <typename T> struct mk_array {
   template <typename C> static py::object op(C &&shp, void *&outPtr) {
@@ -47,7 +47,7 @@ template <typename T> struct wrap_array {
   }
 };
 
-py::object wrap(DDPTensorImpl::ptr_type tnsr, const py::handle &handle) {
+py::object wrap(NDArray::ptr_type tnsr, const py::handle &handle) {
   auto tmp_shp = tnsr->local_shape();
   auto tmp_str = tnsr->local_strides();
   auto nd = tnsr->ndims();
@@ -70,12 +70,12 @@ struct DeferredGetLocals
   py::handle _handle;
 
   DeferredGetLocals() = default;
-  DeferredGetLocals(const tensor_i::future_type &a, py::handle &handle)
+  DeferredGetLocals(const array_i::future_type &a, py::handle &handle)
       : _a(a.guid()), _handle(handle) {}
 
   void run() override {
     auto aa = std::move(Registry::get(_a).get());
-    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     assert(a_ptr);
     auto res = wrap(a_ptr, _handle);
     set_value(py::make_tuple(res));
@@ -101,7 +101,7 @@ struct DeferredGather
   rank_type _root;
 
   DeferredGather() = default;
-  DeferredGather(const tensor_i::future_type &a, rank_type root)
+  DeferredGather(const array_i::future_type &a, rank_type root)
       : _a(a.guid()), _root(root) {}
 
   void run() override {
@@ -109,7 +109,7 @@ struct DeferredGather
     // We simply create a local buffer, copy our local data to the right place
     // and then call AllGatherV via inplace operation.
     auto aa = std::move(Registry::get(_a).get());
-    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     assert(a_ptr);
     auto trscvr = a_ptr->transceiver();
     auto myrank = trscvr ? trscvr->rank() : 0;
@@ -127,7 +127,7 @@ struct DeferredGather
       res = dispatch<mk_array>(a_ptr->dtype(), std::move(tmpv), outPtr);
     }
 
-    gather_tensor(a_ptr, _root, outPtr);
+    gather_array(a_ptr, _root, outPtr);
 
     set_value(res);
   }
@@ -152,8 +152,8 @@ struct DeferredSetItem : public Deferred {
   NDSlice _slc;
 
   DeferredSetItem() = default;
-  DeferredSetItem(const tensor_i::future_type &a,
-                  const tensor_i::future_type &b,
+  DeferredSetItem(const array_i::future_type &a,
+                  const array_i::future_type &b,
                   const std::vector<py::slice> &v)
       : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
         _a(a.guid()), _b(b.guid()), _slc(v, a.shape()) {}
@@ -196,13 +196,13 @@ struct DeferredMap : public Deferred {
   py::object _func;
 
   DeferredMap() = default;
-  DeferredMap(const tensor_i::future_type &a, py::object &func)
+  DeferredMap(const array_i::future_type &a, py::object &func)
       : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
         _a(a.guid()), _func(func) {}
 
   void run() override {
     auto aa = std::move(Registry::get(_a).get());
-    auto a_ptr = std::dynamic_pointer_cast<DDPTensorImpl>(aa);
+    auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     assert(a_ptr);
     auto nd = a_ptr->ndims();
     auto lOffs = a_ptr->local_offsets();
@@ -248,7 +248,7 @@ struct DeferredGetItem : public Deferred {
   NDSlice _slc;
 
   DeferredGetItem() = default;
-  DeferredGetItem(const tensor_i::future_type &a, NDSlice &&v)
+  DeferredGetItem(const array_i::future_type &a, NDSlice &&v)
       : Deferred(a.dtype(), std::move(shape_type(v.sizes())), a.device(),
                  a.team()),
         _a(a.guid()), _slc(std::move(v)) {}
@@ -307,22 +307,22 @@ struct DeferredGetItem : public Deferred {
 
 // ***************************************************************************
 
-ddptensor *GetItem::__getitem__(const ddptensor &a,
+FutureArray *GetItem::__getitem__(const FutureArray &a,
                                 const std::vector<py::slice> &v) {
   auto afut = a.get();
   NDSlice slc(v, afut.shape());
-  return new ddptensor(defer<DeferredGetItem>(afut, std::move(slc)));
+  return new FutureArray(defer<DeferredGetItem>(afut, std::move(slc)));
 }
 
-GetItem::py_future_type GetItem::get_locals(const ddptensor &a, py::handle h) {
+GetItem::py_future_type GetItem::get_locals(const FutureArray &a, py::handle h) {
   return defer<DeferredGetLocals>(a.get(), h);
 }
 
-GetItem::py_future_type GetItem::gather(const ddptensor &a, rank_type root) {
+GetItem::py_future_type GetItem::gather(const FutureArray &a, rank_type root) {
   return defer<DeferredGather>(a.get(), root);
 }
 
-ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
+FutureArray *SetItem::__setitem__(FutureArray &a, const std::vector<py::slice> &v,
                                 const py::object &b) {
   auto bb =
       Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
@@ -332,12 +332,12 @@ ddptensor *SetItem::__setitem__(ddptensor &a, const std::vector<py::slice> &v,
   return &a;
 }
 
-ddptensor *SetItem::map(ddptensor &a, py::object &b) {
+FutureArray *SetItem::map(FutureArray &a, py::object &b) {
   a.put(defer<DeferredMap>(a.get(), b));
   return &a;
 }
 
-py::object GetItem::get_slice(const ddptensor &a,
+py::object GetItem::get_slice(const FutureArray &a,
                               const std::vector<py::slice> &v) {
   const auto aa = std::move(a.get());
   return {}; // FIXME TypeDispatch<x::SPMD>(aa.get(), NDSlice(v), aa.guid());
@@ -348,4 +348,4 @@ FACTORY_INIT(DeferredSetItem, F_SETITEM);
 FACTORY_INIT(DeferredMap, F_MAP);
 FACTORY_INIT(DeferredGather, F_GATHER);
 FACTORY_INIT(DeferredGetLocals, F_GETLOCALS);
-} // namespace DDPT
+} // namespace SHARPY

@@ -5,9 +5,9 @@
   Implementation for registering factories.
 */
 
-#include "ddptensor/Factory.hpp"
+#include "sharpy/Factory.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
 std::vector<Factory::ptr_type> s_factories(FACTORY_LAST);
 
@@ -17,4 +17,4 @@ void Factory::put(Factory::ptr_type &&factory) {
   auto id = factory->id();
   s_factories[id] = std::move(factory);
 }
-} // namespace DDPT
+} // namespace SHARPY

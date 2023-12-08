@@ -4,18 +4,18 @@
   Manipulation ops.
 */
 
-#include "ddptensor/ManipOp.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/ManipOp.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/IR/Builders.h>
 
-namespace DDPT {
+namespace SHARPY {
 
 struct DeferredReshape : public Deferred {
   enum CopyMode : char { COPY_NEVER, COPY_ALWAYS, COPY_POSSIBLE };
@@ -23,7 +23,7 @@ struct DeferredReshape : public Deferred {
   CopyMode _copy;
 
   DeferredReshape() = default;
-  DeferredReshape(const tensor_i::future_type &a, const shape_type &shape,
+  DeferredReshape(const array_i::future_type &a, const shape_type &shape,
                   CopyMode copy)
       : Deferred(a.dtype(), shape, a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
@@ -82,7 +82,7 @@ struct DeferredReshape : public Deferred {
   }
 };
 
-ddptensor *ManipOp::reshape(const ddptensor &a, const shape_type &shape,
+FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
                             const py::object &copy) {
   auto doCopy = copy.is_none()
                     ? DeferredReshape::COPY_POSSIBLE
@@ -92,8 +92,8 @@ ddptensor *ManipOp::reshape(const ddptensor &a, const shape_type &shape,
     assert(!"zero-copy reshape not supported");
   }
   doCopy = DeferredReshape::COPY_ALWAYS;
-  return new ddptensor(defer<DeferredReshape>(a.get(), shape, doCopy));
+  return new FutureArray(defer<DeferredReshape>(a.get(), shape, doCopy));
 }
 
 FACTORY_INIT(DeferredReshape, F_RESHAPE);
-} // namespace DDPT
+} // namespace SHARPY

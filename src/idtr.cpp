@@ -4,9 +4,9 @@
     Intel Distributed Runtime for MLIR
 */
 
-#include <ddptensor/DDPTensorImpl.hpp>
-#include <ddptensor/MPITransceiver.hpp>
-#include <ddptensor/MemRefType.hpp>
+#include <sharpy/NDArray.hpp>
+#include <sharpy/MPITransceiver.hpp>
+#include <sharpy/MemRefType.hpp>
 
 #include <imex/Dialect/PTensor/IR/PTensorDefs.h>
 
@@ -20,11 +20,11 @@
 constexpr id_t UNKNOWN_GUID = -1;
 
 using container_type =
-    std::unordered_map<DDPT::id_type, std::unique_ptr<DDPT::DDPTensorImpl>>;
+    std::unordered_map<SHARPY::id_type, std::unique_ptr<SHARPY::NDArray>>;
 
-static container_type gtensors;
-static DDPT::id_type _nguid = -1;
-inline DDPT::id_type get_guid() { return ++_nguid; }
+static container_type garrays;
+static SHARPY::id_type _nguid = -1;
+inline SHARPY::id_type get_guid() { return ++_nguid; }
 
 // Transceiver * theTransceiver = MPITransceiver();
 
@@ -81,16 +81,16 @@ TYPED_WAIT(i1);
 #define NO_TRANSCEIVER
 #ifdef NO_TRANSCEIVER
 static void initMPIRuntime() {
-  if (DDPT::getTransceiver() == nullptr)
-    DDPT::init_transceiver(new DDPT::MPITransceiver(false));
+  if (SHARPY::getTransceiver() == nullptr)
+    SHARPY::init_transceiver(new SHARPY::MPITransceiver(false));
 }
 #endif
 
 // Return number of ranks/processes in given team/communicator
-uint64_t idtr_nprocs(DDPT::Transceiver *tc) {
+uint64_t idtr_nprocs(SHARPY::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = DDPT::getTransceiver();
+  tc = SHARPY::getTransceiver();
 #endif
   return tc->nranks();
 }
@@ -98,36 +98,36 @@ uint64_t idtr_nprocs(DDPT::Transceiver *tc) {
 #pragma weak _mlir_ciface__idtr_nprocs = idtr_nprocs
 
 // Return rank in given team/communicator
-uint64_t idtr_prank(DDPT::Transceiver *tc) {
+uint64_t idtr_prank(SHARPY::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = DDPT::getTransceiver();
+  tc = SHARPY::getTransceiver();
 #endif
   return tc->rank();
 }
 #pragma weak _idtr_prank = idtr_prank
 #pragma weak _mlir_ciface__idtr_prank = idtr_prank
 
-// Register a global tensor of given shape.
+// Register a global array of given shape.
 // Returns guid.
 // The runtime does not own or manage any memory.
-id_t idtr_init_dtensor(const uint64_t *shape, uint64_t nD) {
+id_t idtr_init_array(const uint64_t *shape, uint64_t nD) {
   auto guid = get_guid();
-  // gtensors[guid] = std::unique_ptr<DDPT::DDPTensorImpl>(nD ? new
-  // DDPT::DDPTensorImpl(shape, nD) : new DDPT::DDPTensorImpl);
+  // garrays[guid] = std::unique_ptr<SHARPY::NDArray>(nD ? new
+  // SHARPY::NDArray(shape, nD) : new SHARPY::NDArray);
   return guid;
 }
 
-id_t _idtr_init_dtensor(void *alloced, void *aligned, intptr_t offset,
+id_t _idtr_init_array(void *alloced, void *aligned, intptr_t offset,
                         intptr_t size, intptr_t stride, uint64_t nD) {
-  return idtr_init_dtensor(mr_to_ptr<uint64_t>(aligned, offset), nD);
+  return idtr_init_array(mr_to_ptr<uint64_t>(aligned, offset), nD);
 }
 
 // Get the offsets (one for each dimension) of the local partition of a
-// distributed tensor in number of elements. Result is stored in provided array.
+// distributed array in number of elements. Result is stored in provided array.
 void idtr_local_offsets(id_t guid, uint64_t *offsets, uint64_t nD) {
 #if 0
-    const auto & tnsr = gtensors.at(guid);
+    const auto & tnsr = garrays.at(guid);
     auto slcs = tnsr->slice().local_slice().slices();
     assert(nD == slcs.size());
     int i = -1;
@@ -144,10 +144,10 @@ void _idtr_local_offsets(id_t guid, void *alloced, void *aligned,
 }
 
 // Get the shape (one size for each dimension) of the local partition of a
-// distributed tensor in number of elements. Result is stored in provided array.
+// distributed array in number of elements. Result is stored in provided array.
 void idtr_local_shape(id_t guid, uint64_t *lshape, uint64_t N) {
 #if 0
-    const auto & tnsr = gtensors.at(guid);
+    const auto & tnsr = garrays.at(guid);
     auto shp = tnsr->slice().local_slice().shape();
     std::copy(shp.begin(), shp.end(), lshape);
 #endif
@@ -160,70 +160,70 @@ void _idtr_local_shape(id_t guid, void *alloced, void *aligned, intptr_t offset,
 } // extern "C"
 
 // convert id of our reduction op to id of imex::ptensor reduction op
-static DDPT::ReduceOpId mlir2ddpt(const ::imex::ptensor::ReduceOpId rop) {
+static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ptensor::ReduceOpId rop) {
   switch (rop) {
   case ::imex::ptensor::MEAN:
-    return DDPT::MEAN;
+    return SHARPY::MEAN;
   case ::imex::ptensor::PROD:
-    return DDPT::PROD;
+    return SHARPY::PROD;
   case ::imex::ptensor::SUM:
-    return DDPT::SUM;
+    return SHARPY::SUM;
   case ::imex::ptensor::STD:
-    return DDPT::STD;
+    return SHARPY::STD;
   case ::imex::ptensor::VAR:
-    return DDPT::VAR;
+    return SHARPY::VAR;
   case ::imex::ptensor::MAX:
-    return DDPT::MAX;
+    return SHARPY::MAX;
   case ::imex::ptensor::MIN:
-    return DDPT::MIN;
+    return SHARPY::MIN;
   default:
     throw std::runtime_error("Unknown reduction operation");
   }
 }
 
-// convert element type/dtype from MLIR to ddpt
-static DDPT::DTypeId mlir2ddpt(const ::imex::ptensor::DType dt) {
+// convert element type/dtype from MLIR to sharpy
+static SHARPY::DTypeId mlir2sharpy(const ::imex::ptensor::DType dt) {
   switch (dt) {
   case ::imex::ptensor::DType::F64:
-    return DDPT::FLOAT64;
+    return SHARPY::FLOAT64;
     break;
   case ::imex::ptensor::DType::I64:
-    return DDPT::INT64;
+    return SHARPY::INT64;
     break;
   case ::imex::ptensor::DType::U64:
-    return DDPT::UINT64;
+    return SHARPY::UINT64;
     break;
   case ::imex::ptensor::DType::F32:
-    return DDPT::FLOAT32;
+    return SHARPY::FLOAT32;
     break;
   case ::imex::ptensor::DType::I32:
-    return DDPT::INT32;
+    return SHARPY::INT32;
     break;
   case ::imex::ptensor::DType::U32:
-    return DDPT::UINT32;
+    return SHARPY::UINT32;
     break;
   case ::imex::ptensor::DType::I16:
-    return DDPT::INT16;
+    return SHARPY::INT16;
     break;
   case ::imex::ptensor::DType::U16:
-    return DDPT::UINT16;
+    return SHARPY::UINT16;
     break;
   case ::imex::ptensor::DType::I8:
-    return DDPT::INT8;
+    return SHARPY::INT8;
     break;
   case ::imex::ptensor::DType::U8:
-    return DDPT::UINT8;
+    return SHARPY::UINT8;
     break;
   case ::imex::ptensor::DType::I1:
-    return DDPT::BOOL;
+    return SHARPY::BOOL;
     break;
   default:
     throw std::runtime_error("unknown dtype");
   };
 }
 
-/// copy possibly strided tensor into a contiguous block of data
-void bufferize(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
+/// copy possibly strided array into a contiguous block of data
+void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
                const int64_t *strides, const int64_t *tStarts,
                const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
   dispatch(dtype, cptr,
@@ -238,7 +238,7 @@ void bufferize(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
                  for (int64_t r = 0; r < nd; ++r) {
                    off += sts[r] * strides[r];
                  }
-                 DDPT::forall(0, &ptr[off], szs, strides, nd,
+                 SHARPY::forall(0, &ptr[off], szs, strides, nd,
                               [&buff](const auto *in) {
                                 *buff = *in;
                                 ++buff;
@@ -248,8 +248,8 @@ void bufferize(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
            });
 }
 
-/// copy contiguous block of data into a possibly strided tensor
-void unpack(void *in, DDPT::DTypeId dtype, const int64_t *sizes,
+/// copy contiguous block of data into a possibly strided array
+void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
             const int64_t *strides, const int64_t *tStarts,
             const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
   dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
@@ -263,7 +263,7 @@ void unpack(void *in, DDPT::DTypeId dtype, const int64_t *sizes,
         for (int64_t r = 0; r < nd; ++r) {
           off += sts[r] * strides[r];
         }
-        DDPT::forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
+        SHARPY::forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
           *out = *buff;
           ++buff;
         });
@@ -307,8 +307,8 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
   }
 }
 
-/// copy a number of tensor elements into a contiguous block of data
-void bufferizeN(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
+/// copy a number of array elements into a contiguous block of data
+void bufferizeN(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
                 const int64_t *strides, const int64_t *tStarts,
                 const int64_t *tEnds, uint64_t nd, uint64_t N, void *out) {
   std::vector<uint64_t> chunks(nd);
@@ -332,18 +332,18 @@ void bufferizeN(void *cptr, DDPT::DTypeId dtype, const int64_t *sizes,
            });
 }
 
-using MRIdx1d = DDPT::Unranked1DMemRefType<int64_t>;
+using MRIdx1d = SHARPY::Unranked1DMemRefType<int64_t>;
 
 // FIXME hard-coded for contiguous layout
 template <typename T>
 void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
-  DDPT::UnrankedMemRefType<T> data(dataRank, dataDescr);
+  SHARPY::UnrankedMemRefType<T> data(dataRank, dataDescr);
   assert(dataRank == 0 || (dataRank == 1 && data.strides()[0] == 1));
   auto d = data.data();
-  auto t = DDPT::DTYPE<T>::value;
+  auto t = SHARPY::DTYPE<T>::value;
   auto r = dataRank ? data.sizes()[0] : 1;
-  auto o = mlir2ddpt(static_cast<imex::ptensor::ReduceOpId>(op));
-  DDPT::getTransceiver()->reduce_all(d, t, r, o);
+  auto o = mlir2sharpy(static_cast<imex::ptensor::ReduceOpId>(op));
+  SHARPY::getTransceiver()->reduce_all(d, t, r, o);
 }
 
 extern "C" {
@@ -365,17 +365,17 @@ TYPED_REDUCEALL(i1, bool);
 
 } // extern "C"
 
-/// @brief reshape tensor
-/// We assume tensor is partitioned along the first dimension (only) and
+/// @brief reshape array
+/// We assume array is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-void _idtr_reshape(DDPT::DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
+void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank, int64_t *gShapePtr,
                    void *lDataPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
                    int64_t *lOffsPtr, int64_t oRank, int64_t *oGShapePtr,
                    void *oDataPtr, int64_t *oShapePtr, int64_t *oOffsPtr,
-                   DDPT::Transceiver *tc) {
+                   SHARPY::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = DDPT::getTransceiver();
+  tc = SHARPY::getTransceiver();
 #endif
 
   assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
@@ -411,8 +411,8 @@ void _idtr_reshape(DDPT::DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
   for (auto i = 0; i < N; ++i) {
     dspl[i] = 4 * i;
   }
-  tc->gather(buff.data(), counts.data(), dspl.data(), DDPT::INT64,
-             DDPT::REPLICATED);
+  tc->gather(buff.data(), counts.data(), dspl.data(), SHARPY::INT64,
+             SHARPY::REPLICATED);
 
   // compute overlaps of current parts with requested parts
   // and store meta for alltoall
@@ -450,28 +450,28 @@ void _idtr_reshape(DDPT::DTypeId ddpttype, int64_t lRank, int64_t *gShapePtr,
     }
   }
 
-  DDPT::Buffer outbuff(totSSz * sizeof_dtype(ddpttype), 2); // FIXME debug value
-  bufferizeN(lDataPtr, ddpttype, lShapePtr, lStridesPtr, lsOffs.data(),
+  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype), 2); // FIXME debug value
+  bufferizeN(lDataPtr, sharpytype, lShapePtr, lStridesPtr, lsOffs.data(),
              lsEnds.data(), lRank, N, outbuff.data());
-  auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), ddpttype,
+  auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
                           oDataPtr, rszs.data(), roffs.data());
   tc->wait(hdl);
 }
 
-/// @brief reshape tensor
+/// @brief reshape array
 template <typename T>
 void _idtr_reshape(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
                    void *lOffsDescr, int64_t lRank, void *lDescr,
                    int64_t oGShapeRank, void *oGShapeDescr, int64_t oOffsRank,
                    void *oOffsDescr, int64_t oRank, void *oDescr,
-                   DDPT::Transceiver *tc) {
+                   SHARPY::Transceiver *tc) {
 
-  auto ddpttype = DDPT::DTYPE<T>::value;
+  auto sharpytype = SHARPY::DTYPE<T>::value;
 
-  DDPT::UnrankedMemRefType<T> lData(lRank, lDescr);
-  DDPT::UnrankedMemRefType<T> oData(oRank, oDescr);
+  SHARPY::UnrankedMemRefType<T> lData(lRank, lDescr);
+  SHARPY::UnrankedMemRefType<T> oData(oRank, oDescr);
 
-  _idtr_reshape(ddpttype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
+  _idtr_reshape(sharpytype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
                 lData.data(), lData.sizes(), lData.strides(),
                 MRIdx1d(lOffsRank, lOffsDescr).data(), oRank,
                 MRIdx1d(oGShapeRank, oGShapeDescr).data(), oData.data(),
@@ -485,7 +485,7 @@ extern "C" {
       int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
       void *lOffsDescr, int64_t rank, void *lDescr, int64_t oGShapeRank,       \
       void *oGShapeDescr, int64_t oOffsRank, void *oOffsDescr, int64_t oRank,  \
-      void *oDescr, DDPT::Transceiver *tc) {                                   \
+      void *oDescr, SHARPY::Transceiver *tc) {                                   \
     _idtr_reshape<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr, rank,  \
                         lDescr, oGShapeRank, oGShapeDescr, oOffsRank,          \
                         oOffsDescr, oRank, oDescr, tc);                        \
@@ -514,7 +514,7 @@ struct UHCache {
   // receive maps
   std::vector<int> _lRecvSize, _rRecvSize, _lRecvOff, _rRecvOff;
   // buffers
-  DDPT::Buffer _recvLBuff, _recvRBuff, _sendLBuff, _sendRBuff;
+  SHARPY::Buffer _recvLBuff, _recvRBuff, _sendLBuff, _sendRBuff;
   bool _bufferizeSend, _bufferizeLRecv, _bufferizeRRecv;
   // start and sizes for chunks from remotes if copies are needed
   int64_t _lTotalRecvSize, _rTotalRecvSize, _lTotalSendSize, _rTotalSendSize;
@@ -531,8 +531,8 @@ struct UHCache {
           std::vector<int> &&rSendSize, std::vector<int> &&lSendOff,
           std::vector<int> &&rSendOff, std::vector<int> &&lRecvSize,
           std::vector<int> &&rRecvSize, std::vector<int> &&lRecvOff,
-          DDPT::Buffer &&recvLBuff, DDPT::Buffer &&recvRBuff,
-          DDPT::Buffer &&sendLBuff, DDPT::Buffer &&sendRBuff,
+          SHARPY::Buffer &&recvLBuff, SHARPY::Buffer &&recvRBuff,
+          SHARPY::Buffer &&sendLBuff, SHARPY::Buffer &&sendRBuff,
           std::vector<int> &&rRecvOff, bool bufferizeSend, bool bufferizeLRecv,
           bool bufferizeRRecv, int64_t lTotalRecvSize, int64_t rTotalRecvSize,
           int64_t lTotalSendSize, int64_t rTotalSendSize)
@@ -556,11 +556,11 @@ struct UHCache {
   UHCache &operator=(UHCache &&) = default;
 };
 
-UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
+UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
                     int64_t *ownedShape, int64_t *ownedStride, int64_t *bbOff,
                     int64_t *bbShape, int64_t *leftHaloShape,
                     int64_t *leftHaloStride, int64_t *rightHaloShape,
-                    int64_t *rightHaloStride, DDPT::Transceiver *tc) {
+                    int64_t *rightHaloStride, SHARPY::Transceiver *tc) {
   UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
   cE._lTotalRecvSize = 0;
@@ -583,8 +583,8 @@ UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   for (auto i = 0; i < nworkers; ++i) {
     offsets[i] = 2 * ndims * i;
   }
-  tc->gather(bbTable.data(), counts.data(), offsets.data(), DDPT::INT64,
-             DDPT::REPLICATED);
+  tc->gather(bbTable.data(), counts.data(), offsets.data(), SHARPY::INT64,
+             SHARPY::REPLICATED);
 
   // global indices for row partitioning
   auto ownedRowStart = ownedOff[0];
@@ -604,7 +604,7 @@ UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   cE._rSendSize.resize(nworkers, 0);
 
   // use send buffer if owned data is strided or sending a subview
-  cE._bufferizeSend = (!DDPT::is_contiguous(ownedShape, ownedStride, ndims) ||
+  cE._bufferizeSend = (!SHARPY::is_contiguous(ownedShape, ownedStride, ndims) ||
                        bbTotCols != ownedTotCols);
 
   cE._lBufferStart.resize(nworkers * ndims, 0);
@@ -672,8 +672,8 @@ UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
   cE._rRecvOff.resize(nworkers);
 
   // receive size is sender's send size
-  tc->alltoall(cE._lSendSize.data(), 1, DDPT::INT32, cE._lRecvSize.data());
-  tc->alltoall(cE._rSendSize.data(), 1, DDPT::INT32, cE._rRecvSize.data());
+  tc->alltoall(cE._lSendSize.data(), 1, SHARPY::INT32, cE._lRecvSize.data());
+  tc->alltoall(cE._rSendSize.data(), 1, SHARPY::INT32, cE._rRecvSize.data());
   // compute offset in a contiguous receive buffer
   cE._lRecvOff[0] = 0;
   cE._rRecvOff[0] = 0;
@@ -684,9 +684,9 @@ UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
 
   // receive buffering
   cE._bufferizeLRecv =
-      !DDPT::is_contiguous(leftHaloShape, leftHaloStride, ndims);
+      !SHARPY::is_contiguous(leftHaloShape, leftHaloStride, ndims);
   cE._bufferizeRRecv =
-      !DDPT::is_contiguous(rightHaloShape, rightHaloStride, ndims);
+      !SHARPY::is_contiguous(rightHaloShape, rightHaloStride, ndims);
   cE._lRecvBufferSize.resize(nworkers * ndims, 0);
   cE._rRecvBufferSize.resize(nworkers * ndims, 0);
 
@@ -711,25 +711,25 @@ UHCache getMetaData(DDPT::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
 };
 
 /// @brief Update data in halo parts
-/// We assume tensor is partitioned along the first dimension only
+/// We assume array is partitioned along the first dimension only
 /// (row partitioning) and partitions are ordered by ranks
 /// if cache-key is provided (>=0) meta data is read from cache
 /// @return (MPI) handles
-void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
+void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
                         int64_t *ownedOff, int64_t *ownedShape,
                         int64_t *ownedStride, int64_t *bbOff, int64_t *bbShape,
                         void *ownedData, int64_t *leftHaloShape,
                         int64_t *leftHaloStride, void *leftHaloData,
                         int64_t *rightHaloShape, int64_t *rightHaloStride,
-                        void *rightHaloData, DDPT::Transceiver *tc,
+                        void *rightHaloData, SHARPY::Transceiver *tc,
                         int64_t key) {
 
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
-  tc = DDPT::getTransceiver();
+  tc = SHARPY::getTransceiver();
 #endif
   auto nworkers = tc->nranks();
-  if (nworkers <= 1 || getenv("DDPT_SKIP_COMM"))
+  if (nworkers <= 1 || getenv("SHARPY_SKIP_COMM"))
     return nullptr;
 
   // not thread-safe
@@ -749,7 +749,7 @@ void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
   }
   cache = &(cIt->second);
 
-  auto nbytes = sizeof_dtype(ddpttype);
+  auto nbytes = sizeof_dtype(sharpytype);
   if (cache->_bufferizeLRecv) {
     cache->_recvLBuff.resize(cache->_lTotalRecvSize * nbytes);
   }
@@ -772,40 +772,40 @@ void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
 
   // communicate left/right halos
   if (cache->_bufferizeSend) {
-    bufferize(ownedData, ddpttype, ownedShape, ownedStride,
+    bufferize(ownedData, sharpytype, ownedShape, ownedStride,
               cache->_lBufferStart.data(), cache->_lBufferSize.data(), ndims,
               nworkers, cache->_sendLBuff.data());
   }
   auto lwh = tc->alltoall(lSendData, cache->_lSendSize.data(),
-                          cache->_lSendOff.data(), ddpttype, lRecvData,
+                          cache->_lSendOff.data(), sharpytype, lRecvData,
                           cache->_lRecvSize.data(), cache->_lRecvOff.data());
   if (cache->_bufferizeSend) {
-    bufferize(ownedData, ddpttype, ownedShape, ownedStride,
+    bufferize(ownedData, sharpytype, ownedShape, ownedStride,
               cache->_rBufferStart.data(), cache->_rBufferSize.data(), ndims,
               nworkers, cache->_sendRBuff.data());
   }
   auto rwh = tc->alltoall(rSendData, cache->_rSendSize.data(),
-                          cache->_rSendOff.data(), ddpttype, rRecvData,
+                          cache->_rSendOff.data(), sharpytype, rRecvData,
                           cache->_rRecvSize.data(), cache->_rRecvOff.data());
 
   auto wait = [=]() {
     tc->wait(lwh);
     std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
     if (cache->_bufferizeLRecv) {
-      unpack(lRecvData, ddpttype, leftHaloShape, leftHaloStride,
+      unpack(lRecvData, sharpytype, leftHaloShape, leftHaloStride,
              recvBufferStart.data(), cache->_lRecvBufferSize.data(), ndims,
              nworkers, leftHaloData);
     }
     tc->wait(rwh);
     if (cache->_bufferizeRRecv) {
-      unpack(rRecvData, ddpttype, rightHaloShape, rightHaloStride,
+      unpack(rRecvData, sharpytype, rightHaloShape, rightHaloStride,
              recvBufferStart.data(), cache->_rRecvBufferSize.data(), ndims,
              nworkers, rightHaloData);
     }
   };
 
   if (cache->_bufferizeLRecv || cache->_bufferizeRRecv ||
-      getenv("DDPT_NO_ASYNC")) {
+      getenv("SHARPY_NO_ASYNC")) {
     wait();
     return nullptr;
   }
@@ -815,25 +815,25 @@ void *_idtr_update_halo(DDPT::DTypeId ddpttype, int64_t ndims,
 /// @brief templated wrapper for typed function versions calling
 /// _idtr_update_halo
 template <typename T>
-void *_idtr_update_halo(DDPT::Transceiver *tc, int64_t gShapeRank,
+void *_idtr_update_halo(SHARPY::Transceiver *tc, int64_t gShapeRank,
                         void *gShapeDescr, int64_t oOffRank, void *oOffDescr,
                         int64_t oDataRank, void *oDataDescr, int64_t bbOffRank,
                         void *bbOffDescr, int64_t bbShapeRank,
                         void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,
                         int64_t rHaloRank, void *rHaloDescr, int64_t key) {
 
-  auto ddpttype = DDPT::DTYPE<T>::value;
+  auto sharpytype = SHARPY::DTYPE<T>::value;
 
   // Construct unranked memrefs for metadata and data
   MRIdx1d ownedOff(oOffRank, oOffDescr);
   MRIdx1d bbOff(bbOffRank, bbOffDescr);
   MRIdx1d bbShape(bbShapeRank, bbShapeDescr);
-  DDPT::UnrankedMemRefType<T> ownedData(oDataRank, oDataDescr);
-  DDPT::UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
-  DDPT::UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
+  SHARPY::UnrankedMemRefType<T> ownedData(oDataRank, oDataDescr);
+  SHARPY::UnrankedMemRefType<T> leftHalo(lHaloRank, lHaloDescr);
+  SHARPY::UnrankedMemRefType<T> rightHalo(rHaloRank, rHaloDescr);
 
   return _idtr_update_halo(
-      ddpttype, ownedData.rank(), ownedOff.data(), ownedData.sizes(),
+      sharpytype, ownedData.rank(), ownedOff.data(), ownedData.sizes(),
       ownedData.strides(), bbOff.data(), bbShape.data(), ownedData.data(),
       leftHalo.sizes(), leftHalo.strides(), leftHalo.data(), rightHalo.sizes(),
       rightHalo.strides(), rightHalo.data(), tc, key);
@@ -842,7 +842,7 @@ void *_idtr_update_halo(DDPT::Transceiver *tc, int64_t gShapeRank,
 extern "C" {
 #define TYPED_UPDATE_HALO(_sfx, _typ)                                          \
   void *_idtr_update_halo_##_sfx(                                              \
-      DDPT::Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,            \
+      SHARPY::Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,            \
       int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
       int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
       void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \

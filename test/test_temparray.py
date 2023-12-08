@@ -1,25 +1,25 @@
-import ddptensor as dt
+import sharpy as sp
 import pytest
 
 
 class TestTemporaries:
     def test_temp_inline(self):
-        dtyp = dt.float32
-        a = dt.ones((6, 6), dtype=dtyp)
-        b = dt.ones((6, 6), dtype=dtyp)
+        dtyp = sp.float32
+        a = sp.ones((6, 6), dtype=dtyp)
+        b = sp.ones((6, 6), dtype=dtyp)
 
-        dt.sync()
+        sp.sync()
         c = a[0:5, 0:5]
         b[0:5, 0:5] = b[0:5, 0:5] + c
         del c
-        dt.sync()
+        sp.sync()
 
         c = a[0:5, 0:5]
         b[0:5, 0:5] = b[0:5, 0:5] + c
         del c
-        dt.sync()
+        sp.sync()
 
-        r1 = dt.sum(b, [0, 1])
+        r1 = sp.sum(b, [0, 1])
         v = 5 * 5 * 3 + 6 + 5
         assert float(r1) == v
 
@@ -31,16 +31,16 @@ class TestTemporaries:
             c = func(a)
             b[0:5, 0:5] = b[0:5, 0:5] + c
 
-        dtyp = dt.float32
-        a = dt.ones((6, 6), dtype=dtyp)
-        b = dt.ones((6, 6), dtype=dtyp)
+        dtyp = sp.float32
+        a = sp.ones((6, 6), dtype=dtyp)
+        b = sp.ones((6, 6), dtype=dtyp)
 
-        dt.sync()
+        sp.sync()
         update(a, b)
-        dt.sync()
+        sp.sync()
         update(a, b)
-        dt.sync()
+        sp.sync()
 
-        r1 = dt.sum(b, [0, 1])
+        r1 = sp.sum(b, [0, 1])
         v = 5 * 5 * 3 + 6 + 5
         assert float(r1) == v

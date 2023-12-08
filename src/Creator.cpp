@@ -2,13 +2,13 @@
   C++ representation of the array-API's creation functions.
 */
 
-#include "ddptensor/Creator.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/Transceiver.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/Creator.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/Transceiver.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
@@ -20,9 +20,9 @@
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 
-namespace DDPT {
+namespace SHARPY {
 
-static const char *FORCE_DIST = getenv("DDPT_FORCE_DIST");
+static const char *FORCE_DIST = getenv("SHARPY_FORCE_DIST");
 
 inline uint64_t mkTeam(uint64_t team) {
   if (team && (FORCE_DIST || getTransceiver()->nranks() > 1)) {
@@ -101,11 +101,11 @@ struct DeferredFull : public Deferred {
   }
 };
 
-ddptensor *Creator::full(const shape_type &shape, const py::object &val,
+FutureArray *Creator::full(const shape_type &shape, const py::object &val,
                          DTypeId dtype, const std::string &device,
                          uint64_t team) {
   auto v = mk_scalar(val, dtype);
-  return new ddptensor(
+  return new FutureArray(
       defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
 }
 
@@ -164,10 +164,10 @@ struct DeferredArange : public Deferred {
   }
 };
 
-ddptensor *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
+FutureArray *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
                            DTypeId dtype, const std::string &device,
                            uint64_t team) {
-  return new ddptensor(
+  return new FutureArray(
       defer<DeferredArange>(start, end, step, dtype, device, mkTeam(team)));
 }
 
@@ -226,10 +226,10 @@ struct DeferredLinspace : public Deferred {
   }
 };
 
-ddptensor *Creator::linspace(double start, double end, uint64_t num,
+FutureArray *Creator::linspace(double start, double end, uint64_t num,
                              bool endpoint, DTypeId dtype,
                              const std::string &device, uint64_t team) {
-  return new ddptensor(defer<DeferredLinspace>(start, end, num, endpoint, dtype,
+  return new FutureArray(defer<DeferredLinspace>(start, end, num, endpoint, dtype,
                                                device, mkTeam(team)));
 }
 
@@ -238,11 +238,11 @@ ddptensor *Creator::linspace(double start, double end, uint64_t num,
 extern DTypeId DEFAULT_FLOAT;
 extern DTypeId DEFAULT_INT;
 
-std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
+std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
                                                 const std::string &device,
                                                 uint64_t team, DTypeId dtype) {
-  if (py::isinstance<ddptensor>(b)) {
-    return {b.cast<ddptensor *>(), false};
+  if (py::isinstance<FutureArray>(b)) {
+    return {b.cast<FutureArray *>(), false};
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
     return {Creator::full({}, b, dtype, device, team), true};
   }
@@ -253,4 +253,4 @@ std::pair<ddptensor *, bool> Creator::mk_future(const py::object &b,
 FACTORY_INIT(DeferredFull, F_FULL);
 FACTORY_INIT(DeferredArange, F_ARANGE);
 FACTORY_INIT(DeferredLinspace, F_LINSPACE);
-} // namespace DDPT
+} // namespace SHARPY

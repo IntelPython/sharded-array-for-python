@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18.2)
-project(ddptensor VERSION 1.0)
+project(sharpy VERSION 1.0)
 
 if(DEFINED ENV{CONDA_PREFIX})
   set(CONDA_PREFIX $ENV{CONDA_PREFIX})
@@ -77,11 +77,11 @@ set(MKL_LIBRARIES -L${MKLROOT}/lib -lmkl_intel_lp64 -lmkl_tbb_thread -lmkl_core 
 # Use -fPIC even if statically compiled
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(P2C_HPP ${PROJECT_SOURCE_DIR}/src/include/ddptensor/p2c_ids.hpp)
+set(P2C_HPP ${PROJECT_SOURCE_DIR}/src/include/sharpy/p2c_ids.hpp)
 # Generate enums
 add_custom_command(
-    COMMAND python ${PROJECT_SOURCE_DIR}/scripts/code_gen.py ${PROJECT_SOURCE_DIR}/ddptensor/array_api.py ${P2C_HPP}
-    DEPENDS ${PROJECT_SOURCE_DIR}/scripts/code_gen.py ${PROJECT_SOURCE_DIR}/ddptensor/array_api.py
+    COMMAND python ${PROJECT_SOURCE_DIR}/scripts/code_gen.py ${PROJECT_SOURCE_DIR}/sharpy/array_api.py ${P2C_HPP}
+    DEPENDS ${PROJECT_SOURCE_DIR}/scripts/code_gen.py ${PROJECT_SOURCE_DIR}/sharpy/array_api.py
     OUTPUT ${P2C_HPP}
     COMMENT "Generating ${P2C_HPP}."
     )
@@ -90,12 +90,12 @@ add_custom_command(
 # Target
 # ============
 
-FILE(GLOB Hpps ${PROJECT_SOURCE_DIR}/src/include/ddptensor/*.hpp)
-FILE(GLOB JitHpps ${PROJECT_SOURCE_DIR}/src/include/ddptensor/jit/*.hpp)
+FILE(GLOB Hpps ${PROJECT_SOURCE_DIR}/src/include/sharpy/*.hpp)
+FILE(GLOB JitHpps ${PROJECT_SOURCE_DIR}/src/include/sharpy/jit/*.hpp)
 set(Hpps ${Hpps} ${JitHpps} ${P2C_HPP})
 
-set(DDPTSrcs
-    ${PROJECT_SOURCE_DIR}/src/ddptensor.cpp
+set(SHARPYSrcs
+    ${PROJECT_SOURCE_DIR}/src/_sharpy.cpp
     ${PROJECT_SOURCE_DIR}/src/Creator.cpp
     ${PROJECT_SOURCE_DIR}/src/EWBinOp.cpp
     ${PROJECT_SOURCE_DIR}/src/EWUnyOp.cpp
@@ -114,7 +114,7 @@ set(RTSrcs
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
     ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
-    ${PROJECT_SOURCE_DIR}/src/DDPTensorImpl.cpp
+    ${PROJECT_SOURCE_DIR}/src/NDArray.cpp
     ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
     ${PROJECT_SOURCE_DIR}/src/_deferred.cpp
@@ -125,10 +125,10 @@ set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
 )
 
-pybind11_add_module(_ddptensor MODULE ${DDPTSrcs} ${Hpps})
-add_library(_ddpt_rt SHARED ${RTSrcs} ${Hpps})
+pybind11_add_module(_sharpy MODULE ${SHARPYSrcs} ${Hpps})
+add_library(_sharpy_rt SHARED ${RTSrcs} ${Hpps})
 add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
-set(AllTargets _ddptensor _ddpt_rt idtr)
+set(AllTargets _sharpy _sharpy_rt idtr)
 
 add_compile_definitions(USE_MKL=1)
 add_compile_options("-ftemplate-backtrace-limit=0")
@@ -143,12 +143,12 @@ include_directories(
   ${IMEX_INCLUDE_DIRS})
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
-  target_link_options(_ddptensor PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
-  target_link_options(_ddpt_rt PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-ddpt_rt.txt")
+  target_link_options(_sharpy PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
+  target_link_options(_sharpy_rt PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-sharpy_rt.txt")
   # target_link_options(idtr PRIVATE "LINKER:-fvisibility=hidden" "LINKER:--exclude-libs,All")
 endif()
 
-#compile_options(_ddptensor PRIVATE -fopenmp)
+#compile_options(_sharpy PRIVATE -fopenmp)
 get_property(mlir_dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(mlir_conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 get_property(mlir_extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
@@ -156,12 +156,12 @@ get_property(mlir_translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
 get_property(imex_dialect_libs GLOBAL PROPERTY IMEX_DIALECT_LIBS)
 get_property(imex_conversion_libs GLOBAL PROPERTY IMEX_CONVERSION_LIBS)
 
-#llvm_update_compile_flags(_ddpttensor)
-target_link_directories(_ddptensor PRIVATE ${CONDA_PREFIX}/lib)
-target_link_directories(_ddpt_rt PRIVATE ${CONDA_PREFIX}/lib) # ${IMEX_INSTALL_PREFIX}/lib)
+#llvm_update_compile_flags(_sharpy)
+target_link_directories(_sharpy PRIVATE ${CONDA_PREFIX}/lib)
+target_link_directories(_sharpy_rt PRIVATE ${CONDA_PREFIX}/lib) # ${IMEX_INSTALL_PREFIX}/lib)
 target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
 
-target_link_libraries(_ddptensor PRIVATE
+target_link_libraries(_sharpy PRIVATE
     # ${MKL_LIBRARIES}
     # tbb
     ${mlir_dialect_libs}
@@ -176,7 +176,7 @@ target_link_libraries(_ddptensor PRIVATE
     IMEXUtil
     LLVMX86CodeGen
     LLVMX86AsmParser
-    _ddpt_rt
+    _sharpy_rt
     idtr
 )
 target_link_libraries(idtr PRIVATE
@@ -184,7 +184,7 @@ target_link_libraries(idtr PRIVATE
     # ${MKL_LIBRARIES}
     tbb
 )
-target_link_libraries(_ddpt_rt PRIVATE
+target_link_libraries(_sharpy_rt PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb

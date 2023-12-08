@@ -20,7 +20,7 @@ print(
 namespace py = pybind11;
 #endif
 
-namespace DDPT {
+namespace SHARPY {
 """
 )
 
@@ -45,7 +45,7 @@ for cat, lst in api.api_categories.items():
         print(f'        .value("{x.upper()}", {x.upper()})')
     print("        .export_values();\n")
 
-print("}\n#endif\n} // namespace DDPT")
+print("}\n#endif\n} // namespace SHARPY")
 
 # Close the file
 sys.stdout.close()

@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /*
-  A registry of global tensors.
-  Each tensor has a globally unique id.
+  A registry of global arrays.
+  Each array has a globally unique id.
 */
 
-#include "ddptensor/Registry.hpp"
+#include "sharpy/Registry.hpp"
 #include <mutex>
 #include <unordered_map>
 
-namespace DDPT {
+namespace SHARPY {
 namespace Registry {
 
 using locker = std::lock_guard<std::mutex>;
 using keeper_type =
-    std::unordered_map<id_type, tensor_i::future_type>; //::weak_type>;
+    std::unordered_map<id_type, array_i::future_type>; //::weak_type>;
 static keeper_type _keeper;
 static std::mutex _mutex;
 static id_type _nguid = -1;
 
 id_type get_guid() { return ++_nguid; }
 
-void put(const tensor_i::future_type &ptr) {
+void put(const array_i::future_type &ptr) {
   locker _l(_mutex);
   _keeper.insert({ptr.guid(), ptr});
 }
@@ -31,11 +31,11 @@ bool has(id_type id) {
   return _keeper.find(id) != _keeper.end();
 }
 
-tensor_i::future_type get(id_type id) {
+array_i::future_type get(id_type id) {
   locker _l(_mutex);
   auto x = _keeper.find(id);
   if (x == _keeper.end())
-    throw(std::runtime_error("Encountered request for unknown tensor."));
+    throw(std::runtime_error("Encountered request for unknown array."));
   return x->second; //.lock();
 }
 
@@ -49,4 +49,4 @@ void fini() {
   _keeper.clear();
 }
 } // namespace Registry
-} // namespace DDPT
+} // namespace SHARPY

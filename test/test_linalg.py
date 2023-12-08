@@ -1,5 +1,5 @@
 import numpy as np
-import ddptensor as dt
+import sharpy as sp
 import pytest
 
 
@@ -12,7 +12,7 @@ class TestLinAlg:
             return m.reshape(a, (5, 7)), m.reshape(b, (7, 3))
 
         a, b = gen(dt)
-        c = float(dt.sum(dt.vecdot(a, b, 0), [0, 1]))
+        c = float(sp.sum(sp.vecdot(a, b, 0), [0, 1]))
         a, b = gen(np)
         v = float(np.sum(np.dot(a, b)))
         assert c == v

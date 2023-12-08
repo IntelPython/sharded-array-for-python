@@ -4,14 +4,14 @@
   Random number ops.
 */
 
-#include "ddptensor/Random.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Factory.hpp"
+#include "sharpy/Random.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Factory.hpp"
 #include <bitsery/traits/vector.h>
 
-namespace DDPT {
+namespace SHARPY {
 
-using ptr_type = tensor_i::ptr_type;
+using ptr_type = array_i::ptr_type;
 
 #if 0
 namespace x {
@@ -65,16 +65,16 @@ struct DeferredRandomOp : public Deferred {
   }
 };
 
-ddptensor *Random::rand(DTypeId dtype, const shape_type &shape,
+FutureArray *Random::rand(DTypeId dtype, const shape_type &shape,
                         const py::object &lower, const py::object &upper) {
-  return new ddptensor(defer<DeferredRandomOp>(
+  return new FutureArray(defer<DeferredRandomOp>(
       shape, to_native<double>(lower), to_native<double>(upper), dtype));
 }
 
 void Random::seed(uint64_t s) {
   // FIXME defer_lambda([s](){xt::random::seed(s); return
-  // tensor_i::ptr_type();});
+  // array_i::ptr_type();});
 }
 
 FACTORY_INIT(DeferredRandomOp, F_RANDOM);
-} // namespace DDPT
+} // namespace SHARPY

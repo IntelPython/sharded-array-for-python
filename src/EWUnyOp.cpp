@@ -4,16 +4,16 @@
   Elementwise unary ops.
 */
 
-#include "ddptensor/EWUnyOp.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/EWUnyOp.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 
-namespace DDPT {
+namespace SHARPY {
 #if 0
 namespace x {
 
@@ -123,7 +123,7 @@ namespace x {
 #endif // if 0
 
 // convert id of our unary op to id of imex::ptensor unary op
-static ::imex::ptensor::EWUnyOpId ddpt2mlir(const EWUnyOpId uop) {
+static ::imex::ptensor::EWUnyOpId sharpy(const EWUnyOpId uop) {
   switch (uop) {
   case __ABS__:
   case ABS:
@@ -202,7 +202,7 @@ struct DeferredEWUnyOp : public Deferred {
   EWUnyOpId _op;
 
   DeferredEWUnyOp() = default;
-  DeferredEWUnyOp(EWUnyOpId op, const tensor_i::future_type &a)
+  DeferredEWUnyOp(EWUnyOpId op, const array_i::future_type &a)
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _op(op) {}
 
@@ -214,7 +214,7 @@ struct DeferredEWUnyOp : public Deferred {
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto uop = builder.create<::imex::ptensor::EWUnyOp>(
-        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av);
+        loc, outTyp, builder.getI32IntegerAttr(sharpy(_op)), av);
 
     dm.addVal(this->guid(), uop,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
@@ -243,9 +243,9 @@ struct DeferredEWUnyOp : public Deferred {
   }
 };
 
-ddptensor *EWUnyOp::op(EWUnyOpId op, const ddptensor &a) {
-  return new ddptensor(defer<DeferredEWUnyOp>(op, a.get()));
+FutureArray *EWUnyOp::op(EWUnyOpId op, const FutureArray &a) {
+  return new FutureArray(defer<DeferredEWUnyOp>(op, a.get()));
 }
 
 FACTORY_INIT(DeferredEWUnyOp, F_EWUNYOP);
-} // namespace DDPT
+} // namespace SHARPY

@@ -1,5 +1,5 @@
 name: GitHub Actions Demo
-run-name: ${{ github.actor }} CI for ddpt
+run-name: ${{ github.actor }} CI for sharpy
 on: [push, pull_request]
 defaults:
   run:
@@ -49,7 +49,7 @@ jobs:
           cd -
           conda env create -f conda-env.yml
           conda clean -a -y
-          # conda create -q -n ddpt -c intel -c defaults pybind11 numpy cmake ninja impi-devel libstdcxx-ng mpi4py pytest scipy tbb-devel
+          # conda create -q -n sharpy -c intel -c defaults pybind11 numpy cmake ninja impi-devel libstdcxx-ng mpi4py pytest scipy tbb-devel
       - name: Setup miniconda
         if: steps.cache-miniconda.outputs.cache-hit == 'true'
         run: |
@@ -74,7 +74,7 @@ jobs:
         run: |
           echo "INFO: Need to rebuild LLVM-MLIR. Previous installation for MLIR not found"
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           np=`nproc`
           pushd third_party
           if [ -d "llvm-project" ]; then rm -rf llvm-project; fi
@@ -107,32 +107,32 @@ jobs:
         if: steps.cache-imex-mlir.outputs.cache-hit != 'true'
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           mkdir -p third_party/build/imex
           pushd third_party/build/imex
           MLIR_DIR=$GITHUB_WORKSPACE/third_party/install/llvm-mlir cmake $GITHUB_WORKSPACE/third_party/imex -DCMAKE_BUILD_TYPE=debug -G Ninja
           cmake --build . -j ${np} || exit 1
           cmake --install . --prefix=$GITHUB_WORKSPACE/third_party/install/imex || exit 1
           popd
-      - name: Build DDPT
+      - name: Build SHARPY
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python setup.py install
-          # DDPT_ROOT=`pip show -f ddptensor | grep Location | awk '{print $2}'`
+          # SHARPY_ROOT=`pip show -f sharpy | grep Location | awk '{print $2}'`
           # for some reason we cannot use the idtr from the install, not even a copy works
-          libidtr=`ls ${PWD}/build/lib.linux-x86_64-cpython-*/ddptensor/libidtr.so`
-          echo "DDPT_IDTR_SO=${libidtr}" >> $GITHUB_ENV
-          echo $DDPT_IDTR_SO
-      - name: Test DDPT (pytest)
+          libidtr=`ls ${PWD}/build/lib.linux-x86_64-cpython-*/sharpy/libidtr.so`
+          echo "SHARPY_IDTR_SO=${libidtr}" >> $GITHUB_ENV
+          echo $SHARPY_IDTR_SO
+      - name: Test SHARPY (pytest)
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           cd test
-          echo $DDPT_IDTR_SO
-          ldd $DDPT_IDTR_SO
+          echo $SHARPY_IDTR_SO
+          ldd $SHARPY_IDTR_SO
           pytest . -v -s
-          DDPT_FORCE_DIST=1 pytest . -v -s
+          SHARPY_FORCE_DIST=1 pytest . -v -s
           mpirun -n 2 pytest . -v -s
           mpirun -n 3 pytest . -v -s
           mpirun -n 4 pytest . -v -s
@@ -140,16 +140,16 @@ jobs:
       - name: Run examples
         run: |
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate ddpt
+          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           cd examples
-          DDPT_FALLBACK=numpy python -u ./stencil-2d.py 5 1024 star 4
-          DDPT_FALLBACK=numpy DDPT_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
-          mpirun -n 2 -genv DDPT_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
-          mpirun -n 3 -genv DDPT_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
-          mpirun -n 4 -genv DDPT_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
+          SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 1024 star 4
+          SHARPY_FALLBACK=numpy SHARPY_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
+          mpirun -n 2 -genv SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
+          mpirun -n 3 -genv SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
+          mpirun -n 4 -genv SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 2048 star 2
           python -u ./wave_equation.py -d f32
           python -u ./wave_equation.py -d f64
-          DDPT_FORCE_DIST=1 python -u ./wave_equation.py
+          SHARPY_FORCE_DIST=1 python -u ./wave_equation.py
           mpirun -n 2 python -u ./wave_equation.py
           mpirun -n 3 python -u ./wave_equation.py
           mpirun -n 4 python -u ./wave_equation.py
@@ -159,4 +159,4 @@ jobs:
       - name: Cleanup
         run: |
           pip list
-          pip uninstall -y ddptensor
+          pip uninstall -y sharpy

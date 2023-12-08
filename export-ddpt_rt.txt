@@ -1,5 +1,0 @@
-{
-	global:
-        *DDPT*;
-	local: *;
-};

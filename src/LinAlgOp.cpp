@@ -6,12 +6,12 @@
 
 #include <mpi.h>
 //#include <mkl.h>
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/TypeDispatch.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/LinAlgOp.hpp"
+#include "sharpy/TypeDispatch.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
 #if 0
 namespace x {
@@ -36,7 +36,7 @@ namespace x {
 
                 if(a_ptr->is_sliced() || b_ptr->is_sliced()) {
                     if(nda != 1 || ndb != 1)
-                        throw(std::runtime_error("vecdoc on sliced tensors supported for 1d tensors only"));
+                        throw(std::runtime_error("vecdoc on sliced arrays supported for 1d arrays only"));
                     const auto & av = xt::strided_view(ax, a_ptr->lslice());
                     const auto & bv = xt::strided_view(bx, b_ptr->lslice());
                     return vecdot_1d(av, bv, axis);
@@ -47,9 +47,9 @@ namespace x {
                 } else if(nda == 2 && ndb == 2) {
                     return matmul_2d(a_ptr, b_ptr, axis);
                 }
-                throw(std::runtime_error("'vecdot' supported for two 1d or two 2d tensors only."));
+                throw(std::runtime_error("'vecdot' supported for two 1d or two 2d arrays only."));
             } else
-                throw(std::runtime_error("'vecdot' supported for 2 double or float tensors only."));
+                throw(std::runtime_error("'vecdot' supported for 2 double or float arrays only."));
         }
 
         template<typename T1, typename T2>
@@ -125,8 +125,8 @@ struct DeferredLinAlgOp : public Deferred {
   int _axis;
 
   DeferredLinAlgOp() = default;
-  DeferredLinAlgOp(const tensor_i::future_type &a,
-                   const tensor_i::future_type &b, int axis)
+  DeferredLinAlgOp(const array_i::future_type &a,
+                   const array_i::future_type &b, int axis)
       : _a(a.guid()), _b(b.guid()), _axis(axis) {}
 
   void run() {
@@ -144,9 +144,9 @@ struct DeferredLinAlgOp : public Deferred {
   }
 };
 
-ddptensor *LinAlgOp::vecdot(const ddptensor &a, const ddptensor &b, int axis) {
-  return new ddptensor(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
+FutureArray *LinAlgOp::vecdot(const FutureArray &a, const FutureArray &b, int axis) {
+  return new FutureArray(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
 }
 
 FACTORY_INIT(DeferredLinAlgOp, F_LINALGOP);
-} // namespace DDPT
+} // namespace SHARPY

@@ -2,11 +2,11 @@
 
 // Implementation of reduction operations
 
-#include "ddptensor/ReduceOp.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/ReduceOp.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/Dist/Utils/Utils.h>
@@ -14,7 +14,7 @@
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 
-namespace DDPT {
+namespace SHARPY {
 
 #if 0
 namespace x {
@@ -81,7 +81,7 @@ namespace x {
 #endif // if 0
 
 // convert id of our reduction op to id of imex::ptensor reduction op
-static ::imex::ptensor::ReduceOpId ddpt2mlir(const ReduceOpId rop) {
+static ::imex::ptensor::ReduceOpId sharpy2mlir(const ReduceOpId rop) {
   switch (rop) {
   case MEAN:
     return ::imex::ptensor::MEAN;
@@ -108,7 +108,7 @@ struct DeferredReduceOp : public Deferred {
   ReduceOpId _op;
 
   DeferredReduceOp() = default;
-  DeferredReduceOp(ReduceOpId op, const tensor_i::future_type &a,
+  DeferredReduceOp(ReduceOpId op, const array_i::future_type &a,
                    const dim_vec_type &dim)
       : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
@@ -130,7 +130,7 @@ struct DeferredReduceOp : public Deferred {
     auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
     // reduction op
-    auto mop = ddpt2mlir(_op);
+    auto mop = sharpy2mlir(_op);
     auto op =
         builder.getIntegerAttr(builder.getIntegerType(sizeof(mop) * 8), mop);
     dm.addVal(this->guid(),
@@ -162,10 +162,10 @@ struct DeferredReduceOp : public Deferred {
   }
 };
 
-ddptensor *ReduceOp::op(ReduceOpId op, const ddptensor &a,
+FutureArray *ReduceOp::op(ReduceOpId op, const FutureArray &a,
                         const dim_vec_type &dim) {
-  return new ddptensor(defer<DeferredReduceOp>(op, a.get(), dim));
+  return new FutureArray(defer<DeferredReduceOp>(op, a.get(), dim));
 }
 
 FACTORY_INIT(DeferredReduceOp, F_REDUCEOP);
-} // namespace DDPT
+} // namespace SHARPY

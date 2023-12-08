@@ -10,12 +10,12 @@
 #include <thread>
 #include <unordered_map>
 
-#include "ddptensor/CppTypes.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/MPIMediator.hpp"
-#include "ddptensor/MPITransceiver.hpp"
+#include "sharpy/CppTypes.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/MPIMediator.hpp"
+#include "sharpy/MPITransceiver.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
 constexpr static int REQ_TAG = 14711;
 constexpr static int PULL_TAG = 14712;
@@ -180,7 +180,7 @@ void MPIMediator::listen() {
             MPI_Irecv(buff.data(), buff.size(), MPI_CHAR, MPI_ANY_SOURCE, REQ_TAG, _comm, &request_in);
 
             // Now find the array in question and send back its bufferized slice
-            tensor_i::ptr_type ptr = Registry::get(id).get();
+            array_i::ptr_type ptr = Registry::get(id).get();
             // Wait for previous answer to complete so that we can re-use the buffer
             MPI_Wait(&request_out, MPI_STATUS_IGNORE);
             rbuff.resize(0);
@@ -206,4 +206,4 @@ void MPIMediator::listen() {
   // MPI_Cancel(&request_in);
   // MPI_Wait(&request_out, MPI_STATUS_IGNORE);
 }
-} // namespace DDPT
+} // namespace SHARPY

@@ -2,10 +2,10 @@
 
 // the queue of deferred runables
 
-#include "include/ddptensor/Deferred.hpp"
+#include "include/sharpy/Deferred.hpp"
 #include <oneapi/tbb/concurrent_queue.h>
 
-namespace DDPT {
+namespace SHARPY {
 
 // thread-safe FIFO queue holding deferred objects
 tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
@@ -13,4 +13,4 @@ tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
 // add a deferred object to the queue
 void push_runable(Runable::ptr_type &&r) { _deferred.push(std::move(r)); }
 
-} // namespace DDPT
+} // namespace SHARPY

@@ -4,13 +4,13 @@
   Communication device based on MPI.
 */
 
-#include "ddptensor/MPITransceiver.hpp"
+#include "sharpy/MPITransceiver.hpp"
 #include <iostream>
 #include <limits>
 #include <mpi.h>
 #include <sstream>
 
-namespace DDPT {
+namespace SHARPY {
 
 // Init MPI and transceiver
 
@@ -44,26 +44,26 @@ MPITransceiver::MPITransceiver(bool is_cw)
     // Ok, let's spawn the clients.
     // I need some information for the startup.
     // 1. Name of the executable (default is the current exe)
-    const char *_tmp = getenv("DDPT_MPI_SPAWN");
+    const char *_tmp = getenv("SHARPY_MPI_SPAWN");
     if (_tmp) {
       int nClientsToSpawn = atol(_tmp);
       std::string clientExe;
       std::vector<std::string> args;
-      _tmp = getenv("DDPT_MPI_EXECUTABLE");
+      _tmp = getenv("SHARPY_MPI_EXECUTABLE");
       if (!_tmp) {
         _tmp = getenv("PYTHON_EXE");
         if (!_tmp)
           throw std::runtime_error("Spawning MPI processes requires setting "
-                                   "'DDPT_MPI_EXECUTABLE' or 'PYTHON_EXE'");
+                                   "'SHARPY_MPI_EXECUTABLE' or 'PYTHON_EXE'");
         clientExe = _tmp;
         // 2. arguments
-        _tmp = "-c import ddptensor as dt; dt.init(True)";
+        _tmp = "-c import FutureArray as dt; dt.init(True)";
         args.push_back("-c");
-        args.push_back("import ddptensor as dt; dt.init(True)");
+        args.push_back("import FutureArray as dt; dt.init(True)");
       } else {
         clientExe = _tmp;
         // 2. arguments
-        _tmp = getenv("DDPT_MPI_EXE_ARGS");
+        _tmp = getenv("SHARPY_MPI_EXE_ARGS");
         if (_tmp) {
           std::istringstream iss(_tmp);
           std::copy(std::istream_iterator<std::string>(iss),
@@ -78,7 +78,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
       clientArgs[args.size()] = nullptr;
 
       // 3. Special setting for MPI_Info: hosts
-      const char *clientHost = getenv("DDPT_MPI_HOSTS");
+      const char *clientHost = getenv("SHARPY_MPI_HOSTS");
 
       // Prepare MPI_Info object:
       MPI_Info clientInfo = MPI_INFO_NULL;
@@ -86,11 +86,11 @@ MPITransceiver::MPITransceiver(bool is_cw)
         MPI_Info_create(&clientInfo);
         MPI_Info_set(clientInfo, const_cast<char *>("host"),
                      const_cast<char *>(clientHost));
-        std::cerr << "[DDPT " << rank << "] Set MPI_Info_set(\"host\", \""
+        std::cerr << "[SHARPY " << rank << "] Set MPI_Info_set(\"host\", \""
                   << clientHost << "\")\n";
       }
       // Now spawn the client processes:
-      std::cerr << "[DDPT " << rank << "] Spawning " << nClientsToSpawn
+      std::cerr << "[SHARPY " << rank << "] Spawning " << nClientsToSpawn
                 << " MPI processes (" << clientExe << " " << _tmp << ")"
                 << std::endl;
       int *errCodes = new int[nClientsToSpawn];
@@ -101,7 +101,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
                          clientInfo, 0, MPI_COMM_WORLD, &interComm, errCodes);
       delete[] errCodes;
       if (err) {
-        std::cerr << "[DDPT " << rank
+        std::cerr << "[SHARPY " << rank
                   << "] Error in MPI_Comm_spawn. Skipping process spawning";
       } else {
         MPI_Intercomm_merge(interComm, 0, &_comm);
@@ -130,7 +130,7 @@ MPITransceiver::~MPITransceiver() {
     MPI_Finalize();
 }
 
-// convert ddpt's dtype to MPI datatype
+// convert sharpy's dtype to MPI datatype
 static MPI_Datatype to_mpi(DTypeId T) {
   switch (T) {
   case FLOAT64:
@@ -156,7 +156,7 @@ static MPI_Datatype to_mpi(DTypeId T) {
   }
 }
 
-// convert ddpt's RedOpType into MPI_op
+// convert sharpy's RedOpType into MPI_op
 static MPI_Op to_mpi(RedOpType o) {
   switch (o) {
   case MAX:
@@ -239,4 +239,4 @@ void MPITransceiver::wait(WaitHandle h) {
     MPI_Wait(&r, MPI_STATUS_IGNORE);
   }
 }
-} // namespace DDPT
+} // namespace SHARPY

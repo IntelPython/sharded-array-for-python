@@ -1,4 +1,4 @@
-import ddptensor as dt
+import sharpy as dt
 from utils import runAndCompare
 import pytest
 

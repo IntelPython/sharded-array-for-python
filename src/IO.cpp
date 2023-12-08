@@ -4,22 +4,22 @@
   I/O ops.
 */
 
-#include "ddptensor/IO.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/SetGetItem.hpp"
-#include "ddptensor/Transceiver.hpp"
-#include "ddptensor/TypeDispatch.hpp"
+#include "sharpy/IO.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/SetGetItem.hpp"
+#include "sharpy/Transceiver.hpp"
+#include "sharpy/TypeDispatch.hpp"
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
-namespace DDPT {
+namespace SHARPY {
 
 // ***************************************************************************
 
-/// @brief form a ddptensor from local numpy arrays (inplace - no copy)
+/// @brief form a FutureArray from local numpy arrays (inplace - no copy)
 struct DeferredFromLocal : public Deferred {
   py::array _npa;
 
@@ -87,15 +87,15 @@ struct DeferredFromLocal : public Deferred {
   template <typename S> void serialize(S &ser) {}
 };
 
-GetItem::py_future_type IO::to_numpy(const ddptensor &a) {
+GetItem::py_future_type IO::to_numpy(const FutureArray &a) {
   assert(!getTransceiver()->is_cw() || getTransceiver()->rank() == 0);
   return GetItem::gather(a, getTransceiver()->is_cw() ? 0 : REPLICATED);
 }
 
-ddptensor *IO::from_locals(const std::vector<py::array> &a) {
+FutureArray *IO::from_locals(const std::vector<py::array> &a) {
   assert(a.size() == 1);
-  return new ddptensor(defer<DeferredFromLocal>(a.front()));
+  return new FutureArray(defer<DeferredFromLocal>(a.front()));
 }
 
 FACTORY_INIT(DeferredFromLocal, F_FROMLOCALS);
-} // namespace DDPT
+} // namespace SHARPY

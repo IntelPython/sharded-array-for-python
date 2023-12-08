@@ -4,14 +4,14 @@
   Inplace elementwise binary ops.
 */
 
-#include "ddptensor/IEWBinOp.hpp"
-#include "ddptensor/Creator.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/Registry.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/IEWBinOp.hpp"
+#include "sharpy/Creator.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/Registry.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
@@ -19,10 +19,10 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 
-namespace DDPT {
+namespace SHARPY {
 
 // convert id of our binop to id of imex::ptensor binop
-static ::imex::ptensor::EWBinOpId ddpt2mlir(const IEWBinOpId bop) {
+static ::imex::ptensor::EWBinOpId sharpy2mlir(const IEWBinOpId bop) {
   switch (bop) {
   case __IADD__:
     return ::imex::ptensor::ADD;
@@ -60,8 +60,8 @@ struct DeferredIEWBinOp : public Deferred {
   IEWBinOpId _op;
 
   DeferredIEWBinOp() = default;
-  DeferredIEWBinOp(IEWBinOpId op, const tensor_i::future_type &a,
-                   const tensor_i::future_type &b)
+  DeferredIEWBinOp(IEWBinOpId op, const array_i::future_type &a,
+                   const array_i::future_type &b)
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _b(b.guid()), _op(op) {}
 
@@ -75,7 +75,7 @@ struct DeferredIEWBinOp : public Deferred {
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto binop = builder.create<::imex::ptensor::EWBinOp>(
-        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), av, bv);
+        loc, outTyp, builder.getI32IntegerAttr(sharpy2mlir(_op)), av, bv);
     // insertsliceop has no return value, so we just create the op...
     auto zero = ::imex::createIndex(loc, builder, 0);
     auto one = ::imex::createIndex(loc, builder, 1);
@@ -109,15 +109,15 @@ struct DeferredIEWBinOp : public Deferred {
   }
 };
 
-ddptensor *IEWBinOp::op(IEWBinOpId op, ddptensor &a, const py::object &b) {
+FutureArray *IEWBinOp::op(IEWBinOpId op, FutureArray &a, const py::object &b) {
   auto bb =
       Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
   auto res =
-      new ddptensor(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
+      new FutureArray(defer<DeferredIEWBinOp>(op, a.get(), bb.first->get()));
   if (bb.second)
     delete bb.first;
   return res;
 }
 
 FACTORY_INIT(DeferredIEWBinOp, F_IEWBINOP);
-} // namespace DDPT
+} // namespace SHARPY

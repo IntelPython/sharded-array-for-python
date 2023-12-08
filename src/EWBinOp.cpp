@@ -4,27 +4,26 @@
   Elementwise binary ops.
 */
 
-#include "ddptensor/EWBinOp.hpp"
-#include "ddptensor/Broadcast.hpp"
-#include "ddptensor/Creator.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/LinAlgOp.hpp"
-#include "ddptensor/Registry.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/TypePromotion.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/EWBinOp.hpp"
+#include "sharpy/Broadcast.hpp"
+#include "sharpy/Creator.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/LinAlgOp.hpp"
+#include "sharpy/Registry.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 
-namespace DDPT {
+namespace SHARPY {
 
 // convert id of our binop to id of imex::ptensor binop
-static ::imex::ptensor::EWBinOpId ddpt2mlir(const EWBinOpId bop) {
+static ::imex::ptensor::EWBinOpId sharpy2mlir(const EWBinOpId bop) {
   switch (bop) {
   case __ADD__:
   case ADD:
@@ -110,8 +109,8 @@ struct DeferredEWBinOp : public Deferred {
   EWBinOpId _op;
 
   DeferredEWBinOp() = default;
-  DeferredEWBinOp(EWBinOpId op, const tensor_i::future_type &a,
-                  const tensor_i::future_type &b)
+  DeferredEWBinOp(EWBinOpId op, const array_i::future_type &a,
+                  const array_i::future_type &b)
       : Deferred(promoted_dtype(a.dtype(), b.dtype()),
                  broadcast(a.shape(), b.shape()), a.device(), a.team()),
         _a(a.guid()), _b(b.guid()), _op(op) {}
@@ -124,7 +123,7 @@ struct DeferredEWBinOp : public Deferred {
     auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
     auto bTyp = bv.getType().cast<::imex::ptensor::PTensorType>();
     auto outElemType =
-        ::imex::ptensor::toMLIR(builder, DDPT::jit::getPTDType(_dtype));
+        ::imex::ptensor::toMLIR(builder, SHARPY::jit::getPTDType(_dtype));
     auto outTyp = aTyp.cloneWith(shape(), outElemType);
 
     ::mlir::Value one, two;
@@ -136,7 +135,7 @@ struct DeferredEWBinOp : public Deferred {
       two = bv;
     }
     auto bop = builder.create<::imex::ptensor::EWBinOp>(
-        loc, outTyp, builder.getI32IntegerAttr(ddpt2mlir(_op)), one, two);
+        loc, outTyp, builder.getI32IntegerAttr(sharpy2mlir(_op)), one, two);
 
     dm.addVal(this->guid(), bop,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
@@ -166,19 +165,19 @@ struct DeferredEWBinOp : public Deferred {
   }
 };
 
-ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
+FutureArray *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
   std::string deva, devb;
   uint64_t teama = 0, teamb = 0;
   DTypeId dtypea = DTYPE_LAST, dtypeb = DTYPE_LAST;
 
-  if (py::isinstance<ddptensor>(a)) {
-    auto tmp = a.cast<ddptensor *>()->get();
+  if (py::isinstance<FutureArray>(a)) {
+    auto tmp = a.cast<FutureArray *>()->get();
     deva = tmp.device();
     teama = tmp.team();
     dtypea = tmp.dtype();
   }
-  if (py::isinstance<ddptensor>(b)) {
-    auto tmp = b.cast<ddptensor *>()->get();
+  if (py::isinstance<FutureArray>(b)) {
+    auto tmp = b.cast<FutureArray *>()->get();
     devb = tmp.device();
     teamb = tmp.team();
     dtypeb = tmp.dtype();
@@ -196,7 +195,7 @@ ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
   if (op == __MATMUL__) {
     return LinAlgOp::vecdot(*aa.first, *bb.first, 0);
   }
-  auto res = new ddptensor(
+  auto res = new FutureArray(
       defer<DeferredEWBinOp>(op, aa.first->get(), bb.first->get()));
   if (aa.second)
     delete aa.first;
@@ -206,4 +205,4 @@ ddptensor *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
 }
 
 FACTORY_INIT(DeferredEWBinOp, F_EWBINOP);
-} // namespace DDPT
+} // namespace SHARPY

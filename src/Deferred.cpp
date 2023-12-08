@@ -7,13 +7,13 @@
   gets shut down.
 */
 
-#include "include/ddptensor/Deferred.hpp"
-#include "include/ddptensor/Mediator.hpp"
-#include "include/ddptensor/Registry.hpp"
-#include "include/ddptensor/Service.hpp"
-#include "include/ddptensor/Transceiver.hpp"
-#include "include/ddptensor/itac.hpp"
-#include "include/ddptensor/jit/mlir.hpp"
+#include "include/sharpy/Deferred.hpp"
+#include "include/sharpy/Mediator.hpp"
+#include "include/sharpy/Registry.hpp"
+#include "include/sharpy/Service.hpp"
+#include "include/sharpy/Transceiver.hpp"
+#include "include/sharpy/itac.hpp"
+#include "include/sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/PTensor/IR/PTensorOps.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -25,7 +25,7 @@ namespace py = pybind11;
 
 #include <iostream>
 
-namespace DDPT {
+namespace SHARPY {
 
 // thread-safe FIFO queue holding deferred objects
 extern tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
@@ -47,14 +47,14 @@ Deferred::future_type Deferred::get_future() {
           _team};
 }
 
-// defer a tensor-producing computation by adding it to the queue.
-// return a future for the resulting tensor.
+// defer a array-producing computation by adding it to the queue.
+// return a future for the resulting array.
 // set is_global to false if result is a local temporary which does not need a
 // guid
-Deferred::future_type defer_tensor(Runable::ptr_type &&_d, bool is_global) {
+Deferred::future_type defer_array(Runable::ptr_type &&_d, bool is_global) {
   Deferred *d = dynamic_cast<Deferred *>(_d.get());
   if (!d)
-    throw std::runtime_error("Expected Deferred Tensor promise");
+    throw std::runtime_error("Expected Deferred Array promise");
   if (is_global) {
     _dist(d);
     if (d->guid() == Registry::NOGUID) {
@@ -67,9 +67,9 @@ Deferred::future_type defer_tensor(Runable::ptr_type &&_d, bool is_global) {
   return f;
 }
 
-// defer a global tensor producer
+// defer a global array producer
 void Deferred::defer(Runable::ptr_type &&p) {
-  defer_tensor(std::move(p), true);
+  defer_array(std::move(p), true);
 }
 
 void Runable::defer(Runable::ptr_type &&p) { push_runable(std::move(p)); }
@@ -86,10 +86,10 @@ void Runable::fini() { _deferred.clear(); }
 // statement) is finalized, the function gets compiled and executed. The loop
 // completes by calling run() on the requesting object.
 void process_promises() {
-  int vtProcessSym, vtDDPTClass, vtPopSym;
-  VT(VT_classdef, "ddpt", &vtDDPTClass);
-  VT(VT_funcdef, "process", vtDDPTClass, &vtProcessSym);
-  VT(VT_funcdef, "pop", vtDDPTClass, &vtPopSym);
+  int vtProcessSym, vtSHARPYClass, vtPopSym;
+  VT(VT_classdef, "sharpy", &vtSHARPYClass);
+  VT(VT_funcdef, "process", vtSHARPYClass, &vtProcessSym);
+  VT(VT_funcdef, "pop", vtSHARPYClass, &vtPopSym);
   VT(VT_begin, vtProcessSym);
 
   bool done = false;
@@ -113,7 +113,7 @@ void process_promises() {
                                                        dummyFuncType);
       func.setPrivate();
     }
-    std::string fname("ddpt_jit");
+    std::string fname("sharpy_jit");
     auto function =
         builder.create<::mlir::func::FuncOp>(loc, fname, dummyFuncType);
     // create function entry block
@@ -180,4 +180,4 @@ void process_promises() {
     }
   } while (!done);
 }
-} // namespace DDPT
+} // namespace SHARPY

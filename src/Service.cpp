@@ -2,20 +2,20 @@
 
 /*
  Service operations, mostly used internally.
- Dropping/out-of-scoping tensors.
- Replicating tensors.
+ Dropping/out-of-scoping arrays.
+ Replicating arrays.
 */
 
-#include "ddptensor/Service.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Deferred.hpp"
-#include "ddptensor/Factory.hpp"
-#include "ddptensor/Registry.hpp"
-#include "ddptensor/TypeDispatch.hpp"
-#include "ddptensor/ddptensor.hpp"
-#include "ddptensor/jit/mlir.hpp"
+#include "sharpy/Service.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Deferred.hpp"
+#include "sharpy/Factory.hpp"
+#include "sharpy/Registry.hpp"
+#include "sharpy/TypeDispatch.hpp"
+#include "sharpy/FutureArray.hpp"
+#include "sharpy/jit/mlir.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
 #if 0
 namespace x {
@@ -52,7 +52,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
   Op _op;
 
   DeferredService(Op op = SERVICE_LAST) : _a(), _op(op) {}
-  DeferredService(Op op, const tensor_i::future_type &a)
+  DeferredService(Op op, const array_i::future_type &a)
       : _a(a.guid()), _op(op) {}
 
   void run() {
@@ -98,13 +98,13 @@ struct DeferredReplicate : public Deferred {
   id_type _a;
 
   DeferredReplicate() : _a() {}
-  DeferredReplicate(const tensor_i::future_type &a) : _a(a.guid()) {}
+  DeferredReplicate(const array_i::future_type &a) : _a(a.guid()) {}
 
   void run() {
     const auto a = std::move(Registry::get(_a).get());
-    auto ddpt = dynamic_cast<DDPTensorImpl *>(a.get());
-    assert(ddpt);
-    ddpt->replicate();
+    auto sharpy = dynamic_cast<NDArray *>(a.get());
+    assert(sharpy);
+    sharpy->replicate();
     set_value(a);
   }
 
@@ -125,7 +125,7 @@ struct DeferredReplicate : public Deferred {
 bool inited = false;
 bool finied = false;
 
-Service::service_future_type Service::drop(const ddptensor &a) {
+Service::service_future_type Service::drop(const FutureArray &a) {
   if (inited) {
     return defer<DeferredService>(DeferredService::DROP, a.get());
   }
@@ -135,10 +135,10 @@ Service::service_future_type Service::run() {
   return defer<DeferredService>(DeferredService::RUN);
 }
 
-ddptensor *Service::replicate(const ddptensor &a) {
-  return new ddptensor(defer<DeferredReplicate>(a.get()));
+FutureArray *Service::replicate(const FutureArray &a) {
+  return new FutureArray(defer<DeferredReplicate>(a.get()));
 }
 
 FACTORY_INIT(DeferredService, F_SERVICE);
 FACTORY_INIT(DeferredReplicate, F_REPLICATE);
-} // namespace DDPT
+} // namespace SHARPY

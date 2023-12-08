@@ -1,4 +1,4 @@
 {
-	global: PyInit__ddptensor;
+	global: PyInit__sharpy;
 	local: *;
 };

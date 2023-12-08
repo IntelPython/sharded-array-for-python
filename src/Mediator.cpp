@@ -4,9 +4,9 @@
   Initing and Finalizing mediator singleton.
 */
 
-#include <ddptensor/Mediator.hpp>
+#include <sharpy/Mediator.hpp>
 
-namespace DDPT {
+namespace SHARPY {
 
 static Mediator *theMediator = nullptr;
 
@@ -23,4 +23,4 @@ void fini_mediator() {
 }
 
 Mediator *getMediator() { return theMediator; }
-} // namespace DDPT
+} // namespace SHARPY

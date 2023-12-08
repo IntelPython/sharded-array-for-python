@@ -30,10 +30,10 @@ import argparse
 
 
 def run(n, backend, datatype, benchmark_mode):
-    if backend == "ddpt":
-        import ddptensor as np
-        from ddptensor.numpy import fromfunction
-        from ddptensor import init, fini, sync
+    if backend == "sharpy":
+        import sharpy as np
+        from sharpy.numpy import fromfunction
+        from sharpy import init, fini, sync
 
         all_axes = [0, 1]
         init(False)
@@ -413,8 +413,8 @@ if __name__ == "__main__":
         "-b",
         "--backend",
         type=str,
-        default="ddpt",
-        choices=["ddpt", "numpy"],
+        default="sharpy",
+        choices=["sharpy", "numpy"],
         help="Backend to use.",
     )
     parser.add_argument(

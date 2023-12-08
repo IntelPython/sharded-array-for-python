@@ -65,8 +65,8 @@ if sys.version_info >= (33, 3):
 else:
     from timeit import default_timer as timer
 
-import ddptensor as np
-import ddptensor.numpy
+import sharpy as np
+import sharpy.numpy
 
 # print('np version  = ', np.version.version)
 

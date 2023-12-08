@@ -1,10 +1,10 @@
 import os
-import ddptensor as dt
+import sharpy as sp
 
 
 def pytest_configure(config):
-    dt.init()
+    sp.init()
 
 
 def pytest_unconfigure(config):
-    dt.fini()
+    sp.fini()

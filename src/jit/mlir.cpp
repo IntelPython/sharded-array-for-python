@@ -13,29 +13,29 @@
   - create MLIR module/function
   - adding deferred operations
   - adding appropriate casts and return statements
-  - updating function signature to accept existing tensors and returning new and
+  - updating function signature to accept existing arrays and returning new and
   live ones
 
-  Typically operations have input dependences, e.g. tensors produced by other
+  Typically operations have input dependences, e.g. arrays produced by other
   operations. These can either come from outside the jit'ed function or be
   created within the function. Since we strictly add operations in serial order
   input dependences must lready exists. Deps are represented by guids and stored
   in the Registry.
 
-  Internally ddpt's MLIR machinery keeps track of created and needed tensors.
+  Internally sharpy's MLIR machinery keeps track of created and needed arrays.
   Those which were not created internally are added as input arguments to the
   jit-function. Those which are live (not destructed within the function) when
   the function is finalized are added as return values.
 
   MLIR/LLVM supports a single return value only. Following LLVM's policy we need
-  to pack al return tensors into one large buffer/struct. Input tensors get
+  to pack al return arrays into one large buffer/struct. Input arrays get
   represented as a series of arguments, as defined by MLIR/LLVM and IMEX's dist
   dialect.
 */
 
-#include "ddptensor/jit/mlir.hpp"
-#include "ddptensor/DDPTensorImpl.hpp"
-#include "ddptensor/Registry.hpp"
+#include "sharpy/jit/mlir.hpp"
+#include "sharpy/NDArray.hpp"
+#include "sharpy/Registry.hpp"
 
 // #include "llvm/Support/InitLLVM.h"
 
@@ -107,9 +107,9 @@
 #include "llvm/Support/TargetSelect.h"
 // #include "llvm/Support/raw_ostream.h"
 
-#include "ddptensor/itac.hpp"
+#include "sharpy/itac.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 namespace jit {
 
 static ::mlir::Type makeSignlessType(::mlir::Type type) {
@@ -140,7 +140,7 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
   return envs;
 }
 
-// convert ddpt's DTYpeId into MLIR type
+// convert sharpy's DTYpeId into MLIR type
 static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
                              const ::mlir::SmallVector<int64_t> &gShape,
                              const ::mlir::SmallVector<int64_t> &lhShape,
@@ -207,7 +207,7 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     // Not found -> this must be an input argument to the jit function
     auto idx = _args.size();
     auto fut = Registry::get(guid);
-    auto impl = std::dynamic_pointer_cast<DDPTensorImpl>(fut.get());
+    auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
     auto rank = impl->ndims();
     ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
     for (size_t i = 0; i < rank; i++) {
@@ -282,7 +282,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     _func.insertResult(idx, value.getType(), {});
     auto rank = value.getType().cast<::imex::ptensor::PTensorType>().getRank();
     _irm[v.first] = std::make_pair(rank, isDist);
-    // add sizes of tensor
+    // add sizes of array
     sz += ptensor_sz(rank, isDist);
     // clear reference to MLIR value
     v.second = nullptr;
@@ -290,9 +290,9 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   }
 
   if (HAS_ITAC()) {
-    int vtExeSym, vtDDPTClass;
-    VT(VT_classdef, "ddpt", &vtDDPTClass);
-    VT(VT_funcdef, "execute", vtDDPTClass, &vtExeSym);
+    int vtExeSym, vtSHARPYClass;
+    VT(VT_classdef, "sharpy", &vtSHARPYClass);
+    VT(VT_funcdef, "execute", vtSHARPYClass, &vtExeSym);
     auto s = builder.create<::mlir::arith::ConstantOp>(
         loc, builder.getI32IntegerAttr(vtExeSym));
     auto end = builder.create<::mlir::func::CallOp>(
@@ -362,9 +362,9 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
             t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
             t_strides[2], // rhsHalo
             lo_allocated,
-            lo_aligned + lo_offset // local offset is 1d tensor of uint64_t
+            lo_aligned + lo_offset // local offset is 1d array of uint64_t
         );
-      } else { // 0d tensor or non-dist
+      } else { // 0d array or non-dist
         pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
                      t_offset[1], t_sizes[1], t_strides[1]);
         v->second(rank, nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
@@ -391,13 +391,13 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
                                const std::string &fname,
                                std::vector<void *> &inp, size_t osz) {
 
-  int vtDDPTClass, vtHashSym, vtEEngineSym, vtRunSym, vtHashGenSym;
+  int vtSHARPYClass, vtHashSym, vtEEngineSym, vtRunSym, vtHashGenSym;
   if (HAS_ITAC()) {
-    VT(VT_classdef, "ddpt", &vtDDPTClass);
-    VT(VT_funcdef, "lookup_cache", vtDDPTClass, &vtHashSym);
-    VT(VT_funcdef, "gen_sha", vtDDPTClass, &vtHashGenSym);
-    VT(VT_funcdef, "eengine", vtDDPTClass, &vtEEngineSym);
-    VT(VT_funcdef, "run", vtDDPTClass, &vtRunSym);
+    VT(VT_classdef, "sharpy", &vtSHARPYClass);
+    VT(VT_funcdef, "lookup_cache", vtSHARPYClass, &vtHashSym);
+    VT(VT_funcdef, "gen_sha", vtSHARPYClass, &vtHashGenSym);
+    VT(VT_funcdef, "eengine", vtSHARPYClass, &vtEEngineSym);
+    VT(VT_funcdef, "run", vtSHARPYClass, &vtRunSym);
     VT(VT_begin, vtEEngineSym);
 
     ::mlir::OpBuilder builder(module->getContext());
@@ -459,7 +459,7 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
   if (osz) {
     args.push_back(&tmp);
   }
-  // we need a void*& for every input tensor
+  // we need a void*& for every input array
   // we refer directly to the storage in inp
   for (auto &arg : inp) {
     args.push_back(&arg);
@@ -608,9 +608,9 @@ static const char *gpu_pipeline =
     "reconcile-unrealized-casts";
 
 static const char *pass_pipeline =
-    getenv("DDPT_PASSES")
-        ? getenv("DDPT_PASSES")
-        : (getenv("DDPT_USE_GPU") ? gpu_pipeline : cpu_pipeline);
+    getenv("SHARPY_PASSES")
+        ? getenv("SHARPY_PASSES")
+        : (getenv("SHARPY_USE_GPU") ? gpu_pipeline : cpu_pipeline);
 
 JIT::JIT()
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
@@ -635,13 +635,13 @@ JIT::JIT()
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");
 
-  const char *v_ = getenv("DDPT_VERBOSE");
+  const char *v_ = getenv("SHARPY_VERBOSE");
   if (v_) {
     _verbose = std::stoi(v_);
   }
   // some verbosity
   if (_verbose) {
-    std::cerr << "DDPT_PASSES=\"" << pass_pipeline << "\"" << std::endl;
+    std::cerr << "SHARPY_PASSES=\"" << pass_pipeline << "\"" << std::endl;
     // _pm.enableStatistics();
     if (_verbose > 2)
       _pm.enableTiming();
@@ -651,14 +651,14 @@ JIT::JIT()
       _pm.enableIRPrinting();
   }
 
-  const char *envptr = getenv("DDPT_USE_CACHE");
+  const char *envptr = getenv("SHARPY_USE_CACHE");
   envptr = envptr ? envptr : "1";
   {
     auto c = std::string(envptr);
     _useCache = c == "1" || c == "y" || c == "Y" || c == "on" || c == "ON";
     std::cerr << "enableObjectDump=" << _useCache << std::endl;
   }
-  const char *ol_ = getenv("DDPT_OPT_LEVEL");
+  const char *ol_ = getenv("SHARPY_OPT_LEVEL");
   if (ol_) {
     _jit_opt_level = std::stoi(ol_);
     if (_jit_opt_level < 0 || _jit_opt_level > 3) {
@@ -671,12 +671,12 @@ JIT::JIT()
   _crunnerlib = std::string(mlirRoot) + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = std::string(mlirRoot) + "/lib/libmlir_runner_utils.so";
 
-  const char *idtrlib = getenv("DDPT_IDTR_SO");
+  const char *idtrlib = getenv("SHARPY_IDTR_SO");
   idtrlib = idtrlib ? idtrlib : "libidtr.so";
 
-  auto useGPU = getenv("DDPT_USE_GPU");
+  auto useGPU = getenv("SHARPY_USE_GPU");
   if (useGPU) {
-    const char *gpuxlibstr = getenv("DDPT_GPUX_SO");
+    const char *gpuxlibstr = getenv("SHARPY_GPUX_SO");
     if (gpuxlibstr) {
       _gpulib = std::string(gpuxlibstr);
     } else {
@@ -726,4 +726,4 @@ void init() {
   ::llvm::InitializeNativeTargetAsmParser();
 }
 } // namespace jit
-} // namespace DDPT
+} // namespace SHARPY

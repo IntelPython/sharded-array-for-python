@@ -2,9 +2,9 @@
 
 // deprecated
 
-#include "ddptensor/PVSlice.hpp"
+#include "sharpy/PVSlice.hpp"
 
-namespace DDPT {
+namespace SHARPY {
 
 using offsets_type = std::vector<uint64_t>;
 
@@ -191,7 +191,7 @@ PVSlice::map_ranks(const PVSlice &o_slc) const {
   auto o_sz = o_slc.size();
   auto d_sz = size();
   if (d_sz <= 1 && o_sz > 1)
-    throw std::runtime_error("Cannot map nd-tensor to scalar/0d-tensor.");
+    throw std::runtime_error("Cannot map nd-array to scalar/0d-array.");
   if (o_sz <= 1)
     return {};
 
@@ -245,4 +245,4 @@ std::ostream &operator<<(std::ostream &output, const PVSlice &slc) {
          << "offset=" << slc._base->offset() << "}";
   return output;
 }
-} // namespace DDPT
+} // namespace SHARPY

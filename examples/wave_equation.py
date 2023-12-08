@@ -30,10 +30,10 @@ import argparse
 
 
 def run(n, backend, datatype, benchmark_mode):
-    if backend == "ddpt":
-        import ddptensor as np
-        from ddptensor.numpy import fromfunction
-        from ddptensor import init, fini, sync
+    if backend == "sharpy":
+        import sharpy as np
+        from sharpy.numpy import fromfunction
+        from sharpy import init, fini, sync
 
         all_axes = [0, 1]
         init(False)
@@ -137,7 +137,7 @@ def run(n, backend, datatype, benchmark_mode):
         m = 1
         sol_y = np.cos(2 * m * math.pi * y_t_2d / ly)
         omega = c * math.pi * ((n / lx) ** 2 + (m / ly) ** 2) ** 0.5
-        # NOTE ddpt fails with scalar computation
+        # NOTE sharpy fails with scalar computation
         sol_t = numpy.cos(2 * omega * t)
         return amp * sol_x * sol_y * sol_t
 
@@ -276,8 +276,8 @@ if __name__ == "__main__":
         "-b",
         "--backend",
         type=str,
-        default="ddpt",
-        choices=["ddpt", "numpy"],
+        default="sharpy",
+        choices=["sharpy", "numpy"],
         help="Backend to use.",
     )
     parser.add_argument(
