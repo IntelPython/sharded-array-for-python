@@ -1,4 +1,5 @@
 import sharpy as sp
+import numpy
 from utils import runAndCompare
 import pytest
 
@@ -155,3 +156,10 @@ class TestSetGet:
             return b
 
         assert runAndCompare(doit)
+
+    def test_assign_bcast_scalar(self):
+        a = sp.zeros((16, 16), sp.int64)
+        b = 2
+        a[:, :] = b
+        a2 = sp.to_numpy(a)
+        assert numpy.all(a2 == 2)
