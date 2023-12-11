@@ -23,10 +23,10 @@ namespace x {
     class LinAlgOp
     {
     public:
-        using ptr_type = DPTensorBaseX::ptr_type;
+        using ptr_type = DNDArrayBaseX::ptr_type;
 
         template<typename A, typename B>
-        static ptr_type op(int axis, const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr)
+        static ptr_type op(int axis, const std::shared_ptr<DNDArrayX<A>> & a_ptr, const std::shared_ptr<DNDArrayX<B>> & b_ptr)
         {
             if constexpr (std::is_floating_point<A>::value && std::is_same<A, B>::value) {
                 const auto & ax = a_ptr->xarray();
@@ -61,7 +61,7 @@ namespace x {
         }
 
         template<typename A, typename B>
-        static ptr_type matmul_2d(const std::shared_ptr<DPTensorX<A>> & a_ptr, const std::shared_ptr<DPTensorX<B>> & b_ptr, int axis)
+        static ptr_type matmul_2d(const std::shared_ptr<DNDArrayX<A>> & a_ptr, const std::shared_ptr<DNDArrayX<B>> & b_ptr, int axis)
         {
             if(a_ptr->slice().split_dim() != 0)
                 throw(std::runtime_error("vecdoc_2d supported for split_dim=0 only"));

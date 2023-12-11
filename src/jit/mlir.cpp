@@ -90,7 +90,7 @@
 #include <llvm/Support/raw_sha1_ostream.h>
 
 #include <imex/Dialect/Dist/Utils/Utils.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <imex/InitIMEXDialects.h>
 #include <imex/InitIMEXPasses.h>
 
@@ -189,14 +189,14 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
           ::llvm::ArrayRef<int64_t>(reinterpret_cast<const int64_t *>(lOffs),
                                     rank),
           {lhShape, ownShape, rhShape}));
-      return ::imex::ptensor::PTensorType::get(gShape, etyp, envs);
+      return ::imex::ndarray::NDArrayType::get(gShape, etyp, envs);
     } else {
       envs.emplace_back(
           ::imex::dist::DistEnvAttr::get(builder.getI64IntegerAttr(team), 0));
-      return ::imex::ptensor::PTensorType::get({}, etyp, envs);
+      return ::imex::ndarray::NDArrayType::get({}, etyp, envs);
     }
   } else {
-    return ::imex::ptensor::PTensorType::get(ownShape, etyp, envs);
+    return ::imex::ndarray::NDArrayType::get(ownShape, etyp, envs);
   }
 }
 
@@ -280,10 +280,10 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     bool isDist = ::imex::dist::isDist(value.getType());
     ret_values[idx] = value;
     _func.insertResult(idx, value.getType(), {});
-    auto rank = value.getType().cast<::imex::ptensor::PTensorType>().getRank();
+    auto rank = value.getType().cast<::imex::ndarray::NDArrayType>().getRank();
     _irm[v.first] = std::make_pair(rank, isDist);
     // add sizes of array
-    sz += ptensor_sz(rank, isDist);
+    sz += ndarray_sz(rank, isDist);
     // clear reference to MLIR value
     v.second = nullptr;
     ++idx;
@@ -499,7 +499,7 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
   return std::move(maybeEngine.get());
 }
 
-static const char *cpu_pipeline = "ptensor-dist,"
+static const char *cpu_pipeline = "ndarray-dist,"
                                   "func.func(dist-coalesce),"
                                   "func.func(dist-infer-elementwise-cores),"
                                   "convert-dist-to-standard,"
@@ -507,7 +507,7 @@ static const char *cpu_pipeline = "ptensor-dist,"
                                   "overlap-comm-and-compute,"
                                   "add-comm-cache-keys,"
                                   "lower-distruntime-to-idtr,"
-                                  "convert-ptensor-to-linalg,"
+                                  "convert-ndarray-to-linalg,"
                                   "canonicalize,"
                                   "func.func(tosa-to-linalg),"
                                   "func.func(tosa-to-tensor),"
@@ -543,7 +543,7 @@ static const char *cpu_pipeline = "ptensor-dist,"
                                   "reconcile-unrealized-casts";
 
 static const char *gpu_pipeline =
-    "ptensor-dist,"
+    "ndarray-dist,"
     "func.func(dist-coalesce),"
     "func.func(dist-infer-elementwise-cores),"
     "convert-dist-to-standard,"
@@ -551,7 +551,7 @@ static const char *gpu_pipeline =
     "overlap-comm-and-compute,"
     "add-comm-cache-keys,"
     "lower-distruntime-to-idtr,"
-    "convert-ptensor-to-linalg,"
+    "convert-ndarray-to-linalg,"
     "canonicalize,"
     "func.func(tosa-make-broadcastable),"
     "func.func(tosa-to-linalg),"
@@ -625,7 +625,7 @@ JIT::JIT()
   _context.appendDialectRegistry(registry);
 
   // load the dialects we use
-  _context.getOrLoadDialect<::imex::ptensor::PTensorDialect>();
+  _context.getOrLoadDialect<::imex::ndarray::NDArrayDialect>();
   _context.getOrLoadDialect<::imex::dist::DistDialect>();
   _context.getOrLoadDialect<::imex::distruntime::DistRuntimeDialect>();
   _context.getOrLoadDialect<::mlir::arith::ArithDialect>();

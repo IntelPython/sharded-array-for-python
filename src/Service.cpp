@@ -21,10 +21,10 @@ namespace SHARPY {
 namespace x {
     struct Service
     {
-        using ptr_type = DPTensorBaseX::ptr_type;
+        using ptr_type = DNDArrayBaseX::ptr_type;
 
         template<typename T>
-        static ptr_type op(const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static ptr_type op(const std::shared_ptr<DNDArrayX<T>> & a_ptr)
         {
             if(a_ptr->is_replicated()) return a_ptr;
             if(a_ptr->has_owner() && a_ptr->slice().size() == 1) {

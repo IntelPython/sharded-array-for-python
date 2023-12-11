@@ -8,7 +8,7 @@
 #include <sharpy/MPITransceiver.hpp>
 #include <sharpy/MemRefType.hpp>
 
-#include <imex/Dialect/PTensor/IR/PTensorDefs.h>
+#include <imex/Dialect/NDArray/IR/NDArrayDefs.h>
 
 #include <cassert>
 #include <iostream>
@@ -159,22 +159,22 @@ void _idtr_local_shape(id_t guid, void *alloced, void *aligned, intptr_t offset,
 }
 } // extern "C"
 
-// convert id of our reduction op to id of imex::ptensor reduction op
-static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ptensor::ReduceOpId rop) {
+// convert id of our reduction op to id of imex::ndarray reduction op
+static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ndarray::ReduceOpId rop) {
   switch (rop) {
-  case ::imex::ptensor::MEAN:
+  case ::imex::ndarray::MEAN:
     return SHARPY::MEAN;
-  case ::imex::ptensor::PROD:
+  case ::imex::ndarray::PROD:
     return SHARPY::PROD;
-  case ::imex::ptensor::SUM:
+  case ::imex::ndarray::SUM:
     return SHARPY::SUM;
-  case ::imex::ptensor::STD:
+  case ::imex::ndarray::STD:
     return SHARPY::STD;
-  case ::imex::ptensor::VAR:
+  case ::imex::ndarray::VAR:
     return SHARPY::VAR;
-  case ::imex::ptensor::MAX:
+  case ::imex::ndarray::MAX:
     return SHARPY::MAX;
-  case ::imex::ptensor::MIN:
+  case ::imex::ndarray::MIN:
     return SHARPY::MIN;
   default:
     throw std::runtime_error("Unknown reduction operation");
@@ -182,39 +182,39 @@ static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ptensor::ReduceOpId rop) {
 }
 
 // convert element type/dtype from MLIR to sharpy
-static SHARPY::DTypeId mlir2sharpy(const ::imex::ptensor::DType dt) {
+static SHARPY::DTypeId mlir2sharpy(const ::imex::ndarray::DType dt) {
   switch (dt) {
-  case ::imex::ptensor::DType::F64:
+  case ::imex::ndarray::DType::F64:
     return SHARPY::FLOAT64;
     break;
-  case ::imex::ptensor::DType::I64:
+  case ::imex::ndarray::DType::I64:
     return SHARPY::INT64;
     break;
-  case ::imex::ptensor::DType::U64:
+  case ::imex::ndarray::DType::U64:
     return SHARPY::UINT64;
     break;
-  case ::imex::ptensor::DType::F32:
+  case ::imex::ndarray::DType::F32:
     return SHARPY::FLOAT32;
     break;
-  case ::imex::ptensor::DType::I32:
+  case ::imex::ndarray::DType::I32:
     return SHARPY::INT32;
     break;
-  case ::imex::ptensor::DType::U32:
+  case ::imex::ndarray::DType::U32:
     return SHARPY::UINT32;
     break;
-  case ::imex::ptensor::DType::I16:
+  case ::imex::ndarray::DType::I16:
     return SHARPY::INT16;
     break;
-  case ::imex::ptensor::DType::U16:
+  case ::imex::ndarray::DType::U16:
     return SHARPY::UINT16;
     break;
-  case ::imex::ptensor::DType::I8:
+  case ::imex::ndarray::DType::I8:
     return SHARPY::INT8;
     break;
-  case ::imex::ptensor::DType::U8:
+  case ::imex::ndarray::DType::U8:
     return SHARPY::UINT8;
     break;
-  case ::imex::ptensor::DType::I1:
+  case ::imex::ndarray::DType::I1:
     return SHARPY::BOOL;
     break;
   default:
@@ -342,7 +342,7 @@ void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
   auto d = data.data();
   auto t = SHARPY::DTYPE<T>::value;
   auto r = dataRank ? data.sizes()[0] : 1;
-  auto o = mlir2sharpy(static_cast<imex::ptensor::ReduceOpId>(op));
+  auto o = mlir2sharpy(static_cast<imex::ndarray::ReduceOpId>(op));
   SHARPY::getTransceiver()->reduce_all(d, t, r, o);
 }
 

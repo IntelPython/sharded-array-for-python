@@ -16,68 +16,68 @@
 #include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 
 namespace SHARPY {
 
-// convert id of our binop to id of imex::ptensor binop
-static ::imex::ptensor::EWBinOpId sharpy2mlir(const EWBinOpId bop) {
+// convert id of our binop to id of imex::ndarray binop
+static ::imex::ndarray::EWBinOpId sharpy2mlir(const EWBinOpId bop) {
   switch (bop) {
   case __ADD__:
   case ADD:
   case __RADD__:
-    return ::imex::ptensor::ADD;
+    return ::imex::ndarray::ADD;
   case ATAN2:
-    return ::imex::ptensor::ATAN2;
+    return ::imex::ndarray::ATAN2;
   case __FLOORDIV__:
   case FLOOR_DIVIDE:
   case __RFLOORDIV__:
-    return ::imex::ptensor::FLOOR_DIVIDE;
+    return ::imex::ndarray::FLOOR_DIVIDE;
     // __MATMUL__ is handled before dispatching, see below
   case __MUL__:
   case MULTIPLY:
   case __RMUL__:
-    return ::imex::ptensor::MULTIPLY;
+    return ::imex::ndarray::MULTIPLY;
   case __SUB__:
   case SUBTRACT:
   case __RSUB__:
-    return ::imex::ptensor::SUBTRACT;
+    return ::imex::ndarray::SUBTRACT;
   case __TRUEDIV__:
   case DIVIDE:
   case __RTRUEDIV__:
-    return ::imex::ptensor::TRUE_DIVIDE;
+    return ::imex::ndarray::TRUE_DIVIDE;
   case __POW__:
   case POW:
   case __RPOW__:
-    return ::imex::ptensor::POWER;
+    return ::imex::ndarray::POWER;
   case LOGADDEXP:
-    return ::imex::ptensor::LOGADDEXP;
+    return ::imex::ndarray::LOGADDEXP;
   case __LSHIFT__:
   case BITWISE_LEFT_SHIFT:
   case __RLSHIFT__:
-    return ::imex::ptensor::BITWISE_LEFT_SHIFT;
+    return ::imex::ndarray::BITWISE_LEFT_SHIFT;
   case __MOD__:
   case REMAINDER:
   case __RMOD__:
-    return ::imex::ptensor::MODULO;
+    return ::imex::ndarray::MODULO;
   case __RSHIFT__:
   case BITWISE_RIGHT_SHIFT:
   case __RRSHIFT__:
-    return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
+    return ::imex::ndarray::BITWISE_RIGHT_SHIFT;
   case __AND__:
   case BITWISE_AND:
   case __RAND__:
-    return ::imex::ptensor::BITWISE_AND;
+    return ::imex::ndarray::BITWISE_AND;
   case __OR__:
   case BITWISE_OR:
   case __ROR__:
-    return ::imex::ptensor::BITWISE_OR;
+    return ::imex::ndarray::BITWISE_OR;
   case __XOR__:
   case BITWISE_XOR:
   case __RXOR__:
-    return ::imex::ptensor::BITWISE_XOR;
+    return ::imex::ndarray::BITWISE_XOR;
   default:
     throw std::runtime_error("Unknown/invalid elementwise binary operation");
   }
@@ -120,10 +120,10 @@ struct DeferredEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
-    auto bTyp = bv.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
+    auto bTyp = bv.getType().cast<::imex::ndarray::NDArrayType>();
     auto outElemType =
-        ::imex::ptensor::toMLIR(builder, SHARPY::jit::getPTDType(_dtype));
+        ::imex::ndarray::toMLIR(builder, SHARPY::jit::getPTDType(_dtype));
     auto outTyp = aTyp.cloneWith(shape(), outElemType);
 
     ::mlir::Value one, two;
@@ -134,7 +134,7 @@ struct DeferredEWBinOp : public Deferred {
       one = av;
       two = bv;
     }
-    auto bop = builder.create<::imex::ptensor::EWBinOp>(
+    auto bop = builder.create<::imex::ndarray::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(sharpy2mlir(_op)), one, two);
 
     dm.addVal(this->guid(), bop,

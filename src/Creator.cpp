@@ -11,7 +11,7 @@
 #include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <imex/Utils/PassUtils.h>
 
 #include <mlir/Dialect/Arith/IR/Arith.h>
@@ -42,7 +42,7 @@ struct DeferredFull : public Deferred {
   template <typename T> struct ValAndDType {
     static ::mlir::Value op(::mlir::OpBuilder &builder,
                             const ::mlir::Location &loc, const PyScalar &val,
-                            ::imex::ptensor::DType &dtyp) {
+                            ::imex::ndarray::DType &dtyp) {
       dtyp = jit::PT_DTYPE<T>::value;
 
       if (is_none(val)) {
@@ -66,13 +66,13 @@ struct DeferredFull : public Deferred {
       shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
     }
 
-    ::imex::ptensor::DType dtyp;
+    ::imex::ndarray::DType dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
     auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
     dm.addVal(
         this->guid(),
-        builder.create<::imex::ptensor::CreateOp>(loc, shp, dtyp, val, envs),
+        builder.create<::imex::ndarray::CreateOp>(loc, shp, dtyp, val, envs),
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,
@@ -133,7 +133,7 @@ struct DeferredArange : public Deferred {
     auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
     dm.addVal(this->guid(),
-              builder.create<::imex::ptensor::LinSpaceOp>(loc, start, stop, num,
+              builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
                                                           false, dtyp, envs),
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,
@@ -194,7 +194,7 @@ struct DeferredLinspace : public Deferred {
     auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
     dm.addVal(this->guid(),
-              builder.create<::imex::ptensor::LinSpaceOp>(
+              builder.create<::imex::ndarray::LinSpaceOp>(
                   loc, start, stop, num, _endpoint, dtyp, envs),
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,

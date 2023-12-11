@@ -20,10 +20,10 @@ namespace x {
     class EWUnyOp
     {
     public:
-        using ptr_type = DPTensorBaseX::ptr_type;
+        using ptr_type = DNDArrayBaseX::ptr_type;
 
         template<typename T>
-        static ptr_type op(EWUnyOpId uop, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static ptr_type op(EWUnyOpId uop, const std::shared_ptr<DNDArrayX<T>> & a_ptr)
         {
             const auto & ax = a_ptr->xarray();
             if(a_ptr->is_sliced()) {
@@ -35,7 +35,7 @@ namespace x {
 
 #pragma GCC diagnostic ignored "-Wswitch"
         template<typename T1, typename T>
-        static ptr_type do_op(EWUnyOpId uop, const T1 & a, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static ptr_type do_op(EWUnyOpId uop, const T1 & a, const std::shared_ptr<DNDArrayX<T>> & a_ptr)
         {
             switch(uop) {
             case __ABS__:
@@ -122,72 +122,72 @@ namespace x {
 } //namespace x
 #endif // if 0
 
-// convert id of our unary op to id of imex::ptensor unary op
-static ::imex::ptensor::EWUnyOpId sharpy(const EWUnyOpId uop) {
+// convert id of our unary op to id of imex::ndarray unary op
+static ::imex::ndarray::EWUnyOpId sharpy(const EWUnyOpId uop) {
   switch (uop) {
   case __ABS__:
   case ABS:
-    return ::imex::ptensor::ABS;
+    return ::imex::ndarray::ABS;
   case ACOS:
-    return ::imex::ptensor::ACOS;
+    return ::imex::ndarray::ACOS;
   case ACOSH:
-    return ::imex::ptensor::ACOSH;
+    return ::imex::ndarray::ACOSH;
   case ASIN:
-    return ::imex::ptensor::ASIN;
+    return ::imex::ndarray::ASIN;
   case ASINH:
-    return ::imex::ptensor::ASINH;
+    return ::imex::ndarray::ASINH;
   case ATAN:
-    return ::imex::ptensor::ATAN;
+    return ::imex::ndarray::ATAN;
   case ATANH:
-    return ::imex::ptensor::ATANH;
+    return ::imex::ndarray::ATANH;
   case CEIL:
-    return ::imex::ptensor::CEIL;
+    return ::imex::ndarray::CEIL;
   case COS:
-    return ::imex::ptensor::COS;
+    return ::imex::ndarray::COS;
   case COSH:
-    return ::imex::ptensor::COSH;
+    return ::imex::ndarray::COSH;
   case EXP:
-    return ::imex::ptensor::EXP;
+    return ::imex::ndarray::EXP;
   case EXPM1:
-    return ::imex::ptensor::EXPM1;
+    return ::imex::ndarray::EXPM1;
   case FLOOR:
-    return ::imex::ptensor::FLOOR;
+    return ::imex::ndarray::FLOOR;
   case ISFINITE:
-    return ::imex::ptensor::ISFINITE;
+    return ::imex::ndarray::ISFINITE;
   case ISINF:
-    return ::imex::ptensor::ISINF;
+    return ::imex::ndarray::ISINF;
   case ISNAN:
-    return ::imex::ptensor::ISNAN;
+    return ::imex::ndarray::ISNAN;
   case LOG:
-    return ::imex::ptensor::LOG;
+    return ::imex::ndarray::LOG;
   case LOG1P:
-    return ::imex::ptensor::LOG1P;
+    return ::imex::ndarray::LOG1P;
   case LOG2:
-    return ::imex::ptensor::LOG2;
+    return ::imex::ndarray::LOG2;
   case LOG10:
-    return ::imex::ptensor::LOG10;
+    return ::imex::ndarray::LOG10;
   case ROUND:
-    return ::imex::ptensor::ROUND;
+    return ::imex::ndarray::ROUND;
   case SIGN:
-    return ::imex::ptensor::SIGN;
+    return ::imex::ndarray::SIGN;
   case SIN:
-    return ::imex::ptensor::SIN;
+    return ::imex::ndarray::SIN;
   case SINH:
-    return ::imex::ptensor::SINH;
+    return ::imex::ndarray::SINH;
   case SQUARE:
-    return ::imex::ptensor::SQUARE;
+    return ::imex::ndarray::SQUARE;
   case SQRT:
-    return ::imex::ptensor::SQRT;
+    return ::imex::ndarray::SQRT;
   case TAN:
-    return ::imex::ptensor::TAN;
+    return ::imex::ndarray::TAN;
   case TANH:
-    return ::imex::ptensor::TANH;
+    return ::imex::ndarray::TANH;
   case TRUNC:
-    return ::imex::ptensor::TRUNC;
+    return ::imex::ndarray::TRUNC;
   case ERF:
-    return ::imex::ptensor::ERF;
+    return ::imex::ndarray::ERF;
   case LOGICAL_NOT:
-    return ::imex::ptensor::LOGICAL_NOT;
+    return ::imex::ndarray::LOGICAL_NOT;
   case __NEG__:
   case NEGATIVE:
   case __POS__:
@@ -210,10 +210,10 @@ struct DeferredEWUnyOp : public Deferred {
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, _a);
 
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
-    auto uop = builder.create<::imex::ptensor::EWUnyOp>(
+    auto uop = builder.create<::imex::ndarray::EWUnyOp>(
         loc, outTyp, builder.getI32IntegerAttr(sharpy(_op)), av);
 
     dm.addVal(this->guid(), uop,

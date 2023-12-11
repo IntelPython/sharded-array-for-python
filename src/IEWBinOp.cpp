@@ -14,40 +14,40 @@
 #include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 
 namespace SHARPY {
 
-// convert id of our binop to id of imex::ptensor binop
-static ::imex::ptensor::EWBinOpId sharpy2mlir(const IEWBinOpId bop) {
+// convert id of our binop to id of imex::ndarray binop
+static ::imex::ndarray::EWBinOpId sharpy2mlir(const IEWBinOpId bop) {
   switch (bop) {
   case __IADD__:
-    return ::imex::ptensor::ADD;
+    return ::imex::ndarray::ADD;
   case __IAND__:
-    return ::imex::ptensor::BITWISE_AND;
+    return ::imex::ndarray::BITWISE_AND;
   case __IFLOORDIV__:
-    return ::imex::ptensor::FLOOR_DIVIDE;
+    return ::imex::ndarray::FLOOR_DIVIDE;
   case __ILSHIFT__:
-    return ::imex::ptensor::BITWISE_LEFT_SHIFT;
+    return ::imex::ndarray::BITWISE_LEFT_SHIFT;
   case __IMOD__:
-    return ::imex::ptensor::MODULO;
+    return ::imex::ndarray::MODULO;
   case __IMUL__:
-    return ::imex::ptensor::MULTIPLY;
+    return ::imex::ndarray::MULTIPLY;
   case __IOR__:
-    return ::imex::ptensor::BITWISE_OR;
+    return ::imex::ndarray::BITWISE_OR;
   case __IPOW__:
-    return ::imex::ptensor::POWER;
+    return ::imex::ndarray::POWER;
   case __IRSHIFT__:
-    return ::imex::ptensor::BITWISE_RIGHT_SHIFT;
+    return ::imex::ndarray::BITWISE_RIGHT_SHIFT;
   case __ISUB__:
-    return ::imex::ptensor::SUBTRACT;
+    return ::imex::ndarray::SUBTRACT;
   case __ITRUEDIV__:
-    return ::imex::ptensor::TRUE_DIVIDE;
+    return ::imex::ndarray::TRUE_DIVIDE;
   case __IXOR__:
-    return ::imex::ptensor::BITWISE_XOR;
+    return ::imex::ndarray::BITWISE_XOR;
   default:
     throw std::runtime_error(
         "Unknown/invalid inplace elementwise binary operation");
@@ -71,10 +71,10 @@ struct DeferredIEWBinOp : public Deferred {
     auto av = dm.getDependent(builder, _a);
     auto bv = dm.getDependent(builder, _b);
 
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
-    auto binop = builder.create<::imex::ptensor::EWBinOp>(
+    auto binop = builder.create<::imex::ndarray::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(sharpy2mlir(_op)), av, bv);
     // insertsliceop has no return value, so we just create the op...
     auto zero = ::imex::createIndex(loc, builder, 0);
@@ -83,9 +83,9 @@ struct DeferredIEWBinOp : public Deferred {
     ::mlir::SmallVector<::mlir::Value> offs(rank(), zero);
     ::mlir::SmallVector<::mlir::Value> szs(rank(), dyn);
     ::mlir::SmallVector<::mlir::Value> strds(rank(), one);
-    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, binop, offs,
+    (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, binop, offs,
                                                          szs, strds);
-    // ... and use av as to later create the ptensor
+    // ... and use av as to later create the ndarray
     dm.addVal(this->guid(), av,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,

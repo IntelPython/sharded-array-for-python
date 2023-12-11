@@ -15,7 +15,7 @@
 #include "include/sharpy/itac.hpp"
 #include "include/sharpy/jit/mlir.hpp"
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <oneapi/tbb/concurrent_queue.h>

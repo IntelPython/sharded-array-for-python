@@ -10,7 +10,7 @@
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/Dist/Utils/Utils.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/IR/Builders.h>
 
@@ -22,7 +22,7 @@ namespace x {
     class ReduceOp
     {
     public:
-        using ptr_type = DPTensorBaseX::ptr_type;
+        using ptr_type = DNDArrayBaseX::ptr_type;
 
         template<typename X>
         static ptr_type dist_reduce(ReduceOpId rop, const PVSlice & slice, const dim_vec_type & dims, X && x)
@@ -40,7 +40,7 @@ namespace x {
         }
 
         template<typename T>
-        static ptr_type op(ReduceOpId rop, const dim_vec_type & dims, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static ptr_type op(ReduceOpId rop, const dim_vec_type & dims, const std::shared_ptr<DNDArrayX<T>> & a_ptr)
         {
             const auto & ax = a_ptr->xarray();
             if(a_ptr->is_sliced()) {
@@ -52,7 +52,7 @@ namespace x {
 
 #pragma GCC diagnostic ignored "-Wswitch"
         template<typename T1, typename T>
-        static ptr_type do_op(ReduceOpId rop, const dim_vec_type & dims, const T1 & a, const std::shared_ptr<DPTensorX<T>> & a_ptr)
+        static ptr_type do_op(ReduceOpId rop, const dim_vec_type & dims, const T1 & a, const std::shared_ptr<DNDArrayX<T>> & a_ptr)
         {
             switch(rop) {
             case MEAN:
@@ -80,23 +80,23 @@ namespace x {
 } // namespace x
 #endif // if 0
 
-// convert id of our reduction op to id of imex::ptensor reduction op
-static ::imex::ptensor::ReduceOpId sharpy2mlir(const ReduceOpId rop) {
+// convert id of our reduction op to id of imex::ndarray reduction op
+static ::imex::ndarray::ReduceOpId sharpy2mlir(const ReduceOpId rop) {
   switch (rop) {
   case MEAN:
-    return ::imex::ptensor::MEAN;
+    return ::imex::ndarray::MEAN;
   case PROD:
-    return ::imex::ptensor::PROD;
+    return ::imex::ndarray::PROD;
   case SUM:
-    return ::imex::ptensor::SUM;
+    return ::imex::ndarray::SUM;
   case STD:
-    return ::imex::ptensor::STD;
+    return ::imex::ndarray::STD;
   case VAR:
-    return ::imex::ptensor::VAR;
+    return ::imex::ndarray::VAR;
   case MAX:
-    return ::imex::ptensor::MAX;
+    return ::imex::ndarray::MAX;
   case MIN:
-    return ::imex::ptensor::MIN;
+    return ::imex::ndarray::MIN;
   default:
     throw std::runtime_error("Unknown reduction operation");
   }
@@ -125,16 +125,16 @@ struct DeferredReduceOp : public Deferred {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, _a);
     ::mlir::Type dtype =
-        av.getType().cast<::imex::ptensor::PTensorType>().getElementType();
+        av.getType().cast<::imex::ndarray::NDArrayType>().getElementType();
     // return type 0d with same dtype as input
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
     // reduction op
     auto mop = sharpy2mlir(_op);
     auto op =
         builder.getIntegerAttr(builder.getIntegerType(sizeof(mop) * 8), mop);
     dm.addVal(this->guid(),
-              builder.create<::imex::ptensor::ReductionOp>(loc, outTyp, op, av),
+              builder.create<::imex::ndarray::ReductionOp>(loc, outTyp, op, av),
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
                      intptr_t l_offset, const intptr_t *l_sizes,
                      const intptr_t *l_strides, void *o_allocated,

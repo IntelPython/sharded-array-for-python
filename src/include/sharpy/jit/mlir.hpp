@@ -5,7 +5,7 @@
 #include <sharpy/CppTypes.hpp>
 #include <sharpy/array_i.hpp>
 
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Conversion/LLVMCommon/MemRefBuilder.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Bufferization/IR/Bufferization.h>
@@ -34,40 +34,40 @@ namespace jit {
 
 template <typename T> struct PT_DTYPE {};
 template <> struct PT_DTYPE<double> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::F64;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::F64;
 };
 template <> struct PT_DTYPE<float> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::F32;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::F32;
 };
 template <> struct PT_DTYPE<int64_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I64;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I64;
 };
 template <> struct PT_DTYPE<int32_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I32;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I32;
 };
 template <> struct PT_DTYPE<int16_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I16;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I16;
 };
 template <> struct PT_DTYPE<int8_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I8;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I8;
 };
 template <> struct PT_DTYPE<uint64_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U64;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U64;
 };
 template <> struct PT_DTYPE<uint32_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U32;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U32;
 };
 template <> struct PT_DTYPE<uint16_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U16;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U16;
 };
 template <> struct PT_DTYPE<uint8_t> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::U8;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U8;
 };
 template <> struct PT_DTYPE<bool> {
-  constexpr static ::imex::ptensor::DType value = ::imex::ptensor::I1;
+  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I1;
 };
 
-inline ::imex::ptensor::DType getPTDType(DTypeId dt) {
+inline ::imex::ndarray::DType getPTDType(DTypeId dt) {
   switch (dt) {
   case FLOAT64:
     return PT_DTYPE<TYPE<FLOAT64>::dtype>::value;

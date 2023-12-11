@@ -69,9 +69,9 @@ void dispatch(DTypeId dt, const void *ptr, DispatchFunc func) {
 
 #if 0
 template<typename A>
-auto /*typename x::DPTensorX<A>::typed_ptr_type*/_downcast(const array_i::ptr_type & a_ptr)
+auto /*typename x::DNDArrayX<A>::typed_ptr_type*/_downcast(const array_i::ptr_type & a_ptr)
 {
-    auto _a = std::dynamic_pointer_cast<x::DPTensorX<A>>(a_ptr);
+    auto _a = std::dynamic_pointer_cast<x::DNDArrayX<A>>(a_ptr);
     if(!_a )
         throw std::runtime_error("Invalid array object: dynamic cast failed");
     return _a;

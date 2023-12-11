@@ -20,7 +20,7 @@
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/Dist/Utils/Utils.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <imex/Utils/PassUtils.h>
 #include <mlir/Dialect/Linalg/Utils/Utils.h>
 #include <mlir/IR/Builders.h>
@@ -170,9 +170,9 @@ struct DeferredSetItem : public Deferred {
     auto nd = offs.size();
 
     // insertsliceop has no return value, so we just create the op...
-    (void)builder.create<::imex::ptensor::InsertSliceOp>(loc, av, bv, offs,
+    (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
                                                          sizes, strides);
-    // ... and use av as to later create the ptensor
+    // ... and use av as to later create the ndarray
     dm.addReady(this->guid(), [this](id_type guid) {
       assert(this->guid() == guid);
       this->set_value(Registry::get(this->_a).get());
@@ -267,11 +267,11 @@ struct DeferredGetItem : public Deferred {
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
     auto nd = offs.size();
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
 
-    // now we can create the PTensor op using the above Values
-    auto res = builder.create<::imex::ptensor::SubviewOp>(loc, outTyp, av, offs,
+    // now we can create the NDArray op using the above Values
+    auto res = builder.create<::imex::ndarray::SubviewOp>(loc, outTyp, av, offs,
                                                           sizes, strides);
 
     dm.addVal(this->guid(), res,

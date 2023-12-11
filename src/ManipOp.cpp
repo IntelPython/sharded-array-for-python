@@ -12,7 +12,7 @@
 #include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/PTensor/IR/PTensorOps.h>
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/IR/Builders.h>
 
 namespace SHARPY {
@@ -40,11 +40,11 @@ struct DeferredReshape : public Deferred {
             ? ::mlir::IntegerAttr()
             : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
 
-    auto aTyp = av.getType().cast<::imex::ptensor::PTensorType>();
+    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto op =
-        builder.create<::imex::ptensor::ReshapeOp>(loc, outTyp, av, shp, copyA);
+        builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);
 
     dm.addVal(this->guid(), op,
               [this](uint64_t rank, void *l_allocated, void *l_aligned,
