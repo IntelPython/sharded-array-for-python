@@ -8,10 +8,10 @@
 #include "sharpy/SetGetItem.hpp"
 #include "sharpy/CollComm.hpp"
 #include "sharpy/Creator.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/Mediator.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/NDSlice.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
@@ -152,8 +152,7 @@ struct DeferredSetItem : public Deferred {
   NDSlice _slc;
 
   DeferredSetItem() = default;
-  DeferredSetItem(const array_i::future_type &a,
-                  const array_i::future_type &b,
+  DeferredSetItem(const array_i::future_type &a, const array_i::future_type &b,
                   const std::vector<py::slice> &v)
       : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
         _a(a.guid()), _b(b.guid()), _slc(v, a.shape()) {}
@@ -308,13 +307,14 @@ struct DeferredGetItem : public Deferred {
 // ***************************************************************************
 
 FutureArray *GetItem::__getitem__(const FutureArray &a,
-                                const std::vector<py::slice> &v) {
+                                  const std::vector<py::slice> &v) {
   auto afut = a.get();
   NDSlice slc(v, afut.shape());
   return new FutureArray(defer<DeferredGetItem>(afut, std::move(slc)));
 }
 
-GetItem::py_future_type GetItem::get_locals(const FutureArray &a, py::handle h) {
+GetItem::py_future_type GetItem::get_locals(const FutureArray &a,
+                                            py::handle h) {
   return defer<DeferredGetLocals>(a.get(), h);
 }
 
@@ -322,8 +322,9 @@ GetItem::py_future_type GetItem::gather(const FutureArray &a, rank_type root) {
   return defer<DeferredGather>(a.get(), root);
 }
 
-FutureArray *SetItem::__setitem__(FutureArray &a, const std::vector<py::slice> &v,
-                                const py::object &b) {
+FutureArray *SetItem::__setitem__(FutureArray &a,
+                                  const std::vector<py::slice> &v,
+                                  const py::object &b) {
   auto bb =
       Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
   a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));

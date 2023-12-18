@@ -112,9 +112,9 @@ void sync_promises() {
 
 /// trigger compile&run and return future value
 #define PY_SYNC_RETURN(_f)                                                     \
-  int vtWaitSym, vtSHARPYClass;                                                  \
-  VT(VT_classdef, "sharpy", &vtSHARPYClass);                                       \
-  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                             \
+  int vtWaitSym, vtSHARPYClass;                                                \
+  VT(VT_classdef, "sharpy", &vtSHARPYClass);                                   \
+  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                           \
   VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
@@ -124,21 +124,20 @@ void sync_promises() {
 
 /// trigger compile&run and return given attribute _x
 #define SYNC_RETURN(_f, _a)                                                    \
-  int vtWaitSym, vtSHARPYClass;                                                  \
-  VT(VT_classdef, "sharpy", &vtSHARPYClass);                                       \
-  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                             \
+  int vtWaitSym, vtSHARPYClass;                                                \
+  VT(VT_classdef, "sharpy", &vtSHARPYClass);                                   \
+  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                           \
   VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  auto r = (_f).get().get()->_a();                                             \
+  auto r = (_f).get().get() -> _a();                                           \
   VT(VT_end, vtWaitSym);                                                       \
   return r
 
 /// Replicate sharpy/future and SYNC_RETURN attribute _a
 #define REPL_SYNC_RETURN(_f, _a)                                               \
-  auto r_ = std::unique_ptr<FutureArray>(Service::replicate(f));                 \
+  auto r_ = std::unique_ptr<FutureArray>(Service::replicate(f));               \
   SYNC_RETURN(r_->get(), _a)
-
 
 // Finally our Python module
 PYBIND11_MODULE(_sharpy, m) {
@@ -183,13 +182,13 @@ PYBIND11_MODULE(_sharpy, m) {
 
   py::class_<FutureArray>(m, "SHARPYFuture")
       // attributes we can get from the future itself
-      .def_property_readonly("dtype",
-                             [](const FutureArray &f) { return f.get().dtype(); })
-      .def_property_readonly("ndim",
-                             [](const FutureArray &f) { return f.get().rank(); })
+      .def_property_readonly(
+          "dtype", [](const FutureArray &f) { return f.get().dtype(); })
+      .def_property_readonly(
+          "ndim", [](const FutureArray &f) { return f.get().rank(); })
       // attributes we can get from future without additional computation
-      .def_property_readonly("shape",
-                             [](const FutureArray &f) { SYNC_RETURN(f, shape); })
+      .def_property_readonly(
+          "shape", [](const FutureArray &f) { SYNC_RETURN(f, shape); })
       .def_property_readonly("size",
                              [](const FutureArray &f) { SYNC_RETURN(f, size); })
       .def("__len__", [](const FutureArray &f) { SYNC_RETURN(f, __len__); })
@@ -199,10 +198,12 @@ PYBIND11_MODULE(_sharpy, m) {
            [](const FutureArray &f) { REPL_SYNC_RETURN(f, __bool__); })
       .def("__float__",
            [](const FutureArray &f) { REPL_SYNC_RETURN(f, __float__); })
-      .def("__int__", [](const FutureArray &f) { REPL_SYNC_RETURN(f, __int__); })
+      .def("__int__",
+           [](const FutureArray &f) { REPL_SYNC_RETURN(f, __int__); })
       .def("__index__",
            [](const FutureArray &f) { REPL_SYNC_RETURN(f, __int__); })
       // attributes returning a new FutureArray
+      .def("astype", &AsType::astype)
       .def("__getitem__", &GetItem::__getitem__)
       .def("__setitem__", &SetItem::__setitem__)
       .def("map", &SetItem::map);
@@ -212,7 +213,6 @@ PYBIND11_MODULE(_sharpy, m) {
   py::class_<Random>(m, "Random")
       .def("seed", &Random::seed)
       .def("uniform", &Random::rand);
-
 
   // py::class_<dpdlpack>(m, "dpdlpack")
   //     .def("__dlpack__", &dpdlpack.__dlpack__);

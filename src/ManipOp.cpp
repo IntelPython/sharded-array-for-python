@@ -5,9 +5,9 @@
 */
 
 #include "sharpy/ManipOp.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
 
@@ -82,8 +82,68 @@ struct DeferredReshape : public Deferred {
   }
 };
 
+// ***************************************************************************
+
+struct DeferredAsType : public Deferred {
+  id_type _a;
+  bool _copy;
+
+  DeferredAsType() = default;
+  DeferredAsType(const array_i::future_type &a, DTypeId dtype, bool copy)
+      : Deferred(dtype, a.shape(), a.device(), a.team()), _a(a.guid()),
+        _copy(copy) {}
+
+  template <typename T> struct convDType {
+    static ::imex::ndarray::DType op() { return jit::PT_DTYPE<T>::value; };
+  };
+
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     jit::DepManager &dm) override {
+    const auto dtype = this->dtype();
+    auto av = dm.getDependent(builder, _a);
+
+    auto copyAttr = ::imex::getIntAttr(builder, _copy, 1);
+    // construct NDArrayType with same shape and given dtype
+    ::imex::ndarray::DType ndDType = dispatch<convDType>(dtype);
+    auto mlirElType = ::imex::ndarray::toMLIR(builder, ndDType);
+    auto arType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
+    assert(arType);
+    auto outType = arType.cloneWith(std::nullopt, mlirElType);
+    auto res = builder.create<::imex::ndarray::CastElemTypeOp>(loc, outType, av,
+                                                               copyAttr);
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
+                                 _dtype, this->shape(), l_allocated, l_aligned,
+                                 l_offset, l_sizes, l_strides, o_allocated,
+                                 o_aligned, o_offset, o_sizes, o_strides,
+                                 r_allocated, r_aligned, r_offset, r_sizes,
+                                 r_strides, lo_allocated, lo_aligned);
+                if (Registry::has(_a)) {
+                  t->set_base(Registry::get(_a).get());
+                } // else _a is a temporary and was dropped
+                this->set_value(std::move(t));
+              });
+    return false;
+  }
+
+  FactoryId factory() const { return F_ASTYPE; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+    ser.template value<sizeof(_copy)>(_copy);
+  }
+};
+
 FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
-                            const py::object &copy) {
+                              const py::object &copy) {
   auto doCopy = copy.is_none()
                     ? DeferredReshape::COPY_POSSIBLE
                     : (copy.cast<bool>() ? DeferredReshape::COPY_ALWAYS
@@ -95,5 +155,12 @@ FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
   return new FutureArray(defer<DeferredReshape>(a.get(), shape, doCopy));
 }
 
+FutureArray *AsType::astype(const FutureArray &a, DTypeId dtype,
+                            const py::object &copy) {
+  auto doCopy = copy.is_none() ? false : copy.cast<bool>();
+  return new FutureArray(defer<DeferredAsType>(a.get(), dtype, doCopy));
+}
+
 FACTORY_INIT(DeferredReshape, F_RESHAPE);
+FACTORY_INIT(DeferredAsType, F_ASTYPE);
 } // namespace SHARPY

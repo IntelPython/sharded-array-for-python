@@ -1,5 +1,5 @@
 """
-The array class for sharpy, a distributed implementation of the 
+The array class for sharpy, a distributed implementation of the
 array API as defined here: https://data-apis.org/array-api/latest
 """
 #
@@ -50,6 +50,9 @@ class ndarray:
 
     for att in api.attributes:
         exec(f"{att} = property(lambda self: self._t.{att})")
+
+    def astype(self, dtype, copy=False):
+        return ndarray(self._t.astype(dtype, copy))
 
     def __getitem__(self, key):
         key = key if isinstance(key, tuple) else (key,)

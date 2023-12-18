@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "UtilsAndTypes.hpp"
 #include "FutureArray.hpp"
+#include "UtilsAndTypes.hpp"
 #include "p2c_ids.hpp"
 
 namespace SHARPY {
@@ -18,7 +18,7 @@ struct GetItem {
   using py_future_type = std::shared_future<py::object>;
 
   static FutureArray *__getitem__(const FutureArray &a,
-                                const std::vector<py::slice> &v);
+                                  const std::vector<py::slice> &v);
   static py::object get_slice(const FutureArray &a,
                               const std::vector<py::slice> &v);
   static py_future_type get_locals(const FutureArray &a, py::handle h);
@@ -26,8 +26,9 @@ struct GetItem {
 };
 
 struct SetItem {
-  static FutureArray *__setitem__(FutureArray &a, const std::vector<py::slice> &v,
-                                const py::object &b);
+  static FutureArray *__setitem__(FutureArray &a,
+                                  const std::vector<py::slice> &v,
+                                  const py::object &b);
   static FutureArray *map(FutureArray &a, py::object &b);
 };
 } // namespace SHARPY

@@ -342,6 +342,7 @@ enum FactoryId : int {
   F_RESHAPE,
   F_SERVICE,
   F_SETITEM,
+  F_ASTYPE,
   FACTORY_LAST
 };
 
