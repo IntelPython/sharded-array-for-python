@@ -142,6 +142,65 @@ struct DeferredAsType : public Deferred {
   }
 };
 
+// ***************************************************************************
+
+struct DeferredToDevice : public Deferred {
+  id_type _a;
+
+  DeferredToDevice() = default;
+  DeferredToDevice(const array_i::future_type &a, const std::string &device)
+      : Deferred(a.dtype(), a.shape(), device, a.team()), _a(a.guid()) {}
+
+  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     jit::DepManager &dm) override {
+    auto av = dm.getDependent(builder, _a);
+
+    auto srcType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
+    assert(srcType);
+    // copy envs, drop gpu env (if any)
+    auto srcEnvs = srcType.getEnvironments();
+    ::mlir::SmallVector<::mlir::Attribute> envs;
+    for (auto e : srcEnvs) {
+      if (!::mlir::isa<::imex::region::GPUEnvAttr>(e)) {
+        envs.emplace_back(e);
+      }
+    }
+    // append device attr
+    if (!_device.empty()) {
+      envs.emplace_back(
+          ::imex::region::GPUEnvAttr::get(builder.getStringAttr(_device)));
+    }
+    auto outType = ::imex::ndarray::NDArrayType::get(srcType.getShape(),
+                                                     srcType.getElementType(),
+                                                     envs, srcType.getLayout());
+    auto res = builder.create<::imex::ndarray::CopyOp>(loc, outType, av);
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
+                                 _dtype, this->shape(), l_allocated, l_aligned,
+                                 l_offset, l_sizes, l_strides, o_allocated,
+                                 o_aligned, o_offset, o_sizes, o_strides,
+                                 r_allocated, r_aligned, r_offset, r_sizes,
+                                 r_strides, lo_allocated, lo_aligned);
+                this->set_value(std::move(t));
+              });
+    return false;
+  }
+
+  FactoryId factory() const { return F_TODEVICE; }
+
+  template <typename S> void serialize(S &ser) {
+    ser.template value<sizeof(_a)>(_a);
+  }
+};
+
 FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
                               const py::object &copy) {
   auto doCopy = copy.is_none()
@@ -155,12 +214,18 @@ FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
   return new FutureArray(defer<DeferredReshape>(a.get(), shape, doCopy));
 }
 
-FutureArray *AsType::astype(const FutureArray &a, DTypeId dtype,
-                            const py::object &copy) {
+FutureArray *ManipOp::astype(const FutureArray &a, DTypeId dtype,
+                             const py::object &copy) {
   auto doCopy = copy.is_none() ? false : copy.cast<bool>();
   return new FutureArray(defer<DeferredAsType>(a.get(), dtype, doCopy));
 }
 
+FutureArray *ManipOp::to_device(const FutureArray &a,
+                                const std::string &device) {
+  return new FutureArray(defer<DeferredToDevice>(a.get(), device));
+}
+
 FACTORY_INIT(DeferredReshape, F_RESHAPE);
 FACTORY_INIT(DeferredAsType, F_ASTYPE);
+FACTORY_INIT(DeferredToDevice, F_TODEVICE);
 } // namespace SHARPY

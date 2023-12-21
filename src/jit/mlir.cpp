@@ -354,15 +354,14 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
         // no sizes/stride needed, just skip
         pos += memref_sz(1);
         // call finalization callback
-        v->second(
-            rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
-            t_strides[0], // lhsHalo
-            t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
-            t_strides[1], // lData
-            t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
-            t_strides[2], // rhsHalo
-            lo_allocated,
-            lo_aligned + lo_offset // local offset is 1d array of uint64_t
+        v->second(rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
+                  t_strides[0], // lhsHalo
+                  t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+                  t_strides[1], // lData
+                  t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
+                  t_strides[2], // rhsHalo
+                  lo_allocated,
+                  lo_aligned + lo_offset // local offset is 1d array of uint64_t
         );
       } else { // 0d array or non-dist
         pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
@@ -631,6 +630,7 @@ JIT::JIT()
   _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
   _context.getOrLoadDialect<::mlir::func::FuncDialect>();
   _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
+  _context.getOrLoadDialect<::imex::region::RegionDialect>();
   // create the pass pipeline from string
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");

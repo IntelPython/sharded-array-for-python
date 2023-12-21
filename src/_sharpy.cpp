@@ -203,7 +203,8 @@ PYBIND11_MODULE(_sharpy, m) {
       .def("__index__",
            [](const FutureArray &f) { REPL_SYNC_RETURN(f, __int__); })
       // attributes returning a new FutureArray
-      .def("astype", &AsType::astype)
+      .def("astype", &ManipOp::astype)
+      .def("to_device", &ManipOp::to_device)
       .def("__getitem__", &GetItem::__getitem__)
       .def("__setitem__", &SetItem::__setitem__)
       .def("map", &SetItem::map);

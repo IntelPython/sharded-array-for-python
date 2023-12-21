@@ -68,3 +68,15 @@ class TestManip:
             b = a.astype(to_type)
             assert b.dtype == to_type
             assert numpy.allclose(sp.to_numpy(b), [0, 1, 2, 3, 4, 5, 6, 7])
+
+    @pytest.mark.skip(reason="FIXME copy is eliminated")
+    def test_todevice_host2host(self):
+        a = sp.arange(0, 8, 1, sp.int32)
+        b = a.to_device()
+        assert numpy.allclose(sp.to_numpy(b), [0, 1, 2, 3, 4, 5, 6, 7])
+
+    @pytest.mark.skip(reason="FIXME copy is eliminated, device support")
+    def test_todevice_host2gpu(self):
+        a = sp.arange(0, 8, 1, sp.int32)
+        b = a.to_device(device="GPU")
+        assert numpy.allclose(sp.to_numpy(b), [0, 1, 2, 3, 4, 5, 6, 7])

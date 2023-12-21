@@ -54,6 +54,9 @@ class ndarray:
     def astype(self, dtype, copy=False):
         return ndarray(self._t.astype(dtype, copy))
 
+    def to_device(self, device=""):
+        return ndarray(self._t.to_device(device))
+
     def __getitem__(self, key):
         key = key if isinstance(key, tuple) else (key,)
         key = [slicefy(x) for x in key]

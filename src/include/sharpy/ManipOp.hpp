@@ -14,10 +14,11 @@ namespace SHARPY {
 struct ManipOp {
   static FutureArray *reshape(const FutureArray &a, const shape_type &shape,
                               const py::object &copy);
-};
 
-struct AsType {
   static FutureArray *astype(const FutureArray &a, DTypeId dtype,
                              const py::object &copy);
+
+  static FutureArray *to_device(const FutureArray &a,
+                                const std::string &device);
 };
 } // namespace SHARPY

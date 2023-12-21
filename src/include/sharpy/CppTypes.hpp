@@ -343,6 +343,7 @@ enum FactoryId : int {
   F_SERVICE,
   F_SETITEM,
   F_ASTYPE,
+  F_TODEVICE,
   FACTORY_LAST
 };
 
