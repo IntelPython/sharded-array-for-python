@@ -33,7 +33,8 @@ extern tbb::concurrent_bounded_queue<Runable::ptr_type> _deferred;
 // if needed, object/promise is broadcasted to worker processes
 // (for controller/worker mode)
 void _dist(const Runable *p) {
-  if (getTransceiver()->is_cw() && getTransceiver()->rank() == 0)
+  if (getTransceiver() && getTransceiver()->is_cw() &&
+      getTransceiver()->rank() == 0)
     getMediator()->to_workers(p);
 }
 
@@ -68,9 +69,7 @@ Deferred::future_type defer_array(Runable::ptr_type &&_d, bool is_global) {
 }
 
 // defer a global array producer
-void Deferred::defer(Runable::ptr_type &&p) {
-  defer_array(std::move(p), true);
-}
+void Deferred::defer(Runable::ptr_type &&p) { defer_array(std::move(p), true); }
 
 void Runable::defer(Runable::ptr_type &&p) { push_runable(std::move(p)); }
 
@@ -94,6 +93,7 @@ void process_promises() {
 
   bool done = false;
   jit::JIT jit;
+  std::vector<Runable::ptr_type> deleters;
 
   do {
     ::mlir::OpBuilder builder(&jit.context());
@@ -126,28 +126,42 @@ void process_promises() {
     std::vector<Runable::ptr_type> runables;
 
     jit::DepManager dm(function);
-
     Runable::ptr_type d;
-    while (true) {
-      VT(VT_begin, vtPopSym);
-      _deferred.pop(d);
-      VT(VT_end, vtPopSym);
-      if (d) {
-        if (d->generate_mlir(builder, loc, dm)) {
+
+    if (!deleters.empty()) {
+      for (auto &dl : deleters) {
+        if (dl->generate_mlir(builder, loc, dm)) {
+          assert(!"deleters must generate MLIR");
+        }
+        runables.emplace_back(std::move(dl));
+      }
+      deleters.clear();
+    } else {
+      while (true) {
+        VT(VT_begin, vtPopSym);
+        _deferred.pop(d);
+        VT(VT_end, vtPopSym);
+        if (d) {
+          if (d->isDeleter()) {
+            deleters.emplace_back(std::move(d));
+          } else {
+            if (d->generate_mlir(builder, loc, dm)) {
+              break;
+            };
+            // keep alive for later set_value
+            runables.emplace_back(std::move(d));
+          }
+        } else {
+          // signals system shutdown
+          done = true;
           break;
-        };
-        // keep alive for later set_value
-        runables.push_back(std::move(d));
-      } else {
-        // signals system shutdown
-        done = true;
-        break;
+        }
       }
     }
 
     if (!runables.empty()) {
       // get input buffers (before results!)
-      auto input = std::move(dm.store_inputs());
+      auto input = std::move(dm.finalize_inputs());
       // create return statement and adjust function type
       uint64_t osz = dm.handleResult(builder);
       // also request generation of c-wrapper function

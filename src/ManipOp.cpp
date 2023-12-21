@@ -30,7 +30,7 @@ struct DeferredReshape : public Deferred {
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    auto av = dm.getDependent(builder, _a);
+    auto av = dm.getDependent(builder, Registry::get(_a));
     ::mlir::SmallVector<::mlir::Value> shp(shape().size());
     for (auto i = 0; i < shape().size(); ++i) {
       shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
@@ -55,12 +55,12 @@ struct DeferredReshape : public Deferred {
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
-                                 _dtype, this->shape(), l_allocated, l_aligned,
-                                 l_offset, l_sizes, l_strides, o_allocated,
-                                 o_aligned, o_offset, o_sizes, o_strides,
-                                 r_allocated, r_aligned, r_offset, r_sizes,
-                                 r_strides, lo_allocated, lo_aligned);
+                auto t = mk_tnsr(this->guid(), _dtype, this->shape(),
+                                 this->device(), this->team(), l_allocated,
+                                 l_aligned, l_offset, l_sizes, l_strides,
+                                 o_allocated, o_aligned, o_offset, o_sizes,
+                                 o_strides, r_allocated, r_aligned, r_offset,
+                                 r_sizes, r_strides, lo_allocated, lo_aligned);
                 if (_copy != COPY_ALWAYS) {
                   assert(!"copy-free reshape not supported");
                   if (Registry::has(_a)) {
@@ -100,7 +100,7 @@ struct DeferredAsType : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     const auto dtype = this->dtype();
-    auto av = dm.getDependent(builder, _a);
+    auto av = dm.getDependent(builder, Registry::get(_a));
 
     auto copyAttr = ::imex::getIntAttr(builder, _copy, 1);
     // construct NDArrayType with same shape and given dtype
@@ -120,13 +120,13 @@ struct DeferredAsType : public Deferred {
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
-                                 _dtype, this->shape(), l_allocated, l_aligned,
-                                 l_offset, l_sizes, l_strides, o_allocated,
-                                 o_aligned, o_offset, o_sizes, o_strides,
-                                 r_allocated, r_aligned, r_offset, r_sizes,
-                                 r_strides, lo_allocated, lo_aligned);
-                if (Registry::has(_a)) {
+                auto t = mk_tnsr(this->guid(), this->dtype(), this->shape(),
+                                 this->device(), this->team(), l_allocated,
+                                 l_aligned, l_offset, l_sizes, l_strides,
+                                 o_allocated, o_aligned, o_offset, o_sizes,
+                                 o_strides, r_allocated, r_aligned, r_offset,
+                                 r_sizes, r_strides, lo_allocated, lo_aligned);
+                if (!this->_copy && Registry::has(_a)) {
                   t->set_base(Registry::get(_a).get());
                 } // else _a is a temporary and was dropped
                 this->set_value(std::move(t));

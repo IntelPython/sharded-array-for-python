@@ -40,7 +40,7 @@ class build_ext(build_ext_orig):
         build_args = [
             "--config",
             config,
-            "-j8"
+            "-j4"
             # '--', '-j4'
         ]
 

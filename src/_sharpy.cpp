@@ -57,11 +57,29 @@ std::thread *pprocessor = nullptr;
 extern bool inited;
 extern bool finied;
 
+void sync_promises() {
+  int vtWaitSym, vtSHARPYClass;
+  VT(VT_classdef, "sharpy", &vtSHARPYClass);
+  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);
+  VT(VT_begin, vtWaitSym);
+  py::gil_scoped_release release;
+  (void)Service::run().get();
+  VT(VT_end, vtWaitSym);
+}
+
 // users currently need to call fini to make MPI terminate gracefully
 void fini() {
-  py::gil_scoped_release release;
   if (finied)
     return;
+  sync_promises();
+  {
+    auto guids = Registry::get_all();
+    for (auto id : guids) {
+      Service::drop(id);
+    }
+  }
+  sync_promises();
+  py::gil_scoped_release release;
   fini_mediator(); // stop task is sent in here
   if (pprocessor) {
     if (getTransceiver()->nranks() == 1)
@@ -98,16 +116,6 @@ void init(bool cw) {
   finied = false;
 }
 
-void sync_promises() {
-  int vtWaitSym, vtSHARPYClass;
-  VT(VT_classdef, "sharpy", &vtSHARPYClass);
-  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);
-  VT(VT_begin, vtWaitSym);
-  py::gil_scoped_release release;
-  (void)Service::run().get();
-  VT(VT_end, vtWaitSym);
-}
-
 // #########################################################################
 
 /// trigger compile&run and return future value
@@ -130,7 +138,7 @@ void sync_promises() {
   VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  auto r = (_f).get().get() -> _a();                                           \
+  auto r = (_f).get().get()->_a();                                             \
   VT(VT_end, vtWaitSym);                                                       \
   return r
 

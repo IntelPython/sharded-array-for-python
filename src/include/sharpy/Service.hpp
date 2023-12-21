@@ -6,11 +6,13 @@
 
 #pragma once
 
+#include "CppTypes.hpp"
 #include <future>
 
 namespace SHARPY {
 
 class FutureArray;
+class NDArray;
 
 struct Service {
   using service_promise_type = std::promise<bool>;
@@ -22,6 +24,6 @@ struct Service {
   /// this is not blocking, use futures for synchronization
   static service_future_type run();
   /// signal that the given FutureArray is no longer needed and can be deleted
-  static service_future_type drop(const FutureArray &a);
+  static void drop(id_type a);
 };
 } // namespace SHARPY

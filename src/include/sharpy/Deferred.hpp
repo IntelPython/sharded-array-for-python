@@ -46,6 +46,7 @@ struct Runable {
     throw(std::runtime_error("No MLIR support for this operation."));
     return false;
   };
+  virtual bool isDeleter() { return false; }
   virtual FactoryId factory() const = 0;
   virtual void defer(ptr_type &&);
   static void fini();
@@ -83,8 +84,7 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 
 /// Deferred operation returning/producing a array
 /// holds a guid as well as shape, dtype, device and team of future array
-class Deferred
-    : public DeferredT<array_i::promise_type, array_i::future_type> {
+class Deferred : public DeferredT<array_i::promise_type, array_i::future_type> {
 public:
   using ptr_type = std::unique_ptr<Deferred>;
   using DeferredT<array_i::promise_type, array_i::future_type>::DeferredT;
@@ -114,15 +114,14 @@ typename T::future_type defer(Ts &&...args) {
 }
 
 // implementation details for deferring ops returning arrays
-extern Deferred::future_type defer_array(Runable::ptr_type &&d,
-                                          bool is_global);
+extern Deferred::future_type defer_array(Runable::ptr_type &&d, bool is_global);
 
 // defer operations which do return a array, e.g. which are a Deferred
 template <typename T, typename... Ts,
           std::enable_if_t<std::is_base_of_v<Deferred, T>, bool> = true>
 Deferred::future_type defer(Ts &&...args) {
   return defer_array(std::move(std::make_unique<T>(std::forward<Ts>(args)...)),
-                      true);
+                     true);
 }
 
 static void defer(nullptr_t) { push_runable(Runable::ptr_type()); }
@@ -130,26 +129,30 @@ static void defer(nullptr_t) { push_runable(Runable::ptr_type()); }
 struct UnDeferred : public Deferred {
   UnDeferred(array_i::ptr_type ptr) { set_value(std::move(ptr)); }
 
-  void run() {}
+  void run() override {}
 
   FactoryId factory() const {
     throw(std::runtime_error("No Factory for Undeferred."));
   }
 };
 
-template <typename L> struct DeferredLambda : public Runable {
+template <typename G, typename R, bool D = false>
+struct DeferredLambda : public Runable {
   using promise_type = int;
   using future_type = int;
 
-  L _l;
+  G _g;
+  R _r;
 
-  DeferredLambda(L l) : _l(l) {}
+  DeferredLambda(G g, R r) : _g(g), _r(r) {}
 
-  void run() { _l(); }
+  bool isDeleter() override { return D; }
 
-  bool generate_mlir(::mlir::OpBuilder &, const ::mlir::Location &,
-                     jit::DepManager &) {
-    return _l();
+  void run() override { _r(); }
+
+  bool generate_mlir(::mlir::OpBuilder &b, const ::mlir::Location &l,
+                     jit::DepManager &d) override {
+    return _g(b, l, d);
   }
 
   FactoryId factory() const {
@@ -157,7 +160,10 @@ template <typename L> struct DeferredLambda : public Runable {
   }
 };
 
-template <typename L> void defer_lambda(L &&l) {
-  push_runable(std::move(std::make_unique<DeferredLambda<L>>(l)));
+template <typename G, typename R> void defer_lambda(G &&g, R &&r) {
+  push_runable(std::move(std::make_unique<DeferredLambda<G, R, false>>(g, r)));
+}
+template <typename G, typename R> void defer_del_lambda(G &&g, R &&r) {
+  push_runable(std::move(std::make_unique<DeferredLambda<G, R, true>>(g, r)));
 }
 } // namespace SHARPY

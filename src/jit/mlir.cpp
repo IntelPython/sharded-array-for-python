@@ -16,11 +16,11 @@
   - updating function signature to accept existing arrays and returning new and
   live ones
 
-  Typically operations have input dependences, e.g. arrays produced by other
+  Typically operations have input dependencies, e.g. arrays produced by other
   operations. These can either come from outside the jit'ed function or be
   created within the function. Since we strictly add operations in serial order
-  input dependences must lready exists. Deps are represented by guids and stored
-  in the Registry.
+  input dependencies must already exists. Deps are represented by guids and
+  stored in the Registry.
 
   Internally sharpy's MLIR machinery keeps track of created and needed arrays.
   Those which were not created internally are added as input arguments to the
@@ -200,62 +200,82 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
   }
 }
 
-::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
-                                       id_type guid) {
-  auto loc = builder.getUnknownLoc();
-  if (auto d = _ivm.find(guid); d == _ivm.end()) {
-    // Not found -> this must be an input argument to the jit function
-    auto idx = _args.size();
-    auto fut = Registry::get(guid);
-    auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
-    auto rank = impl->ndims();
-    ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
-    for (size_t i = 0; i < rank; i++) {
-      lhShape[i] = impl->lh_shape() ? impl->lh_shape()[i] : 0;
-      ownShape[i] = impl->local_shape()[i];
-      rhShape[i] = impl->rh_shape() ? impl->rh_shape()[i] : 0;
+DepManager::InOut *DepManager::findInOut(id_type guid) {
+  for (auto &r : _inOut) {
+    if (r._guid == guid) {
+      return &r;
     }
-    auto typ = getTType(
-        builder, impl->dtype(),
-        ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
-        lhShape, ownShape, rhShape, fut.device(), fut.team(),
-        impl->local_offsets());
-    _func.insertArgument(idx, typ, {}, loc);
-    auto val = _func.getArgument(idx);
-    _args.push_back({guid, std::move(fut)});
-    _ivm[guid] = val;
-    return val;
-  } else {
-    return d->second;
   }
+  return nullptr;
 }
 
-std::vector<void *> DepManager::store_inputs() {
-  std::vector<void *> res;
-  for (auto a : _args) {
-    a.second.get().get()->add_to_args(res);
-    _ivm.erase(a.first); // inputs need no delivery
-    _icm.erase(a.first);
+::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
+                                       const array_i::future_type &fut) {
+  id_type guid = fut.guid();
+  if (auto d = findInOut(guid); !d) {
+    // this must be an argument, so the future should be ready
+    auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
+    return getDependent(builder, impl.get());
+  } else {
+    return d->_value;
   }
-  return res;
+};
+
+::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
+                                       const NDArray *impl) {
+  id_type guid = impl->guid();
+  // this must be an input argument to the jit function
+  assert(!findInOut(guid));
+
+  auto idx = _lastIn++;
+  auto rank = impl->ndims();
+  ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
+  for (size_t i = 0; i < rank; i++) {
+    lhShape[i] = impl->lh_shape() ? impl->lh_shape()[i] : 0;
+    ownShape[i] = impl->local_shape()[i];
+    rhShape[i] = impl->rh_shape() ? impl->rh_shape()[i] : 0;
+  }
+
+  auto typ = getTType(
+      builder, impl->dtype(),
+      ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
+      lhShape, ownShape, rhShape, impl->device(), impl->team(),
+      impl->local_offsets());
+  _func.insertArgument(idx, typ, {}, builder.getUnknownLoc());
+
+  auto val = _func.getArgument(idx);
+  impl->add_to_args(_inputs);
+  _inOut.emplace_back(InOut(guid, val));
+
+  return val;
+}
+
+std::vector<void *> DepManager::finalize_inputs() {
+  // return current buffer and reset internal input buffer
+  _lastIn = 0;
+  return std::move(_inputs);
 }
 
 void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb) {
-  assert(_ivm.find(guid) == _ivm.end());
-  _ivm[guid] = val;
-  _icm[guid] = cb;
+  assert(!findInOut(guid));
+  auto tmp = _inOut.emplace_back(InOut(guid, val, cb));
 }
 
 void DepManager::addReady(id_type guid, ReadyFunc cb) {
-  _icr[guid].emplace_back(cb);
+  auto x = findInOut(guid);
+  if (!x) {
+    x = &_inOut.emplace_back(InOut{guid});
+  }
+  x->_readyFuncs.emplace_back(cb);
 }
 
 void DepManager::drop(id_type guid) {
-  _ivm.erase(guid);
-  _icm.erase(guid);
-  _icr.erase(guid);
-  Registry::del(guid);
-  // FIXME create delete op
+  auto x = findInOut(guid);
+  // drop from our list if it has not yet been delivered
+  if (x) {
+    x->_value = nullptr;
+    x->_setResFunc = nullptr;
+  }
 }
 
 // Now we have to define the return type as a ValueRange of all arrays which we
@@ -266,27 +286,26 @@ void DepManager::drop(id_type guid) {
 uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   // Need a container to put all return values, will be used to construct
   // TypeRange
-  std::vector<::mlir::Value> ret_values(_ivm.size());
-
-  // remove default result
-  //_func.eraseResult(0);
+  std::vector<::mlir::Value> ret_values;
 
   // here we store the total size of the llvm struct
   auto loc = builder.getUnknownLoc();
   uint64_t sz = 0;
   unsigned idx = 0;
-  for (auto &v : _ivm) {
-    ::mlir::Value value = v.second;
-    bool isDist = ::imex::dist::isDist(value.getType());
-    ret_values[idx] = value;
-    _func.insertResult(idx, value.getType(), {});
-    auto rank = value.getType().cast<::imex::ndarray::NDArrayType>().getRank();
-    _irm[v.first] = std::make_pair(rank, isDist);
-    // add sizes of array
-    sz += ndarray_sz(rank, isDist);
-    // clear reference to MLIR value
-    v.second = nullptr;
-    ++idx;
+  for (auto &x : _inOut) {
+    ::mlir::Value value = x._value;
+    if (value) {
+      bool isDist = ::imex::dist::isDist(value.getType());
+      ret_values.emplace_back(value);
+      _func.insertResult(idx, value.getType(), {});
+      auto rank =
+          value.getType().cast<::imex::ndarray::NDArrayType>().getRank();
+      x._rank = rank;
+      x._isDist = isDist;
+      // add sizes of array
+      sz += ndarray_sz(rank, isDist);
+      ++idx;
+    }
   }
 
   if (HAS_ITAC()) {
@@ -309,14 +328,13 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   auto ret_value = builder.create<::mlir::func::ReturnOp>(
       builder.getUnknownLoc(), ret_values);
 
-  // _ivm defines the order of return values -> do not clear
-
   return 2 * sz;
 }
 
 void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
   auto output = outputV.data();
   size_t pos = 0;
+  int rv = 0;
 
   auto getMR = [](int rank, auto buff, void *&allocated, void *&aligned,
                   intptr_t &offset, intptr_t *&sizes, intptr_t *&strides) {
@@ -328,23 +346,17 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
     return memref_sz(rank);
   };
 
-  // _ivm defines the order of return values
-  for (auto &r : _ivm) {
-    auto guid = r.first;
-    if (auto v = _icm.find(guid); v != _icm.end()) {
-      assert(v->first == guid);
-      auto tmp = _irm[guid];
-      auto rank = tmp.first;
-      auto isDist = tmp.second;
+  for (auto &x : _inOut) {
+    if (x._value) {
       void *t_allocated[3];
       void *t_aligned[3];
       intptr_t t_offset[3];
       intptr_t *t_sizes[3];
       intptr_t *t_strides[3];
 
-      if (rank > 0 && isDist) {
+      if (x._rank > 0 && x._isDist) {
         for (auto t = 0; t < 3; ++t) {
-          pos += getMR(rank, &output[pos], t_allocated[t], t_aligned[t],
+          pos += getMR(x._rank, &output[pos], t_allocated[t], t_aligned[t],
                        t_offset[t], t_sizes[t], t_strides[t]);
         }
         // lastly extract local offsets
@@ -353,37 +365,43 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
         intptr_t lo_offset = output[pos + 2];
         // no sizes/stride needed, just skip
         pos += memref_sz(1);
-        // call finalization callback
-        v->second(rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
-                  t_strides[0], // lhsHalo
-                  t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
-                  t_strides[1], // lData
-                  t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
-                  t_strides[2], // rhsHalo
-                  lo_allocated,
-                  lo_aligned + lo_offset // local offset is 1d array of uint64_t
-        );
+        if (x._setResFunc) {
+          // call finalization callback
+          x._setResFunc(
+              x._rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
+              t_strides[0], // lhsHalo
+              t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+              t_strides[1], // lData
+              t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
+              t_strides[2], // rhsHalo
+              lo_allocated,
+              lo_aligned + lo_offset // local offset is 1d array of uint64_t
+          );
+        }
       } else { // 0d array or non-dist
-        pos += getMR(rank, &output[pos], t_allocated[1], t_aligned[1],
+        pos += getMR(x._rank, &output[pos], t_allocated[1], t_aligned[1],
                      t_offset[1], t_sizes[1], t_strides[1]);
-        v->second(rank, nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
-                  t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
-                  t_strides[1],                          // lData
-                  nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
-                  nullptr, nullptr);
+        if (x._setResFunc) {
+          x._setResFunc(x._rank, nullptr, nullptr, 0, nullptr,
+                        nullptr, // lhsHalo
+                        t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+                        t_strides[1],                          // lData
+                        nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
+                        nullptr, nullptr);
+        }
       }
-    } else {
-      assert(false);
+    }
+
+    // not attached to value, call always if provided
+    if (!x._readyFuncs.empty()) {
+      for (auto cb : x._readyFuncs) {
+        cb(x._guid);
+      }
     }
   }
 
-  // ready signals will always be sent, at this point they are not linked to a
-  // return value
-  for (auto &readyV : _icr) {
-    for (auto cb : readyV.second) {
-      cb(readyV.first);
-    }
-  }
+  // finally clear
+  _inOut.clear();
 }
 
 std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
@@ -429,8 +447,9 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     if (auto search = engineCache.find(cksm); search == engineCache.end()) {
       engineCache[cksm] = createExecutionEngine(module);
     } else {
-      if (_verbose)
+      if (_verbose) {
         std::cerr << "cached..." << std::endl;
+      }
     }
     enginePtr = engineCache[cksm].get();
     VT(VT_end, vtHashSym);
@@ -524,6 +543,8 @@ static const char *cpu_pipeline = "ndarray-dist,"
                                   "func.func(linalg-bufferize),"
                                   "func.func(linalg-detensorize),"
                                   "func.func(tensor-bufferize),"
+                                  "region-bufferize,"
+                                  "canonicalize,"
                                   "func.func(finalizing-bufferize),"
                                   "func.func(buffer-deallocation),"
                                   "imex-remove-temporaries,"
@@ -542,6 +563,7 @@ static const char *cpu_pipeline = "ndarray-dist,"
                                   "reconcile-unrealized-casts";
 
 static const char *gpu_pipeline =
+    "add-gpu-regions,"
     "ndarray-dist,"
     "func.func(dist-coalesce),"
     "func.func(dist-infer-elementwise-cores),"
@@ -568,6 +590,8 @@ static const char *gpu_pipeline =
     "func.func(linalg-bufferize),"
     "func.func(linalg-detensorize),"
     "func.func(tensor-bufferize),"
+    "region-bufferize,"
+    "canonicalize,"
     "func.func(finalizing-bufferize),"
     "imex-remove-temporaries,"
     "func.func(convert-linalg-to-parallel-loops),"
@@ -577,7 +601,8 @@ static const char *gpu_pipeline =
     "func.func(gpu-map-parallel-loops),"
     "func.func(convert-parallel-loops-to-gpu),"
     // insert-gpu-allocs pass can have client-api = opencl or vulkan args
-    "func.func(insert-gpu-allocs{client-api=opencl}),"
+    "func.func(insert-gpu-allocs{in-regions=1}),"
+    "convert-region-to-gpu,"
     "canonicalize,"
     "normalize-memrefs,"
     // Unstride memrefs does not seem to be needed.
@@ -592,7 +617,7 @@ static const char *gpu_pipeline =
     "gpu.module(set-spirv-abi-attrs{client-api=opencl}),"
     "canonicalize,"
     "fold-memref-alias-ops,"
-    "imex-convert-gpu-to-spirv,"
+    "imex-convert-gpu-to-spirv{enable-vc-intrinsic=1},"
     "spirv.module(spirv-lower-abi-attrs),"
     "spirv.module(spirv-update-vce),"
     // "func.func(llvm-request-c-wrappers),"
@@ -627,6 +652,7 @@ JIT::JIT()
   _context.getOrLoadDialect<::imex::ndarray::NDArrayDialect>();
   _context.getOrLoadDialect<::imex::dist::DistDialect>();
   _context.getOrLoadDialect<::imex::distruntime::DistRuntimeDialect>();
+  _context.getOrLoadDialect<::imex::region::RegionDialect>();
   _context.getOrLoadDialect<::mlir::arith::ArithDialect>();
   _context.getOrLoadDialect<::mlir::func::FuncDialect>();
   _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();

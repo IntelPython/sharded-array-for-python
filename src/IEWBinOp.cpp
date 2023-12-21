@@ -6,9 +6,9 @@
 
 #include "sharpy/IEWBinOp.hpp"
 #include "sharpy/Creator.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/Registry.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
@@ -68,8 +68,8 @@ struct DeferredIEWBinOp : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // FIXME the type of the result is based on a only
-    auto av = dm.getDependent(builder, _a);
-    auto bv = dm.getDependent(builder, _b);
+    auto av = dm.getDependent(builder, Registry::get(_a));
+    auto bv = dm.getDependent(builder, Registry::get(_b));
 
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());

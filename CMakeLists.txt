@@ -107,10 +107,8 @@ set(SHARPYSrcs
     ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
     ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
-    ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
-)
-set(RTSrcs
+    ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
     ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
@@ -126,9 +124,8 @@ set(IDTRSrcs
 )
 
 pybind11_add_module(_sharpy MODULE ${SHARPYSrcs} ${Hpps})
-add_library(_sharpy_rt SHARED ${RTSrcs} ${Hpps})
 add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
-set(AllTargets _sharpy _sharpy_rt idtr)
+set(AllTargets _sharpy idtr)
 
 add_compile_definitions(USE_MKL=1)
 add_compile_options("-ftemplate-backtrace-limit=0")
@@ -144,7 +141,6 @@ include_directories(
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   target_link_options(_sharpy PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")
-  target_link_options(_sharpy_rt PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export-sharpy_rt.txt")
   # target_link_options(idtr PRIVATE "LINKER:-fvisibility=hidden" "LINKER:--exclude-libs,All")
 endif()
 
@@ -158,7 +154,6 @@ get_property(imex_conversion_libs GLOBAL PROPERTY IMEX_CONVERSION_LIBS)
 
 #llvm_update_compile_flags(_sharpy)
 target_link_directories(_sharpy PRIVATE ${CONDA_PREFIX}/lib)
-target_link_directories(_sharpy_rt PRIVATE ${CONDA_PREFIX}/lib) # ${IMEX_INSTALL_PREFIX}/lib)
 target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
 
 target_link_libraries(_sharpy PRIVATE
@@ -176,15 +171,10 @@ target_link_libraries(_sharpy PRIVATE
     IMEXUtil
     LLVMX86CodeGen
     LLVMX86AsmParser
-    _sharpy_rt
     idtr
-)
-target_link_libraries(idtr PRIVATE
-    ${MPI_C_LIBRARIES}
-    # ${MKL_LIBRARIES}
     tbb
 )
-target_link_libraries(_sharpy_rt PRIVATE
+target_link_libraries(idtr PRIVATE
     ${MPI_C_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb

@@ -125,6 +125,13 @@ struct DynMemRef {
     delete[] _strides;
   }
 
-  void freeData() { free(_allocated); }
+  void freeData() {
+    if (_allocated) {
+      free(_allocated);
+      markDeallocated();
+    }
+  }
+
+  void markDeallocated() { _allocated = nullptr; }
 };
 } // namespace SHARPY

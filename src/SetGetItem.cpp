@@ -161,8 +161,8 @@ struct DeferredSetItem : public Deferred {
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     const auto dtype = this->dtype();
-    auto av = dm.getDependent(builder, _a);
-    auto bv = dm.getDependent(builder, _b);
+    auto av = dm.getDependent(builder, Registry::get(_a));
+    auto bv = dm.getDependent(builder, Registry::get(_b));
     auto &offs = _slc.offsets();
     auto &sizes = _slc.sizes();
     auto &strides = _slc.strides();
@@ -261,7 +261,7 @@ struct DeferredGetItem : public Deferred {
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     const auto dtype = this->dtype();
-    auto av = dm.getDependent(builder, _a);
+    auto av = dm.getDependent(builder, Registry::get(_a));
     const auto &offs = _slc.offsets();
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
@@ -282,12 +282,12 @@ struct DeferredGetItem : public Deferred {
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
-                                 _dtype, this->shape(), l_allocated, l_aligned,
-                                 l_offset, l_sizes, l_strides, o_allocated,
-                                 o_aligned, o_offset, o_sizes, o_strides,
-                                 r_allocated, r_aligned, r_offset, r_sizes,
-                                 r_strides, lo_allocated, lo_aligned);
+                auto t = mk_tnsr(this->guid(), _dtype, this->shape(),
+                                 this->device(), this->team(), l_allocated,
+                                 l_aligned, l_offset, l_sizes, l_strides,
+                                 o_allocated, o_aligned, o_offset, o_sizes,
+                                 o_strides, r_allocated, r_aligned, r_offset,
+                                 r_sizes, r_strides, lo_allocated, lo_aligned);
                 if (Registry::has(_a)) {
                   t->set_base(Registry::get(_a).get());
                 } // else _a is a temporary and was dropped

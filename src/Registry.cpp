@@ -44,6 +44,15 @@ void del(id_type id) {
   _keeper.erase(id);
 }
 
+std::vector<id_type> get_all() {
+  std::vector<id_type> res;
+  locker _l(_mutex);
+  for (auto f : _keeper) {
+    res.emplace_back(f.first);
+  }
+  return res;
+}
+
 void fini() {
   locker _l(_mutex);
   _keeper.clear();

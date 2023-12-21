@@ -25,15 +25,15 @@ protected:
   id_type _guid = -1;
   DTypeId _dtype = DTYPE_LAST;
   shape_type _shape = {};
-  std::string _device;
-  uint64_t _team;
+  std::string _device = {};
+  uint64_t _team = 0;
 
 public:
   ArrayMeta(id_type id, DTypeId dt, const shape_type &shape,
-             const std::string &device, uint64_t team)
+            const std::string &device, uint64_t team)
       : _guid(id), _dtype(dt), _shape(shape), _device(device), _team(team) {}
   ArrayMeta(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
-             uint64_t team)
+            uint64_t team)
       : _guid(id), _dtype(dt), _shape(std::forward<shape_type>(shape)),
         _device(std::forward<std::string>(device)), _team(team) {}
   ArrayMeta() = default;
@@ -92,7 +92,7 @@ public:
     Metaified(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
               uint64_t team)
         : T(), ArrayMeta(id, dt, std::forward<shape_type>(shape),
-                          std::move(device), team) {}
+                         std::move(device), team) {}
     ~Metaified() {}
   };
 
@@ -125,7 +125,10 @@ public:
   // store array information in form of corresponding
   // jit::JIT::DistMemRefDescriptor
   // @return stored size in number of intptr_t
-  virtual void add_to_args(std::vector<void *> &args) = 0;
+  virtual void add_to_args(std::vector<void *> &args) const = 0;
+  // mark as deallocated
+  virtual void markDeallocated() = 0;
+  virtual bool isAllocated() = 0;
 };
 
 #if 0

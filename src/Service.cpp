@@ -7,40 +7,19 @@
 */
 
 #include "sharpy/Service.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/FutureArray.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/Registry.hpp"
 #include "sharpy/TypeDispatch.hpp"
-#include "sharpy/FutureArray.hpp"
 #include "sharpy/jit/mlir.hpp"
+#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 
 namespace SHARPY {
 
-#if 0
-namespace x {
-    struct Service
-    {
-        using ptr_type = DNDArrayBaseX::ptr_type;
-
-        template<typename T>
-        static ptr_type op(const std::shared_ptr<DNDArrayX<T>> & a_ptr)
-        {
-            if(a_ptr->is_replicated()) return a_ptr;
-            if(a_ptr->has_owner() && a_ptr->slice().size() == 1) {
-                if(getTransceiver()->rank() == a_ptr->owner()) {
-                    a_ptr->_replica = *(xt::strided_view(a_ptr->xarray(), a_ptr->lslice()).begin());
-                }
-                getTransceiver()->bcast(&a_ptr->_replica, sizeof(T), a_ptr->owner());
-                a_ptr->set_owner(REPLICATED);
-            } else {
-                throw(std::runtime_error("Replication implemented for single element and single owner only."));
-            }
-            return a_ptr;
-        }
-    };
-}
-#endif // if 0
+bool inited = false;
+bool finied = false;
 
 // **************************************************************************
 
@@ -52,8 +31,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
   Op _op;
 
   DeferredService(Op op = SERVICE_LAST) : _a(), _op(op) {}
-  DeferredService(Op op, const array_i::future_type &a)
-      : _a(a.guid()), _op(op) {}
+  DeferredService(Op op, id_type id) : _a(id), _op(op) {}
 
   void run() {
     switch (_op) {
@@ -69,11 +47,13 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     switch (_op) {
-    case DROP:
+    case DROP: {
+      // drop from dep manager
       dm.drop(_a);
-      set_value(true);
-      // FIXME create delete op and return it
+      // and from registry
+      Registry::del(_a);
       break;
+    }
     case RUN:
       return true;
     default:
@@ -122,12 +102,9 @@ struct DeferredReplicate : public Deferred {
 
 // **************************************************************************
 
-bool inited = false;
-bool finied = false;
-
-Service::service_future_type Service::drop(const FutureArray &a) {
+void Service::drop(const id_type a) {
   if (inited) {
-    return defer<DeferredService>(DeferredService::DROP, a.get());
+    defer<DeferredService>(DeferredService::DROP, a);
   }
 }
 

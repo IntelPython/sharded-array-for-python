@@ -5,8 +5,8 @@
 */
 
 #include "sharpy/IO.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/SetGetItem.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
@@ -70,7 +70,8 @@ struct DeferredFromLocal : public Deferred {
       strides[i] = _strides[i] / eSz;
     }
 
-    auto res = mk_tnsr(getDTypeId(dtype), ndim, shape, strides.data(), data);
+    auto res = mk_tnsr(this->guid(), getDTypeId(dtype), ndim, shape,
+                       strides.data(), data, this->device(), this->team());
     // make sure we do not delete numpy's memory before the numpy array is dead
     // notice: py::objects have ref-counting)
     res->set_base(new SharedBaseObject<py::object>(_npa));

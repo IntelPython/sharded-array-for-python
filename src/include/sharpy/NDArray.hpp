@@ -6,9 +6,10 @@
 #pragma once
 
 #include "MemRefType.hpp"
+#include "Registry.hpp"
 #include "TypeDispatch.hpp"
-#include "p2c_ids.hpp"
 #include "array_i.hpp"
+#include "p2c_ids.hpp"
 
 #include <cstring>
 #include <memory>
@@ -20,12 +21,12 @@ class Transceiver;
 
 /// @brief use this to provide a base object to the array
 // such a base object can own shared data
-// you might need to implem,ent reference counting
+// you might need to implement reference counting
 struct BaseObj {
   virtual ~BaseObj() {}
 };
 
-/// @brief Simple implementatino of BaseObj for ref-counting types
+/// @brief Simple implementation of BaseObj for ref-counting types
 /// @tparam T ref-counting type, such as py::object of std::shared_Ptr
 /// we keep an object of the ref-counting type. Normal ref-counting/destructors
 /// will take care of the rest.
@@ -41,23 +42,24 @@ template <typename T> struct SharedBaseObject : public BaseObj {
 /// interface. It holds the array data and some meta information. The member
 /// attributes are mostly inspired by the needs of interacting with MLIR. It
 /// also holds information needed for distributed operation.
-/// Besides the local data it alos holds data haloed from other processes.
+/// Besides the local data it also holds data haloed from other processes.
 /// Here, the halos are never used for anything except for interchanging with
 /// MLIR.
-class NDArray : public array_i {
-
-  mutable rank_type _owner;
-  Transceiver *_transceiver = nullptr;
-  shape_type _gShape = {};
+class NDArray : public array_i, protected ArrayMeta {
+  mutable rank_type _owner = NOOWNER;
   uint64_t *_lo_allocated = nullptr;
   uint64_t *_lo_aligned = nullptr;
   DynMemRef _lhsHalo;
   DynMemRef _lData;
   DynMemRef _rhsHalo;
-  DTypeId _dtype = DTYPE_LAST;
   BaseObj *_base = nullptr;
 
 public:
+  struct NDADeleter {
+    void operator()(NDArray *a) const;
+  };
+  friend struct NDADeleter;
+
   using ptr_type = std::shared_ptr<NDArray>;
 
   // don't allow copying.
@@ -65,35 +67,40 @@ public:
   NDArray(NDArray &&) = default;
 
   // construct from a and MLIR-jitted execution
-  NDArray(Transceiver *transceiver, DTypeId dtype, shape_type gShape,
-                void *l_allocated, void *l_aligned, intptr_t l_offset,
-                const intptr_t *l_sizes, const intptr_t *l_strides,
-                void *o_allocated, void *o_aligned, intptr_t o_offset,
-                const intptr_t *o_sizes, const intptr_t *o_strides,
-                void *r_allocated, void *r_aligned, intptr_t r_offset,
-                const intptr_t *r_sizes, const intptr_t *r_strides,
-                uint64_t *lo_allocated, uint64_t *lo_aligned,
-                rank_type owner = NOOWNER);
+  NDArray(id_type guid, DTypeId dtype, shape_type gShape, std::string device,
+          uint64_t team, void *l_allocated, void *l_aligned, intptr_t l_offset,
+          const intptr_t *l_sizes, const intptr_t *l_strides, void *o_allocated,
+          void *o_aligned, intptr_t o_offset, const intptr_t *o_sizes,
+          const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+          intptr_t r_offset, const intptr_t *r_sizes, const intptr_t *r_strides,
+          uint64_t *lo_allocated, uint64_t *lo_aligned,
+          rank_type owner = NOOWNER);
 
-  NDArray(DTypeId dtype, const shape_type &shp,
-                rank_type owner = NOOWNER);
+  NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
+          std::string device, uint64_t team, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
-  NDArray(const int64_t *shape, uint64_t N, rank_type owner = NOOWNER);
+  NDArray(id_type guid, const int64_t *shape, uint64_t N, std::string device,
+          uint64_t team, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
   NDArray() : _owner(REPLICATED) { assert(ndims() <= 1); }
 
   // From numpy
   // FIXME multi-proc
-  NDArray(DTypeId dtype, ssize_t ndims, const ssize_t *shape,
-                const intptr_t *strides, void *data);
+  NDArray(id_type guid, DTypeId dtype, ssize_t ndims, const ssize_t *shape,
+          const intptr_t *strides, void *data, std::string device,
+          uint64_t team);
 
   // set the base array
   void set_base(const array_i::ptr_type &base);
   void set_base(BaseObj *obj);
 
   virtual ~NDArray();
+
+  // mark local data and halos as deallocated
+  void markDeallocated();
+  bool isAllocated();
 
   // @return pointer to raw data
   void *data();
@@ -104,16 +111,22 @@ public:
   /// python object's __repr__
   virtual std::string __repr__() const override;
 
+  /// @return array's GUID
+  virtual id_type guid() const { return ArrayMeta::guid(); }
+
   /// @return array's element type
-  virtual DTypeId dtype() const override { return _dtype; }
+  virtual DTypeId dtype() const override { return ArrayMeta::dtype(); }
 
   /// @return array's shape
   virtual const int64_t *shape() const override {
-    return _transceiver ? _gShape.data() : local_shape();
+    return ArrayMeta::shape().data();
   }
 
   /// @returnnumber of dimensions of array
-  virtual int ndims() const override { return _gShape.size(); }
+  virtual int ndims() const override { return ArrayMeta::rank(); }
+
+  uint64_t team() const { return ArrayMeta::team(); }
+  const std::string &device() const { return ArrayMeta::device(); }
 
   /// @return global number of elements in array
   virtual uint64_t size() const override {
@@ -121,9 +134,10 @@ public:
     case 0:
       return 1;
     case 1:
-      return _gShape.front();
+      return ArrayMeta::shape().front();
     default:
-      return std::accumulate(_gShape.begin(), _gShape.end(), 1,
+      return std::accumulate(ArrayMeta::shape().begin(),
+                             ArrayMeta::shape().end(), 1,
                              std::multiplies<intptr_t>());
     }
   }
@@ -152,7 +166,7 @@ public:
 
   /// @return global number of elements in first dimension
   virtual uint64_t __len__() const override {
-    return ndims() ? _gShape.front() : 1;
+    return ndims() ? ArrayMeta::shape().front() : 1;
   }
 
   /// @return true if array has a unique owner
@@ -165,7 +179,9 @@ public:
   rank_type owner() const { return _owner; }
 
   /// @return Transceiver linked to this array
-  Transceiver *transceiver() const { return _transceiver; }
+  Transceiver *transceiver() const {
+    return reinterpret_cast<Transceiver *>(team());
+  }
 
   /// @return true if array is replicated across all process ranks
   bool is_replicated() const { return _owner == REPLICATED; }
@@ -175,7 +191,7 @@ public:
 
   /// add array to list of args in the format expected by MLIR
   /// assuming array has ndims dims.
-  virtual void add_to_args(std::vector<void *> &args) override;
+  virtual void add_to_args(std::vector<void *> &args) const override;
 
   /// @return local offsets into global array
   const uint64_t *local_offsets() const { return _lo_aligned; }
@@ -220,11 +236,8 @@ public:
 /// create a new SHARPYensor from given args and wrap in shared pointer
 template <typename... Ts>
 static typename NDArray::ptr_type mk_tnsr(Ts &&...args) {
-  return std::make_shared<NDArray>(std::forward<Ts>(args)...);
-}
-
-template <typename... Ts> static array_i::future_type mk_ftx(Ts &&...args) {
-  return UnDeferred(mk_tnsr(std::forward(args)...)).get_future();
+  return NDArray::ptr_type(new NDArray(std::forward<Ts>(args)...),
+                           NDArray::NDADeleter());
 }
 
 // execute an OP on all elements of a array represented by

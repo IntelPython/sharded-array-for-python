@@ -3,9 +3,9 @@
 */
 
 #include "sharpy/Creator.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
@@ -82,12 +82,11 @@ struct DeferredFull : public Deferred {
                const intptr_t *r_strides, uint64_t *lo_allocated,
                uint64_t *lo_aligned) {
           assert(rank == this->rank());
-          this->set_value(std::move(
-              mk_tnsr(reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                      this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                      l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                      o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                      r_strides, lo_allocated, lo_aligned)));
+          this->set_value(std::move(mk_tnsr(
+              this->guid(), _dtype, this->shape(), this->device(), this->team(),
+              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
+              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
         });
     return false;
   }
@@ -102,8 +101,8 @@ struct DeferredFull : public Deferred {
 };
 
 FutureArray *Creator::full(const shape_type &shape, const py::object &val,
-                         DTypeId dtype, const std::string &device,
-                         uint64_t team) {
+                           DTypeId dtype, const std::string &device,
+                           uint64_t team) {
   auto v = mk_scalar(val, dtype);
   return new FutureArray(
       defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
@@ -132,26 +131,26 @@ struct DeferredArange : public Deferred {
     auto dtyp = jit::getPTDType(dtype());
     auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
-    dm.addVal(this->guid(),
-              builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
-                                                          false, dtyp, envs),
-              [this](uint64_t rank, void *l_allocated, void *l_aligned,
-                     intptr_t l_offset, const intptr_t *l_sizes,
-                     const intptr_t *l_strides, void *o_allocated,
-                     void *o_aligned, intptr_t o_offset,
-                     const intptr_t *o_sizes, const intptr_t *o_strides,
-                     void *r_allocated, void *r_aligned, intptr_t r_offset,
-                     const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                assert(rank == 1);
-                assert(o_strides[0] == 1);
-                this->set_value(std::move(mk_tnsr(
-                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                    r_strides, lo_allocated, lo_aligned)));
-              });
+    dm.addVal(
+        this->guid(),
+        builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
+                                                    false, dtyp, envs),
+        [this](uint64_t rank, void *l_allocated, void *l_aligned,
+               intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, uint64_t *lo_allocated,
+               uint64_t *lo_aligned) {
+          assert(rank == 1);
+          assert(o_strides[0] == 1);
+          this->set_value(std::move(mk_tnsr(
+              this->guid(), _dtype, this->shape(), this->device(), this->team(),
+              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
+              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+        });
     return false;
   }
 
@@ -165,8 +164,8 @@ struct DeferredArange : public Deferred {
 };
 
 FutureArray *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
-                           DTypeId dtype, const std::string &device,
-                           uint64_t team) {
+                             DTypeId dtype, const std::string &device,
+                             uint64_t team) {
   return new FutureArray(
       defer<DeferredArange>(start, end, step, dtype, device, mkTeam(team)));
 }
@@ -193,26 +192,26 @@ struct DeferredLinspace : public Deferred {
     auto dtyp = jit::getPTDType(dtype());
     auto envs = jit::mkEnvs(builder, rank(), _device, team());
 
-    dm.addVal(this->guid(),
-              builder.create<::imex::ndarray::LinSpaceOp>(
-                  loc, start, stop, num, _endpoint, dtyp, envs),
-              [this](uint64_t rank, void *l_allocated, void *l_aligned,
-                     intptr_t l_offset, const intptr_t *l_sizes,
-                     const intptr_t *l_strides, void *o_allocated,
-                     void *o_aligned, intptr_t o_offset,
-                     const intptr_t *o_sizes, const intptr_t *o_strides,
-                     void *r_allocated, void *r_aligned, intptr_t r_offset,
-                     const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                assert(rank == 1);
-                assert(l_strides[0] == 1);
-                this->set_value(std::move(mk_tnsr(
-                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                    r_strides, lo_allocated, lo_aligned)));
-              });
+    dm.addVal(
+        this->guid(),
+        builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
+                                                    _endpoint, dtyp, envs),
+        [this](uint64_t rank, void *l_allocated, void *l_aligned,
+               intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, uint64_t *lo_allocated,
+               uint64_t *lo_aligned) {
+          assert(rank == 1);
+          assert(l_strides[0] == 1);
+          this->set_value(std::move(mk_tnsr(
+              this->guid(), _dtype, this->shape(), this->device(), this->team(),
+              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
+              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+        });
     return false;
   }
 
@@ -227,10 +226,10 @@ struct DeferredLinspace : public Deferred {
 };
 
 FutureArray *Creator::linspace(double start, double end, uint64_t num,
-                             bool endpoint, DTypeId dtype,
-                             const std::string &device, uint64_t team) {
-  return new FutureArray(defer<DeferredLinspace>(start, end, num, endpoint, dtype,
-                                               device, mkTeam(team)));
+                               bool endpoint, DTypeId dtype,
+                               const std::string &device, uint64_t team) {
+  return new FutureArray(defer<DeferredLinspace>(start, end, num, endpoint,
+                                                 dtype, device, mkTeam(team)));
 }
 
 // ***************************************************************************
@@ -239,8 +238,9 @@ extern DTypeId DEFAULT_FLOAT;
 extern DTypeId DEFAULT_INT;
 
 std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
-                                                const std::string &device,
-                                                uint64_t team, DTypeId dtype) {
+                                                  const std::string &device,
+                                                  uint64_t team,
+                                                  DTypeId dtype) {
   if (py::isinstance<FutureArray>(b)) {
     return {b.cast<FutureArray *>(), false};
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {

@@ -29,6 +29,7 @@
 namespace SHARPY {
 
 class Transceiver;
+class NDArray;
 
 namespace jit {
 
@@ -110,29 +111,39 @@ using ReadyFunc = std::function<void(id_type guid)>;
 // initialize jit
 void init();
 
-/// Manages iput/output (array) dependencies
+/// Manages input/output (array) dependencies
 class DepManager {
 private:
-  using IdValueMap = std::map<id_type, ::mlir::Value>;
-  using IdCallbackMap = std::map<id_type, SetResFunc>;
-  using IdReadyMap = std::map<id_type, std::vector<ReadyFunc>>;
-  using IdRankMap = std::map<id_type, std::pair<int, bool>>;
-  // here we store the future (and not the guid) to keep it alive long enough
-  using ArgList = std::vector<std::pair<id_type, array_i::future_type>>;
+  struct InOut {
+    id_type _guid = 0;
+    ::mlir::Value _value = nullptr;
+    SetResFunc _setResFunc;
+    int _rank = 0;
+    bool _isDist = false;
+    std::vector<ReadyFunc> _readyFuncs;
+    InOut(id_type guid = 0, const ::mlir::Value &value = nullptr,
+          const SetResFunc &setResFunc = nullptr, int rank = 0,
+          bool isDist = false, const std::vector<ReadyFunc> &readyFuncs = {})
+        : _guid(guid), _rank(rank), _value(value), _isDist(isDist),
+          _setResFunc(setResFunc), _readyFuncs(readyFuncs) {}
+  };
+  using InOutList = std::vector<InOut>;
 
+  InOutList _inOut;
+  int _lastIn = 0;
   ::mlir::func::FuncOp &_func; // MLIR function to which ops are added
-  IdValueMap _ivm;             // guid -> mlir::Value
-  IdCallbackMap _icm;          // guid -> deliver-callback
-  IdReadyMap _icr;             // guid -> ready-callback
-  IdRankMap _irm;              // guid -> rank/isDist fo return values
-  ArgList _args;               // input arguments of the generated function
+  std::vector<void *> _inputs; // collecting input args
+
+  InOut *findInOut(id_type guid);
 
 public:
   DepManager(::mlir::func::FuncOp &f) : _func(f) {}
-  /// @return the ::mlir::Value representing the array with guid guid
-  /// If the array is not created within the current function, it will
+  /// @return the ::mlir::Value representing the array
+  /// If the array was not created within the current function, it will
   /// be added as a function argument.
-  ::mlir::Value getDependent(::mlir::OpBuilder &builder, id_type guid);
+  ::mlir::Value getDependent(::mlir::OpBuilder &builder,
+                             const array_i::future_type &fut);
+  ::mlir::Value getDependent(::mlir::OpBuilder &builder, const NDArray *fut);
 
   /// for the array guid register the ::mlir::value and a callback to deliver
   /// the promise which generated the value if the array is alive when the
@@ -151,9 +162,11 @@ public:
   /// devlier promise after execution
   void deliver(std::vector<intptr_t> &, uint64_t);
 
-  /// store all inputs into given buffer
+  /// finalize all inputs storage and
+  /// @return buffer with all inputs
   /// This must be called before handleResults()
-  std::vector<void *> store_inputs();
+  /// Resets internal input buffer
+  std::vector<void *> finalize_inputs();
 };
 
 // A class to manage the MLIR business (compilation and execution).

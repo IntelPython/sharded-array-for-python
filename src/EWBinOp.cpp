@@ -7,10 +7,10 @@
 #include "sharpy/EWBinOp.hpp"
 #include "sharpy/Broadcast.hpp"
 #include "sharpy/Creator.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/LinAlgOp.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/Registry.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
@@ -117,8 +117,8 @@ struct DeferredEWBinOp : public Deferred {
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    auto av = dm.getDependent(builder, _a);
-    auto bv = dm.getDependent(builder, _b);
+    auto av = dm.getDependent(builder, Registry::get(_a));
+    auto bv = dm.getDependent(builder, Registry::get(_b));
 
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto bTyp = bv.getType().cast<::imex::ndarray::NDArrayType>();
@@ -137,22 +137,22 @@ struct DeferredEWBinOp : public Deferred {
     auto bop = builder.create<::imex::ndarray::EWBinOp>(
         loc, outTyp, builder.getI32IntegerAttr(sharpy2mlir(_op)), one, two);
 
-    dm.addVal(this->guid(), bop,
-              [this](uint64_t rank, void *l_allocated, void *l_aligned,
-                     intptr_t l_offset, const intptr_t *l_sizes,
-                     const intptr_t *l_strides, void *o_allocated,
-                     void *o_aligned, intptr_t o_offset,
-                     const intptr_t *o_sizes, const intptr_t *o_strides,
-                     void *r_allocated, void *r_aligned, intptr_t r_offset,
-                     const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                this->set_value(std::move(mk_tnsr(
-                    reinterpret_cast<Transceiver *>(this->team()), _dtype,
-                    this->shape(), l_allocated, l_aligned, l_offset, l_sizes,
-                    l_strides, o_allocated, o_aligned, o_offset, o_sizes,
-                    o_strides, r_allocated, r_aligned, r_offset, r_sizes,
-                    r_strides, lo_allocated, lo_aligned)));
-              });
+    dm.addVal(
+        this->guid(), bop,
+        [this](uint64_t rank, void *l_allocated, void *l_aligned,
+               intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, uint64_t *lo_allocated,
+               uint64_t *lo_aligned) {
+          this->set_value(std::move(mk_tnsr(
+              this->guid(), _dtype, this->shape(), this->device(), this->team(),
+              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
+              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
+              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+        });
     return false;
   }
 
@@ -165,7 +165,8 @@ struct DeferredEWBinOp : public Deferred {
   }
 };
 
-FutureArray *EWBinOp::op(EWBinOpId op, const py::object &a, const py::object &b) {
+FutureArray *EWBinOp::op(EWBinOpId op, const py::object &a,
+                         const py::object &b) {
   std::string deva, devb;
   uint64_t teama = 0, teamb = 0;
   DTypeId dtypea = DTYPE_LAST, dtypeb = DTYPE_LAST;

@@ -30,6 +30,9 @@ void del(id_type id);
 /// @return true if given guid is registered
 bool has(id_type);
 
+/// @return all (currently) registered arrays in vector
+std::vector<id_type> get_all();
+
 /// finalize registry (before shutdown)
 void fini();
 
