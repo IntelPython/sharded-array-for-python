@@ -6,7 +6,7 @@ defaults:
     shell: bash
 jobs:
   build_and_test:
-    runs-on: [self-hosted, dds-base]
+    runs-on: tpi-ubuntu-latest
     strategy:
       fail-fast: false
     steps:
@@ -30,13 +30,14 @@ jobs:
         id: cache-miniconda
         uses: actions/cache@v3
         env:
-          MINICONDA_CACHE_NUMBER: 1  # Increase to reset cache
+          MINICONDA_CACHE_NUMBER: 2  # Increase to reset cache
         with:
           path: third_party/install/miniconda/**
           key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.yml') }}
       - name: Miniconda
         if: steps.cache-miniconda.outputs.cache-hit != 'true'
         run: |
+          rm -rf "$GITHUB_WORKSPACE"/third_party/install/miniconda
           mkdir -p "$GITHUB_WORKSPACE"/third_party/install
           cd "$GITHUB_WORKSPACE"/third_party
           wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh

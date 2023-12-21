@@ -153,7 +153,7 @@ struct DeferredToDevice : public Deferred {
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    auto av = dm.getDependent(builder, _a);
+    auto av = dm.getDependent(builder, Registry::get(_a));
 
     auto srcType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
     assert(srcType);
@@ -183,12 +183,12 @@ struct DeferredToDevice : public Deferred {
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
                      uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                auto t = mk_tnsr(reinterpret_cast<Transceiver *>(this->team()),
-                                 _dtype, this->shape(), l_allocated, l_aligned,
-                                 l_offset, l_sizes, l_strides, o_allocated,
-                                 o_aligned, o_offset, o_sizes, o_strides,
-                                 r_allocated, r_aligned, r_offset, r_sizes,
-                                 r_strides, lo_allocated, lo_aligned);
+                auto t = mk_tnsr(this->guid(), this->dtype(), this->shape(),
+                                 this->device(), this->team(), l_allocated,
+                                 l_aligned, l_offset, l_sizes, l_strides,
+                                 o_allocated, o_aligned, o_offset, o_sizes,
+                                 o_strides, r_allocated, r_aligned, r_offset,
+                                 r_sizes, r_strides, lo_allocated, lo_aligned);
                 this->set_value(std::move(t));
               });
     return false;
