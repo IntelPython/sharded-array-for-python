@@ -65,4 +65,8 @@ class ndarray:
     def __setitem__(self, key, value):
         key = key if isinstance(key, tuple) else (key,)
         key = [slicefy(x) for x in key]
+        if isinstance(value, ndarray) and value._t.dtype != self._t.dtype:
+            raise ValueError(
+                f"Mismatching data type in setitem: {value._t.dtype}, expecting {self._t.dtype}"
+            )
         self._t.__setitem__(key, value._t if isinstance(value, ndarray) else value)
