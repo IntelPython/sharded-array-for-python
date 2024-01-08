@@ -550,6 +550,7 @@ static const char *cpu_pipeline = "ndarray-dist,"
                                   "imex-remove-temporaries,"
                                   "func.func(convert-linalg-to-parallel-loops),"
                                   "func.func(scf-parallel-loop-fusion),"
+                                  "drop-regions,"
                                   "canonicalize,"
                                   "fold-memref-alias-ops,"
                                   "expand-strided-metadata,"
@@ -602,7 +603,7 @@ static const char *gpu_pipeline =
     "func.func(convert-parallel-loops-to-gpu),"
     // insert-gpu-allocs pass can have client-api = opencl or vulkan args
     "func.func(insert-gpu-allocs{in-regions=1}),"
-    "convert-region-to-gpu,"
+    "drop-regions,"
     "canonicalize,"
     "normalize-memrefs,"
     // Unstride memrefs does not seem to be needed.
