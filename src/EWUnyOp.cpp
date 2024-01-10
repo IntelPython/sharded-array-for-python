@@ -190,8 +190,10 @@ static ::imex::ndarray::EWUnyOpId sharpy(const EWUnyOpId uop) {
     return ::imex::ndarray::LOGICAL_NOT;
   case __NEG__:
   case NEGATIVE:
+    return ::imex::ndarray::NEGATIVE;
   case __POS__:
   case POSITIVE:
+    return ::imex::ndarray::POSITIVE;
   default:
     throw std::runtime_error("Unknown/invalid elementwise unary operation");
   }
@@ -213,24 +215,31 @@ struct DeferredEWUnyOp : public Deferred {
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
+    auto ndOpId = sharpy(_op);
     auto uop = builder.create<::imex::ndarray::EWUnyOp>(
-        loc, outTyp, builder.getI32IntegerAttr(sharpy(_op)), av);
+        loc, outTyp, builder.getI32IntegerAttr(ndOpId), av);
+    // positive op will be eliminated so it is equivalent to a view
+    auto view = ndOpId == ::imex::ndarray::POSITIVE;
 
     dm.addVal(
         this->guid(), uop,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, uint64_t *lo_allocated,
-               uint64_t *lo_aligned) {
-          this->set_value(std::move(mk_tnsr(
-              this->guid(), _dtype, this->shape(), this->device(), this->team(),
-              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
-              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+        [this, view](uint64_t rank, void *l_allocated, void *l_aligned,
+                     intptr_t l_offset, const intptr_t *l_sizes,
+                     const intptr_t *l_strides, void *o_allocated,
+                     void *o_aligned, intptr_t o_offset,
+                     const intptr_t *o_sizes, const intptr_t *o_strides,
+                     void *r_allocated, void *r_aligned, intptr_t r_offset,
+                     const intptr_t *r_sizes, const intptr_t *r_strides,
+                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), l_allocated, l_aligned, l_offset,
+                           l_sizes, l_strides, o_allocated, o_aligned, o_offset,
+                           o_sizes, o_strides, r_allocated, r_aligned, r_offset,
+                           r_sizes, r_strides, lo_allocated, lo_aligned);
+          if (view && Registry::has(_a)) {
+            t->set_base(Registry::get(_a).get());
+          }
+          this->set_value(std::move(t));
         });
     return false;
   }
