@@ -312,7 +312,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     int vtExeSym, vtSHARPYClass;
     VT(VT_classdef, "sharpy", &vtSHARPYClass);
     VT(VT_funcdef, "execute", vtSHARPYClass, &vtExeSym);
-    auto s = builder.create<::mlir::arith::ConstantOp>(
+    ::mlir::Value s = builder.create<::mlir::arith::ConstantOp>(
         loc, builder.getI32IntegerAttr(vtExeSym));
     auto end = builder.create<::mlir::func::CallOp>(
         builder.getUnknownLoc(), "VT_end",
