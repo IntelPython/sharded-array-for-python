@@ -153,7 +153,7 @@ get_property(imex_dialect_libs GLOBAL PROPERTY IMEX_DIALECT_LIBS)
 get_property(imex_conversion_libs GLOBAL PROPERTY IMEX_CONVERSION_LIBS)
 
 #llvm_update_compile_flags(_sharpy)
-target_link_directories(_sharpy PRIVATE ${CONDA_PREFIX}/lib)
+target_link_directories(_sharpy PRIVATE ${CONDA_PREFIX}/lib ${IMEX_ROOT}/lib)
 target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
 
 target_link_libraries(_sharpy PRIVATE
