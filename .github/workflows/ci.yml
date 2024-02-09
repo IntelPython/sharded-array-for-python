@@ -159,6 +159,12 @@ jobs:
           mpirun -n 2 python -u ./shallow_water.py
           mpirun -n 3 python -u ./shallow_water.py
           mpirun -n 4 python -u ./shallow_water.py
+          python -u ./black_scholes.py -d f32
+          python -u ./black_scholes.py -d f64
+          SHARPY_FORCE_DIST=1 python -u ./black_scholes.py
+          mpirun -n 2 python -u ./black_scholes.py
+          mpirun -n 3 python -u ./black_scholes.py
+          mpirun -n 4 python -u ./black_scholes.py
           cd -
       - name: Cleanup
         run: |
