@@ -28,6 +28,10 @@ import numpy
 import time as time_mod
 import argparse
 
+import os
+
+device = os.getenv("SHARPY_USE_GPU", "")
+
 
 def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
@@ -94,8 +98,12 @@ def run(n, backend, datatype, benchmark_mode):
     t_end = 1.0
 
     # coordinate arrays
-    x_t_2d = fromfunction(lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype)
-    y_t_2d = fromfunction(lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype)
+    x_t_2d = fromfunction(
+        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype, device=device
+    )
+    y_t_2d = fromfunction(
+        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype, device=device
+    )
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
@@ -111,17 +119,17 @@ def run(n, backend, datatype, benchmark_mode):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    e = np.full(T_shape, 0.0, dtype)
-    u = np.full(U_shape, 0.0, dtype)
-    v = np.full(V_shape, 0.0, dtype)
+    e = np.full(T_shape, 0.0, dtype, device=device)
+    u = np.full(U_shape, 0.0, dtype, device=device)
+    v = np.full(V_shape, 0.0, dtype, device=device)
 
     # auxiliary variables for RK time integration
-    e1 = np.full(T_shape, 0.0, dtype)
-    u1 = np.full(U_shape, 0.0, dtype)
-    v1 = np.full(V_shape, 0.0, dtype)
-    e2 = np.full(T_shape, 0.0, dtype)
-    u2 = np.full(U_shape, 0.0, dtype)
-    v2 = np.full(V_shape, 0.0, dtype)
+    e1 = np.full(T_shape, 0.0, dtype, device=device)
+    u1 = np.full(U_shape, 0.0, dtype, device=device)
+    v1 = np.full(V_shape, 0.0, dtype, device=device)
+    e2 = np.full(T_shape, 0.0, dtype, device=device)
+    u2 = np.full(U_shape, 0.0, dtype, device=device)
+    v2 = np.full(V_shape, 0.0, dtype, device=device)
 
     def exact_elev(t, x_t_2d, y_t_2d, lx, ly):
         """

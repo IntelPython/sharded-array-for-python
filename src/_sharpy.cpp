@@ -91,6 +91,7 @@ void fini() {
   fini_transceiver();
   Deferred::fini();
   Registry::fini();
+  jit::fini();
   inited = false;
   finied = true;
 }

@@ -1,12 +1,12 @@
 import sharpy as sp
-import pytest
+from utils import device
 
 
 class TestTemporaries:
     def test_temp_inline(self):
         dtyp = sp.float32
-        a = sp.ones((6, 6), dtype=dtyp)
-        b = sp.ones((6, 6), dtype=dtyp)
+        a = sp.ones((6, 6), dtype=dtyp, device=device)
+        b = sp.ones((6, 6), dtype=dtyp, device=device)
 
         sp.sync()
         c = a[0:5, 0:5]
@@ -32,8 +32,8 @@ class TestTemporaries:
             b[0:5, 0:5] = b[0:5, 0:5] + c
 
         dtyp = sp.float32
-        a = sp.ones((6, 6), dtype=dtyp)
-        b = sp.ones((6, 6), dtype=dtyp)
+        a = sp.ones((6, 6), dtype=dtyp, device=device)
+        b = sp.ones((6, 6), dtype=dtyp, device=device)
 
         sp.sync()
         update(a, b)

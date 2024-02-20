@@ -213,7 +213,7 @@ struct DeferredMap : public Deferred {
           0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), nd, lIdx,
           [&](const std::vector<int64_t> &idx, auto *elPtr) {
             for (auto i = 0; i < nd; ++i) {
-              gIdx[i] = lOffs ? idx[i] + lOffs[i] : idx[i];
+              gIdx[i] = lOffs.empty() ? idx[i] : idx[i] + lOffs[i];
             }
             auto pyIdx = _make_tuple(gIdx);
             *elPtr =
@@ -273,26 +273,25 @@ struct DeferredGetItem : public Deferred {
     auto res = builder.create<::imex::ndarray::SubviewOp>(loc, outTyp, av, offs,
                                                           sizes, strides);
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *l_allocated, void *l_aligned,
-                     intptr_t l_offset, const intptr_t *l_sizes,
-                     const intptr_t *l_strides, void *o_allocated,
-                     void *o_aligned, intptr_t o_offset,
-                     const intptr_t *o_sizes, const intptr_t *o_strides,
-                     void *r_allocated, void *r_aligned, intptr_t r_offset,
-                     const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
-                auto t = mk_tnsr(this->guid(), _dtype, this->shape(),
-                                 this->device(), this->team(), l_allocated,
-                                 l_aligned, l_offset, l_sizes, l_strides,
-                                 o_allocated, o_aligned, o_offset, o_sizes,
-                                 o_strides, r_allocated, r_aligned, r_offset,
-                                 r_sizes, r_strides, lo_allocated, lo_aligned);
-                if (Registry::has(_a)) {
-                  t->set_base(Registry::get(_a).get());
-                } // else _a is a temporary and was dropped
-                this->set_value(std::move(t));
-              });
+    dm.addVal(
+        this->guid(), res,
+        [this](uint64_t rank, void *l_allocated, void *l_aligned,
+               intptr_t l_offset, const intptr_t *l_sizes,
+               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+               intptr_t o_offset, const intptr_t *o_sizes,
+               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
+               intptr_t r_offset, const intptr_t *r_sizes,
+               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), l_allocated, l_aligned, l_offset,
+                           l_sizes, l_strides, o_allocated, o_aligned, o_offset,
+                           o_sizes, o_strides, r_allocated, r_aligned, r_offset,
+                           r_sizes, r_strides, std::move(loffs));
+          if (Registry::has(_a)) {
+            t->set_base(Registry::get(_a).get());
+          } // else _a is a temporary and was dropped
+          this->set_value(std::move(t));
+        });
     return false;
   }
 

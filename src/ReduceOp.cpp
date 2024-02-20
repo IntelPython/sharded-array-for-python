@@ -142,13 +142,12 @@ struct DeferredReduceOp : public Deferred {
                intptr_t o_offset, const intptr_t *o_sizes,
                const intptr_t *o_strides, void *r_allocated, void *r_aligned,
                intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, uint64_t *lo_allocated,
-               uint64_t *lo_aligned) {
+               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
           this->set_value(std::move(mk_tnsr(
               this->guid(), _dtype, this->shape(), this->device(), this->team(),
               l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
               o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, lo_allocated, lo_aligned)));
+              r_offset, r_sizes, r_strides, std::move(loffs))));
         });
     return false;
   }

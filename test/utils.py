@@ -5,9 +5,11 @@ from os import getenv
 
 sharpy.fromfunction = fromfunction
 
+device = getenv("SHARPY_USE_GPU", "")
+
 
 def runAndCompare(func, do_gather=True):
-    aa = func(sharpy)
+    aa = func(sharpy, device=device)
     a = sharpy.spmd.gather(aa) if do_gather else aa
     b = func(numpy)
     if isinstance(b, numpy.ndarray):
@@ -18,16 +20,14 @@ def runAndCompare(func, do_gather=True):
 mpi_dtypes = [
     sharpy.float32,
     sharpy.int32,
+    sharpy.uint32,
 ]
 
-on_gpu = getenv("SHARPY_USE_GPU", False)
-
-if not on_gpu:
+if len(device) == 0:
     mpi_dtypes += [
         sharpy.float64,
         sharpy.int64,
         sharpy.uint64,
-        sharpy.uint32,
         sharpy.int8,
         sharpy.uint8,
     ]

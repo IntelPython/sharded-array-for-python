@@ -1,14 +1,15 @@
 import numpy as np
 import sharpy as sp
 import pytest
+from utils import device
 
 
 class TestLinAlg:
     @pytest.mark.skip(reason="FIXME")
     def test_vecdot1(self):
         def gen(m):
-            a = m.arange(1, 36, 1, dtype=m.float64)
-            b = m.arange(1, 22, 1, dtype=m.float64)
+            a = m.arange(1, 36, 1, dtype=m.float64, device=device)
+            b = m.arange(1, 22, 1, dtype=m.float64, device=device)
             return m.reshape(a, (5, 7)), m.reshape(b, (7, 3))
 
         a, b = gen(dt)

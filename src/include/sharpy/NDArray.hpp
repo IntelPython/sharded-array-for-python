@@ -47,11 +47,10 @@ template <typename T> struct SharedBaseObject : public BaseObj {
 /// MLIR.
 class NDArray : public array_i, protected ArrayMeta {
   mutable rank_type _owner = NOOWNER;
-  uint64_t *_lo_allocated = nullptr;
-  uint64_t *_lo_aligned = nullptr;
   DynMemRef _lhsHalo;
   DynMemRef _lData;
   DynMemRef _rhsHalo;
+  std::vector<int64_t> _lOffsets;
   BaseObj *_base = nullptr;
 
 public:
@@ -73,8 +72,7 @@ public:
           void *o_aligned, intptr_t o_offset, const intptr_t *o_sizes,
           const intptr_t *o_strides, void *r_allocated, void *r_aligned,
           intptr_t r_offset, const intptr_t *r_sizes, const intptr_t *r_strides,
-          uint64_t *lo_allocated, uint64_t *lo_aligned,
-          rank_type owner = NOOWNER);
+          std::vector<int64_t> &&loffs, rank_type owner = NOOWNER);
 
   NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
           std::string device, uint64_t team, rank_type owner = NOOWNER);
@@ -193,8 +191,15 @@ public:
   /// assuming array has ndims dims.
   virtual void add_to_args(std::vector<void *> &args) const override;
 
+  /// @return locally owned data as DynMemref
+  const DynMemRef &owned_data() const { return _lData; }
+  /// @return left halo as DynMemref
+  const DynMemRef &left_halo() const { return _lhsHalo; }
+  /// @return right halo as DynMemref
+  const DynMemRef &right_halo() const { return _rhsHalo; }
+
   /// @return local offsets into global array
-  const uint64_t *local_offsets() const { return _lo_aligned; }
+  const std::vector<int64_t> &local_offsets() const { return _lOffsets; }
   /// @return shape of local data
   const int64_t *local_shape() const { return _lData._sizes; }
   /// @return strides of local data

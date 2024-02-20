@@ -86,6 +86,7 @@
 // #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 // #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 // #include "mlir/Target/LLVMIR/Dialect/OpenMP/OpenMPToLLVMIRTranslation.h"
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 
 #include <llvm/Support/raw_sha1_ostream.h>
 
@@ -140,55 +141,58 @@ static ::mlir::Type makeSignlessType(::mlir::Type type) {
   return envs;
 }
 
-// convert sharpy's DTYpeId into MLIR type
-static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
-                             const ::mlir::SmallVector<int64_t> &gShape,
-                             const ::mlir::SmallVector<int64_t> &lhShape,
-                             const ::mlir::SmallVector<int64_t> &ownShape,
-                             const ::mlir::SmallVector<int64_t> &rhShape,
-                             const std::string &device, uint64_t team,
-                             const uint64_t *lOffs) {
-  ::mlir::Type etyp;
-
+::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dtype) {
   switch (dtype) {
   case FLOAT64:
-    etyp = builder.getF64Type();
+    return builder.getF64Type();
     break;
   case FLOAT32:
-    etyp = builder.getF32Type();
+    return builder.getF32Type();
     break;
   case INT64:
   case UINT64:
-    etyp = builder.getI64Type();
+    return builder.getI64Type();
     break;
   case INT32:
   case UINT32:
-    etyp = builder.getI32Type();
+    return builder.getI32Type();
     break;
   case INT16:
   case UINT16:
-    etyp = builder.getIntegerType(16);
+    return builder.getIntegerType(16);
     break;
   case INT8:
   case UINT8:
-    etyp = builder.getI8Type();
+    return builder.getI8Type();
     break;
   case BOOL:
-    etyp = builder.getI1Type();
+    return builder.getI1Type();
     break;
   default:
     throw std::runtime_error("unknown dtype");
   };
+  return {};
+}
 
+// convert sharpy's DTYpeId into MLIR type
+static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
+                             const std::string &device,
+                             const ::mlir::ArrayRef<int64_t> ownShape,
+                             uint64_t team = 0,
+                             const ::mlir::ArrayRef<int64_t> gShape = {},
+                             const ::mlir::ArrayRef<int64_t> lOffs = {},
+                             const ::mlir::ArrayRef<int64_t> lhShape = {},
+                             const ::mlir::ArrayRef<int64_t> rhShape = {}) {
+  ::mlir::Type etyp(getMLIRType(builder, dtype));
   auto rank = gShape.size();
   auto envs = mkEnvs(builder, rank, device, 0);
   if (team) {
     if (rank) {
       envs.emplace_back(::imex::dist::DistEnvAttr::get(
-          builder.getI64IntegerAttr(team),
-          ::llvm::ArrayRef<int64_t>(reinterpret_cast<const int64_t *>(lOffs),
-                                    rank),
-          {lhShape, ownShape, rhShape}));
+          builder.getI64IntegerAttr(team), lOffs,
+          {::mlir::SmallVector<int64_t>(lhShape),
+           ::mlir::SmallVector<int64_t>(ownShape),
+           ::mlir::SmallVector<int64_t>(rhShape)}));
       return ::imex::ndarray::NDArrayType::get(gShape, etyp, envs);
     } else {
       envs.emplace_back(
@@ -197,6 +201,51 @@ static ::mlir::Type getTType(::mlir::OpBuilder &builder, DTypeId dtype,
     }
   } else {
     return ::imex::ndarray::NDArrayType::get(ownShape, etyp, envs);
+  }
+}
+
+std::string DepManager::_fname = "sharpy_jit";
+
+DepManager::DepManager(jit::JIT &jit) : _jit(jit), _builder(&jit.context()) {
+  auto loc = _builder.getUnknownLoc();
+
+  // Create a MLIR module
+  _module = _builder.create<::mlir::ModuleOp>(loc);
+  // Create the jit func
+  // create dummy type, we'll replace it with the actual type later
+  auto dummyFuncType = _builder.getFunctionType({}, {});
+  _func = _builder.create<::mlir::func::FuncOp>(loc, _fname, dummyFuncType);
+  // create function entry block
+  auto &entryBlock = *_func.addEntryBlock();
+  // Set the insertion point in the _builder to the beginning of the function
+  // body
+  _builder.setInsertionPointToStart(&entryBlock);
+}
+
+void DepManager::finalizeAndRun() {
+  // get input buffers (before results!)
+  auto input = std::move(finalize_inputs());
+  // create return statement and adjust function type
+  uint64_t osz = handleResult(_builder);
+  // also request generation of c-wrapper function
+  _func->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(),
+                 _builder.getUnitAttr());
+  if (_jit.verbose())
+    _func.getFunctionType().dump();
+  // add the function to the module
+  _module.push_back(_func);
+
+  if (osz > 0 || !input.empty()) {
+    // compile and run the module
+    auto output = _jit.run(_module, _fname, input, osz);
+    if (output.size() != osz)
+      throw std::runtime_error("failed running jit");
+
+    // push results to deliver promises
+    deliver(output, osz);
+  } else {
+    if (_jit.verbose())
+      std::cerr << "\tskipping\n";
   }
 }
 
@@ -215,38 +264,113 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
   if (auto d = findInOut(guid); !d) {
     // this must be an argument, so the future should be ready
     auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
-    return getDependent(builder, impl.get());
+    return addDependent(builder, impl.get());
   } else {
     return d->_value;
   }
 };
 
-::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
+static ::mlir::MemRefType getMRType(size_t ndims, intptr_t offset,
+                                    intptr_t *sizes, intptr_t *strides,
+                                    ::mlir::Type elType) {
+  auto layout = ::mlir::StridedLayoutAttr::get(elType.getContext(), offset,
+                                               {strides, ndims});
+  return ::mlir::MemRefType::get({sizes, ndims}, elType, layout);
+}
+
+static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
+                                    ::mlir::Type elType) {
+  return getMRType(ndims, mr._offset, mr._sizes, mr._strides, elType);
+}
+
+// add a new array input argument to the jit function
+// the array is passed as memrefs and integers
+// a initializing operation is added at the beginning of the function to form a
+// ndarray returns the value to be used by users of the array
+::mlir::Value DepManager::addDependent(::mlir::OpBuilder &builder,
                                        const NDArray *impl) {
   id_type guid = impl->guid();
-  // this must be an input argument to the jit function
+  // this must not yet be an input argument to the jit function
   assert(!findInOut(guid));
 
-  auto idx = _lastIn++;
-  auto rank = impl->ndims();
-  ::mlir::SmallVector<int64_t> lhShape(rank), ownShape(rank), rhShape(rank);
-  for (size_t i = 0; i < rank; i++) {
-    lhShape[i] = impl->lh_shape() ? impl->lh_shape()[i] : 0;
-    ownShape[i] = impl->local_shape()[i];
-    rhShape[i] = impl->rh_shape() ? impl->rh_shape()[i] : 0;
+  auto idx = _lastIn;
+  size_t ndims = impl->ndims();
+  ::mlir::SmallVector<int64_t> zeros(ndims, 0);
+  auto lhShape = impl->lh_shape() ? impl->lh_shape() : zeros.data();
+  auto ownShape = impl->local_shape();
+  auto rhShape = impl->rh_shape() ? impl->rh_shape() : zeros.data();
+  auto elType(getMLIRType(builder, impl->dtype()));
+  auto loc = builder.getUnknownLoc();
+  ::mlir::Value val;
+
+  ::mlir::OpBuilder::InsertionGuard g(_builder);
+  _builder.setInsertionPointToStart(&_func.front());
+
+  auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
+    intptr_t *buff = new intptr_t[memref_sz(ndims)];
+    buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
+    buff[1] = reinterpret_cast<intptr_t>(mr._aligned);
+    buff[2] = static_cast<intptr_t>(mr._offset);
+    memcpy(buff + 3, mr._sizes, ndims * sizeof(intptr_t));
+    memcpy(buff + 3 + ndims, mr._strides, ndims * sizeof(intptr_t));
+    return buff;
+  }; // FIXME memory leak?
+
+  if (impl->team() == 0 || ndims == 0) {
+    // no-dist-mode is simpler: just the local data memref
+    auto typ = getMRType(ndims, impl->owned_data(), elType);
+    _func.insertArgument(idx, typ, {}, loc);
+    _inputs.push_back(storeMR(impl->owned_data()));
+    auto arTyp = getTType(builder, impl->dtype(), impl->device(),
+                          {impl->shape(), ndims});
+    val = _builder.create<::imex::ndarray::FromMemRefOp>(
+        loc, arTyp, _func.getArgument(idx));
+    _lastIn += 1;
+  } else {
+    auto typ = getMRType(ndims, impl->left_halo(), elType);
+    _func.insertArgument(idx++, typ, {}, loc);
+    _inputs.push_back(storeMR(impl->left_halo()));
+
+    typ = getMRType(ndims, impl->owned_data(), elType);
+    _func.insertArgument(idx++, typ, {}, loc);
+    _inputs.push_back(storeMR(impl->owned_data()));
+
+    typ = getMRType(ndims, impl->right_halo(), elType);
+    _func.insertArgument(idx++, typ, {}, loc);
+    _inputs.push_back(storeMR(impl->right_halo()));
+
+    auto lhTyp =
+        getTType(builder, impl->dtype(), impl->device(), {lhShape, ndims});
+    auto owTyp =
+        getTType(builder, impl->dtype(), impl->device(), {ownShape, ndims});
+    auto rhTyp =
+        getTType(builder, impl->dtype(), impl->device(), {rhShape, ndims});
+
+    ::mlir::Value lhalo = _builder.create<::imex::ndarray::FromMemRefOp>(
+        loc, lhTyp, _func.getArgument(_lastIn));
+    ::mlir::Value owned = _builder.create<::imex::ndarray::FromMemRefOp>(
+        loc, owTyp, _func.getArgument(_lastIn + 1));
+    ::mlir::Value rhalo = _builder.create<::imex::ndarray::FromMemRefOp>(
+        loc, rhTyp, _func.getArgument(_lastIn + 2));
+
+    ::imex::ValVec lOffs;
+    for (size_t i = 0; i < ndims; ++i) {
+      assert(!::mlir::ShapedType::isDynamic(impl->local_offsets()[i]));
+      lOffs.emplace_back(
+          ::imex::createIndex(loc, builder, impl->local_offsets()[i]));
+    }
+
+    auto darTyp =
+        getTType(builder, impl->dtype(), impl->device(), {ownShape, ndims},
+                 impl->team(), {impl->shape(), ndims}, {impl->local_offsets()},
+                 {lhShape, ndims}, {rhShape, ndims});
+
+    val = _builder.create<::imex::dist::InitDistArrayOp>(
+        loc, darTyp, lOffs, ::mlir::ValueRange{lhalo, owned, rhalo});
+    _lastIn += 3;
   }
 
-  auto typ = getTType(
-      builder, impl->dtype(),
-      ::mlir::SmallVector<int64_t>(impl->shape(), impl->shape() + rank),
-      lhShape, ownShape, rhShape, impl->device(), impl->team(),
-      impl->local_offsets());
-  _func.insertArgument(idx, typ, {}, builder.getUnknownLoc());
-
-  auto val = _func.getArgument(idx);
-  impl->add_to_args(_inputs);
   _inOut.emplace_back(InOut(guid, val));
-
   return val;
 }
 
@@ -286,6 +410,7 @@ void DepManager::drop(id_type guid) {
 uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   // Need a container to put all return values, will be used to construct
   // TypeRange
+  mlir::OpBuilder::InsertionGuard guard(builder);
   std::vector<::mlir::Value> ret_values;
 
   // here we store the total size of the llvm struct
@@ -296,15 +421,42 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     ::mlir::Value value = x._value;
     if (value) {
       bool isDist = ::imex::dist::isDist(value.getType());
-      ret_values.emplace_back(value);
-      _func.insertResult(idx, value.getType(), {});
       auto rank =
           value.getType().cast<::imex::ndarray::NDArrayType>().getRank();
-      x._rank = rank;
-      x._isDist = isDist;
-      // add sizes of array
-      sz += ndarray_sz(rank, isDist);
-      ++idx;
+      ::imex::ValVec parts;
+
+      if (isDist) {
+        builder.setInsertionPointToEnd(&_func.front());
+        parts =
+            builder
+                .create<::imex::dist::PartsOfOp>(builder.getUnknownLoc(), value)
+                .getResults();
+      } else {
+        parts.emplace_back(value);
+      }
+
+      for (auto p : parts) {
+        ret_values.emplace_back(p);
+        _func.insertResult(idx, p.getType(), {});
+        x._rank = rank;
+        x._isDist = isDist;
+        // add sizes of array
+        sz += ndarray_sz(rank, isDist);
+        ++idx;
+      }
+
+      if (isDist && rank) {
+        auto lOffs = builder
+                         .create<::imex::dist::LocalOffsetsOfOp>(
+                             builder.getUnknownLoc(), value)
+                         .getResults();
+        for (auto o : lOffs) {
+          ret_values.emplace_back(o);
+          _func.insertResult(idx, o.getType(), {});
+          ++sz;
+          ++idx;
+        }
+      }
     }
   }
 
@@ -360,22 +512,21 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
                        t_offset[t], t_sizes[t], t_strides[t]);
         }
         // lastly extract local offsets
-        uint64_t *lo_allocated = reinterpret_cast<uint64_t *>(output[pos]);
-        uint64_t *lo_aligned = reinterpret_cast<uint64_t *>(output[pos + 1]);
-        intptr_t lo_offset = output[pos + 2];
-        // no sizes/stride needed, just skip
-        pos += memref_sz(1);
+        std::vector<int64_t> l_offs;
+        size_t end = pos + x._rank;
+        for (; pos < end; ++pos) {
+          l_offs.emplace_back(output[pos]);
+        }
         if (x._setResFunc) {
           // call finalization callback
-          x._setResFunc(
-              x._rank, t_allocated[0], t_aligned[0], t_offset[0], t_sizes[0],
-              t_strides[0], // lhsHalo
-              t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
-              t_strides[1], // lData
-              t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
-              t_strides[2], // rhsHalo
-              lo_allocated,
-              lo_aligned + lo_offset // local offset is 1d array of uint64_t
+          x._setResFunc(x._rank, t_allocated[0], t_aligned[0], t_offset[0],
+                        t_sizes[0],
+                        t_strides[0], // lhsHalo
+                        t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
+                        t_strides[1], // lData
+                        t_allocated[2], t_aligned[2], t_offset[2], t_sizes[2],
+                        t_strides[2],     // rhsHalo
+                        std::move(l_offs) // local offset is 1d array of int64_t
           );
         }
       } else { // 0d array or non-dist
@@ -387,7 +538,7 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
                         t_allocated[1], t_aligned[1], t_offset[1], t_sizes[1],
                         t_strides[1],                          // lData
                         nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
-                        nullptr, nullptr);
+                        {});
         }
       }
     }
@@ -403,6 +554,10 @@ void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
   // finally clear
   _inOut.clear();
 }
+
+static std::map<std::array<unsigned char, 20>,
+                std::unique_ptr<::mlir::ExecutionEngine>>
+    engineCache;
 
 std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
                                const std::string &fname,
@@ -434,9 +589,6 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
 
   if (_useCache) {
     VT(VT_begin, vtHashGenSym);
-    static std::map<std::array<unsigned char, 20>,
-                    std::unique_ptr<::mlir::ExecutionEngine>>
-        engineCache;
 
     llvm::raw_sha1_ostream shaOS;
     module->print(shaOS);
@@ -565,6 +717,7 @@ static const char *cpu_pipeline = "ndarray-dist,"
 
 static const char *gpu_pipeline =
     "add-gpu-regions,"
+    "canonicalize,"
     "ndarray-dist,"
     "func.func(dist-coalesce),"
     "func.func(dist-infer-elementwise-cores),"
@@ -605,9 +758,8 @@ static const char *gpu_pipeline =
     "func.func(insert-gpu-allocs{in-regions=1}),"
     "drop-regions,"
     "canonicalize,"
-    "normalize-memrefs,"
-    // Unstride memrefs does not seem to be needed.
-    //  "func.func(unstride-memrefs),"
+    // "normalize-memrefs,"
+    // "gpu-decompose-memrefs,"
     "func.func(lower-affine),"
     "gpu-kernel-outlining,"
     "canonicalize,"
@@ -741,7 +893,7 @@ JIT::JIT()
 // register dialects and passes
 void init() {
   assert(sizeof(intptr_t) == sizeof(void *));
-  assert(sizeof(intptr_t) == sizeof(uint64_t));
+  assert(sizeof(intptr_t) == sizeof(int64_t));
 
   ::mlir::registerAllPasses();
   ::imex::registerAllPasses();
@@ -752,5 +904,7 @@ void init() {
   ::llvm::InitializeNativeTargetAsmPrinter();
   ::llvm::InitializeNativeTargetAsmParser();
 }
+
+void fini() { engineCache.clear(); }
 } // namespace jit
 } // namespace SHARPY

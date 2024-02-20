@@ -15,9 +15,6 @@
 #include "include/sharpy/itac.hpp"
 #include "include/sharpy/jit/mlir.hpp"
 
-#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
-#include <mlir/Dialect/Func/IR/FuncOps.h>
-#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <oneapi/tbb/concurrent_queue.h>
 
 #include <pybind11/pybind11.h>
@@ -96,36 +93,13 @@ void process_promises() {
   std::vector<Runable::ptr_type> deleters;
 
   do {
-    ::mlir::OpBuilder builder(&jit.context());
-    auto loc = builder.getUnknownLoc();
-
-    // Create a MLIR module
-    auto module = builder.create<::mlir::ModuleOp>(loc);
-    // Create the jit func
-    // create dummy type, we'll replace it with the actual type later
-    auto dummyFuncType = builder.getFunctionType({}, {});
-    if (false) {
-      ::mlir::OpBuilder::InsertionGuard guard(builder);
-      // Insert before module terminator.
-      builder.setInsertionPoint(module.getBody(),
-                                std::prev(module.getBody()->end()));
-      auto func = builder.create<::mlir::func::FuncOp>(loc, "_debugFunc",
-                                                       dummyFuncType);
-      func.setPrivate();
-    }
-    std::string fname("sharpy_jit");
-    auto function =
-        builder.create<::mlir::func::FuncOp>(loc, fname, dummyFuncType);
-    // create function entry block
-    auto &entryBlock = *function.addEntryBlock();
-    // Set the insertion point in the builder to the beginning of the function
-    // body
-    builder.setInsertionPointToStart(&entryBlock);
     // we need to keep runables/deferred/futures alive until we set their values
     // below
     std::vector<Runable::ptr_type> runables;
 
-    jit::DepManager dm(function);
+    jit::DepManager dm(jit);
+    auto &builder = dm.getBuilder();
+    auto loc = builder.getUnknownLoc();
     Runable::ptr_type d;
 
     if (!deleters.empty()) {
@@ -160,30 +134,7 @@ void process_promises() {
     }
 
     if (!runables.empty()) {
-      // get input buffers (before results!)
-      auto input = std::move(dm.finalize_inputs());
-      // create return statement and adjust function type
-      uint64_t osz = dm.handleResult(builder);
-      // also request generation of c-wrapper function
-      function->setAttr(::mlir::LLVM::LLVMDialect::getEmitCWrapperAttrName(),
-                        builder.getUnitAttr());
-      if (jit.verbose())
-        function.getFunctionType().dump();
-      // add the function to the module
-      module.push_back(function);
-
-      if (osz > 0 || !input.empty()) {
-        // compile and run the module
-        auto output = jit.run(module, fname, input, osz);
-        if (output.size() != osz)
-          throw std::runtime_error("failed running jit");
-
-        // push results to deliver promises
-        dm.deliver(output, osz);
-      } else {
-        if (jit.verbose())
-          std::cerr << "\tskipping\n";
-      }
+      dm.finalizeAndRun();
     } // no else needed
 
     // now we execute the deferred action which could not be compiled

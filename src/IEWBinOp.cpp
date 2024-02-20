@@ -94,7 +94,7 @@ struct DeferredIEWBinOp : public Deferred {
                      const intptr_t *o_sizes, const intptr_t *o_strides,
                      void *r_allocated, void *r_aligned, intptr_t r_offset,
                      const intptr_t *r_sizes, const intptr_t *r_strides,
-                     uint64_t *lo_allocated, uint64_t *lo_aligned) {
+                     std::vector<int64_t> &&loffs) {
                 this->set_value(Registry::get(this->_a).get());
               });
     return false;

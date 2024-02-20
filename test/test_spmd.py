@@ -2,7 +2,7 @@ import numpy as np
 from mpi4py import MPI
 import sharpy as sp
 from sharpy import _sharpy_cw
-from utils import on_gpu
+from utils import device
 import pytest
 import os
 
@@ -12,7 +12,9 @@ class TestSPMD:
     @pytest.mark.skip(reason="FIXME")
     def test_get_slice(self):
         a = sp.ones(
-            (2 + MPI.COMM_WORLD.size * 2, 2 + MPI.COMM_WORLD.size * 2), sp.float32
+            (2 + MPI.COMM_WORLD.size * 2, 2 + MPI.COMM_WORLD.size * 2),
+            sp.float32,
+            device=device,
         )
         MPI.COMM_WORLD.barrier()
         b = sp.spmd.get_slice(
@@ -27,9 +29,8 @@ class TestSPMD:
         assert c == v
         MPI.COMM_WORLD.barrier()
 
-    @pytest.mark.skipif(on_gpu, reason="FIXME GPU")
     def test_get_locals(self):
-        a = sp.ones((32, 32), sp.float32)
+        a = sp.ones((32, 32), sp.float32, device=device)
         l = sp.spmd.get_locals(a)[0]
         l[0, 0] = 0
         MPI.COMM_WORLD.barrier()
@@ -44,7 +45,7 @@ class TestSPMD:
     # )
     @pytest.mark.skip(reason="FIXME imex-remove-temporaries")
     def test_get_locals_of_view(self):
-        a = sp.ones((32, 32), sp.float32)
+        a = sp.ones((32, 32), sp.float32, device=device)
         b = a[0:32:2, 0:32:2]
         l = sp.spmd.get_locals(b)[0]
         assert len(l) > 0
@@ -57,15 +58,17 @@ class TestSPMD:
 
     @pytest.mark.skip(reason="FIXME reshape")
     def test_gather1(self):
-        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32), [11, 10])
+        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10])
         b = sp.spmd.gather(a)
         c = np.sum(b)
-        v = np.sum(np.reshape(np.arange(0, 110, 1, dtype=np.float32), (11, 10)))
+        v = np.sum(
+            np.reshape(np.arange(0, 110, 1, dtype=np.float32, device=device), (11, 10))
+        )
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
 
     def test_gather2(self):
-        a = sp.arange(0, 110, 1, dtype=sp.float32)
+        a = sp.arange(0, 110, 1, dtype=sp.float32, device=device)
         b = sp.spmd.gather(a)
         c = np.sum(b)
         v = np.sum(np.arange(0, 110, 1, dtype=np.float32))
@@ -74,7 +77,7 @@ class TestSPMD:
 
     @pytest.mark.skip(reason="FIXME reshape")
     def test_gather_strided1(self):
-        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32), [11, 10])
+        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10])
         b = sp.spmd.gather(a[4:12:2, 1:11:3])
         c = np.sum(b)
         v = np.sum(
@@ -84,7 +87,7 @@ class TestSPMD:
         MPI.COMM_WORLD.barrier()
 
     def test_gather_strided2(self):
-        a = sp.arange(0, 110, 1, dtype=sp.float32)
+        a = sp.arange(0, 110, 1, dtype=sp.float32, device=device)
         b = sp.spmd.gather(a[34:82:2])
         c = np.sum(b)
         v = np.sum(np.arange(0, 110, 1, dtype=np.float32)[34:82:2])

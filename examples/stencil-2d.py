@@ -47,7 +47,7 @@
 #          The output consists of diagnostics to make sure the
 #          algorithm worked, and of timing statistics.
 #
-# HISTORY: - Written by Rob Van der Wijngnumpyrt, February 2009.
+# HISTORY: - Written by Rob Van der Wijngaart, February 2009.
 #          - RvdW: Removed unrolling pragmas for clarity;
 #            added constant to array "in" at end of each iteration to force
 #            refreshing of neighbor data in parallel versions; August 2013
@@ -55,7 +55,7 @@
 #
 # *******************************************************************
 
-import sys
+import sys, os
 
 print(
     "Python version = ", str(sys.version_info.major) + "." + str(sys.version_info.minor)
@@ -117,11 +117,13 @@ def main():
     print("Data type            = double precision")
     print("Compact representation of stencil loop body")
 
+    device = os.getenv("SHARPY_USE_GPU", "")
+
     # there is certainly a more Pythonic way to initialize W,
     # but it will have no impact on performance.
     t0 = timer()
-    W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float32)
-    B = np.zeros((n, n), dtype=np.float32)
+    W = np.zeros(((2 * r + 1), (2 * r + 1)), dtype=np.float32, device=device)
+    B = np.zeros((n, n), dtype=np.float32, device=device)
 
     if pattern == "star":
         stencil_size = 4 * r + 1
@@ -143,7 +145,9 @@ def main():
             W[r + j, r + j] = +1.0 / (4 * j * r)
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
-    A = np.numpy.fromfunction(lambda i, j: i + j, (n, n), dtype=np.float32)
+    A = np.numpy.fromfunction(
+        lambda i, j: i + j, (n, n), dtype=np.float32, device=device
+    )
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration

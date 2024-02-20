@@ -28,6 +28,10 @@ import numpy
 import time as time_mod
 import argparse
 
+import os
+
+device = os.getenv("SHARPY_USE_GPU", "")
+
 
 def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
@@ -94,16 +98,24 @@ def run(n, backend, datatype, benchmark_mode):
     t_end = 1.0
 
     # coordinate arrays
-    x_t_2d = fromfunction(lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype)
-    y_t_2d = fromfunction(lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype)
-    x_u_2d = fromfunction(lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype)
+    x_t_2d = fromfunction(
+        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype, device=device
+    )
+    y_t_2d = fromfunction(
+        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype, device=device
+    )
+    x_u_2d = fromfunction(
+        lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype, device=device
+    )
     y_u_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx + 1, ny), dtype=dtype
+        lambda i, j: ymin + j * dy + dy / 2, (nx + 1, ny), dtype=dtype, device=device
     )
     x_v_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny + 1), dtype=dtype
+        lambda i, j: xmin + i * dx + dx / 2, (nx, ny + 1), dtype=dtype, device=device
     )
-    y_v_2d = fromfunction(lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype)
+    y_v_2d = fromfunction(
+        lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype, device=device
+    )
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
@@ -120,32 +132,32 @@ def run(n, backend, datatype, benchmark_mode):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    e = np.full(T_shape, 0.0, dtype)
-    u = np.full(U_shape, 0.0, dtype)
-    v = np.full(V_shape, 0.0, dtype)
+    e = np.full(T_shape, 0.0, dtype, device=device)
+    u = np.full(U_shape, 0.0, dtype, device=device)
+    v = np.full(V_shape, 0.0, dtype, device=device)
 
     # potential vorticity
-    q = np.full(F_shape, 0.0, dtype)
+    q = np.full(F_shape, 0.0, dtype, device=device)
 
     # bathymetry
-    h = np.full(T_shape, 0.0, dtype)
+    h = np.full(T_shape, 0.0, dtype, device=device)
 
-    hu = np.full(U_shape, 0.0, dtype)
-    hv = np.full(V_shape, 0.0, dtype)
+    hu = np.full(U_shape, 0.0, dtype, device=device)
+    hv = np.full(V_shape, 0.0, dtype, device=device)
 
-    dudy = np.full(F_shape, 0.0, dtype)
-    dvdx = np.full(F_shape, 0.0, dtype)
+    dudy = np.full(F_shape, 0.0, dtype, device=device)
+    dvdx = np.full(F_shape, 0.0, dtype, device=device)
 
     # vector invariant form
-    H_at_f = np.full(F_shape, 0.0, dtype)
+    H_at_f = np.full(F_shape, 0.0, dtype, device=device)
 
     # auxiliary variables for RK time integration
-    e1 = np.full(T_shape, 0.0, dtype)
-    u1 = np.full(U_shape, 0.0, dtype)
-    v1 = np.full(V_shape, 0.0, dtype)
-    e2 = np.full(T_shape, 0.0, dtype)
-    u2 = np.full(U_shape, 0.0, dtype)
-    v2 = np.full(V_shape, 0.0, dtype)
+    e1 = np.full(T_shape, 0.0, dtype, device=device)
+    u1 = np.full(U_shape, 0.0, dtype, device=device)
+    v1 = np.full(V_shape, 0.0, dtype, device=device)
+    e2 = np.full(T_shape, 0.0, dtype, device=device)
+    u2 = np.full(U_shape, 0.0, dtype, device=device)
+    v2 = np.full(V_shape, 0.0, dtype, device=device)
 
     def exact_solution(t, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d):
         """
@@ -174,7 +186,7 @@ def run(n, backend, datatype, benchmark_mode):
         Water depth at rest
         """
         bath = 1.0
-        return bath * np.full(T_shape, 1.0, dtype)
+        return bath * np.full(T_shape, 1.0, dtype, device=device)
 
     # inital elevation
     u0, v0, e0 = exact_solution(0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d)

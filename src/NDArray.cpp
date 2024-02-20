@@ -21,16 +21,16 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
                  intptr_t o_offset, const intptr_t *o_sizes,
                  const intptr_t *o_strides, void *r_allocated, void *r_aligned,
                  intptr_t r_offset, const intptr_t *r_sizes,
-                 const intptr_t *r_strides, uint64_t *lo_allocated,
-                 uint64_t *lo_aligned, rank_type owner)
+                 const intptr_t *r_strides, std::vector<int64_t> &&loffs,
+                 rank_type owner)
     : ArrayMeta(guid_, dtype_, gShape, device_, team_), _owner(owner),
-      _lo_allocated(lo_allocated), _lo_aligned(lo_aligned),
       _lhsHalo(l_allocated ? gShape.size() : 0, l_allocated, l_aligned,
                l_offset, l_sizes, l_strides),
       _lData(o_allocated ? gShape.size() : 0, o_allocated, o_aligned, o_offset,
              o_sizes, o_strides),
       _rhsHalo(r_allocated ? gShape.size() : 0, r_allocated, r_aligned,
-               r_offset, r_sizes, r_strides) {
+               r_offset, r_sizes, r_strides),
+      _lOffsets(std::move(loffs)) {
   if (ndims() == 0) {
     _owner = REPLICATED;
   }
@@ -73,11 +73,10 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
                  const ssize_t *shape, const intptr_t *strides, void *data,
                  std::string device_, uint64_t team_)
     : ArrayMeta(guid_, dtype_, {shape, shape + ndims}, device_, team_),
-      _owner(NOOWNER), _lo_allocated(static_cast<uint64_t *>(
-                           calloc(ndims, sizeof_dtype(dtype_)))),
-      _lo_aligned(_lo_allocated),
+      _owner(NOOWNER),
       _lData(ndims, data, data, 0, reinterpret_cast<const intptr_t *>(shape),
-             reinterpret_cast<const intptr_t *>(strides)) {}
+             reinterpret_cast<const intptr_t *>(strides)),
+      _lOffsets(ndims, 0) {}
 
 void NDArray::set_base(const array_i::ptr_type &base) {
   _base = new SharedBaseObject<array_i::ptr_type>(base);
@@ -106,22 +105,13 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
         [a](::mlir::OpBuilder &builder, const ::mlir::Location &loc,
             jit::DepManager &dm) {
           assert(a);
-          uint64_t *ptr = const_cast<uint64_t *>(a->_lo_allocated);
           // don't do anything if runtime was shutdown
           if (finied) {
             std::cerr << "sharpy fini: detected possible memory leak\n";
-            if (ptr) {
-              free(ptr);
-            }
           } else {
-            auto av = dm.getDependent(builder, a);
+            auto av = dm.addDependent(builder, a);
             builder.create<::imex::ndarray::DeleteOp>(loc, av);
             dm.drop(a->guid());
-
-            if (ptr) {
-              // further defer deleting remaining memory until after execution
-              dm.addReady(a->guid(), [ptr](id_type guid) { free(ptr); });
-            }
           }
           return false;
         },
@@ -186,9 +176,9 @@ std::string NDArray::__repr__() const {
   for (auto i = 0; i < nd; ++i)
     oss << gshp[i] << (i == nd - 1 ? "" : ", ");
   oss << "), loff=(";
-  if (_lo_aligned)
+  if (_lOffsets.size())
     for (auto i = 0; i < nd; ++i)
-      oss << _lo_aligned[i] << (i == nd - 1 ? "" : ", ");
+      oss << _lOffsets[i] << (i == nd - 1 ? "" : ", ");
   oss << "), lsz=(";
   for (auto i = 0; i < nd; ++i)
     oss << _lData._sizes[i] << (i == nd - 1 ? "" : ", ");
@@ -264,8 +254,8 @@ void NDArray::add_to_args(std::vector<void *> &args) const {
     // local offsets last
     auto buff = new intptr_t[memref_sz(1)];
     assert(5 == memref_sz(1));
-    buff[0] = reinterpret_cast<intptr_t>(_lo_allocated);
-    buff[1] = reinterpret_cast<intptr_t>(_lo_aligned);
+    buff[0] = reinterpret_cast<intptr_t>(_lOffsets.data());
+    buff[1] = buff[0];
     buff[2] = 0;
     buff[3] = ndims;
     buff[4] = 1;
