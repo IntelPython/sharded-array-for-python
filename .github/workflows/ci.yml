@@ -33,7 +33,7 @@ jobs:
           MINICONDA_CACHE_NUMBER: 2  # Increase to reset cache
         with:
           path: third_party/install/miniconda/**
-          key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.yml') }}
+          key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.txt') }}
       - name: Miniconda
         if: steps.cache-miniconda.outputs.cache-hit != 'true'
         run: |
@@ -48,9 +48,8 @@ jobs:
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate
           cd -
-          conda env create -f conda-env.yml
+          conda create --file conda-env.txt --name sharpy
           conda clean -a -y
-          # conda create -q -n sharpy -c intel -c defaults pybind11 numpy cmake ninja impi-devel libstdcxx-ng mpi4py pytest scipy tbb-devel
       - name: Setup miniconda
         if: steps.cache-miniconda.outputs.cache-hit == 'true'
         run: |

@@ -198,7 +198,7 @@ MPITransceiver::alltoall(const void *buffer_send, const int *counts_send,
   MPI_Ialltoallv(buffer_send, counts_send, displacements_send, to_mpi(datatype),
                  buffer_recv, counts_recv, displacements_recv, to_mpi(datatype),
                  _comm, &request);
-  static_assert(sizeof(request == sizeof(WaitHandle)));
+  static_assert(sizeof(request) == sizeof(WaitHandle));
   return static_cast<WaitHandle>(request);
 }
 

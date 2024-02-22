@@ -175,7 +175,7 @@ target_link_libraries(_sharpy PRIVATE
     tbb
 )
 target_link_libraries(idtr PRIVATE
-    ${MPI_C_LIBRARIES}
+    ${MPI_CXX_LIBRARIES}
     # ${MKL_LIBRARIES}
     tbb
 )
