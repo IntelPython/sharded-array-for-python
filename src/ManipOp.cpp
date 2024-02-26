@@ -32,7 +32,7 @@ struct DeferredReshape : public Deferred {
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     ::mlir::SmallVector<::mlir::Value> shp(shape().size());
-    for (auto i = 0; i < shape().size(); ++i) {
+    for (auto i = 0ul; i < shape().size(); ++i) {
       shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
     }
     auto copyA =

@@ -160,13 +160,11 @@ struct DeferredSetItem : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
-    const auto dtype = this->dtype();
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto bv = dm.getDependent(builder, Registry::get(_b));
     auto &offs = _slc.offsets();
     auto &sizes = _slc.sizes();
     auto &strides = _slc.strides();
-    auto nd = offs.size();
 
     // insertsliceop has no return value, so we just create the op...
     (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
@@ -260,12 +258,10 @@ struct DeferredGetItem : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
-    const auto dtype = this->dtype();
     auto av = dm.getDependent(builder, Registry::get(_a));
     const auto &offs = _slc.offsets();
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
-    auto nd = offs.size();
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
 

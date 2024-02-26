@@ -14,30 +14,28 @@ https://data-apis.org/array-api/latest
 # are simply forwarded as-is.
 
 _bool = bool
-from typing import Any
-from . import _sharpy as _csp
-from ._sharpy import (
-    FLOAT64 as float64,
-    FLOAT32 as float32,
-    INT64 as int64,
-    INT32 as int32,
-    INT16 as int16,
-    INT8 as int8,
-    UINT64 as uint64,
-    UINT32 as uint32,
-    UINT16 as uint16,
-    UINT8 as uint8,
-    BOOL as bool,
-    init as _init,
-    fini,
-    sync,
-)
-
-from .ndarray import ndarray
-from os import getenv
 from importlib import import_module
+from os import getenv
+from typing import Any
+
+from . import _sharpy as _csp
 from . import array_api as api
 from . import spmd
+from ._sharpy import BOOL as bool
+from ._sharpy import FLOAT32 as float32
+from ._sharpy import FLOAT64 as float64
+from ._sharpy import INT8 as int8
+from ._sharpy import INT16 as int16
+from ._sharpy import INT32 as int32
+from ._sharpy import INT64 as int64
+from ._sharpy import UINT8 as uint8
+from ._sharpy import UINT16 as uint16
+from ._sharpy import UINT32 as uint32
+from ._sharpy import UINT64 as uint64
+from ._sharpy import fini
+from ._sharpy import init as _init
+from ._sharpy import sync
+from .ndarray import ndarray
 
 _sharpy_cw = _bool(int(getenv("SHARPY_CW", False)))
 

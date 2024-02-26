@@ -1,6 +1,7 @@
-import sharpy as sp
-from utils import runAndCompare
 import pytest
+from utils import runAndCompare
+
+import sharpy as sp
 
 
 class TestRed:

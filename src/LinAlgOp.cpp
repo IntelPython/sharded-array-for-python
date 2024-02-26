@@ -6,9 +6,9 @@
 
 #include <mpi.h>
 //#include <mkl.h>
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/LinAlgOp.hpp"
+#include "sharpy/NDArray.hpp"
 #include "sharpy/TypeDispatch.hpp"
 
 namespace SHARPY {
@@ -125,8 +125,8 @@ struct DeferredLinAlgOp : public Deferred {
   int _axis;
 
   DeferredLinAlgOp() = default;
-  DeferredLinAlgOp(const array_i::future_type &a,
-                   const array_i::future_type &b, int axis)
+  DeferredLinAlgOp(const array_i::future_type &a, const array_i::future_type &b,
+                   int axis)
       : _a(a.guid()), _b(b.guid()), _axis(axis) {}
 
   void run() {
@@ -144,7 +144,8 @@ struct DeferredLinAlgOp : public Deferred {
   }
 };
 
-FutureArray *LinAlgOp::vecdot(const FutureArray &a, const FutureArray &b, int axis) {
+FutureArray *LinAlgOp::vecdot(const FutureArray &a, const FutureArray &b,
+                              int axis) {
   return new FutureArray(defer<DeferredLinAlgOp>(a.get(), b.get(), axis));
 }
 

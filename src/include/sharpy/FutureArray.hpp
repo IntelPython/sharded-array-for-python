@@ -37,7 +37,7 @@ public:
   }
 
   const array_i::future_type &get() const { return _ftx; }
-  void const put(array_i::future_type &&f) {
+  void put(array_i::future_type &&f) {
     _ftx = std::forward<array_i::future_type>(f);
   }
 };

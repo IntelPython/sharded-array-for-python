@@ -22,9 +22,10 @@ Examples:
     python black_scholes.py -p M16Gb -b numpy
 
 """
-import numpy
-import time as time_mod
 import argparse
+import time as time_mod
+
+import numpy
 
 try:
     import mpi4py
@@ -150,7 +151,7 @@ def black_scholes(np, erf, nopt, price, strike, t, rate, volatility, call, put):
 def run(nopt, backend, iterations, datatype):
     if backend == "sharpy":
         import sharpy as np
-        from sharpy import init, fini, sync
+        from sharpy import fini, init, sync
 
         init(False)
         erf = np.erf

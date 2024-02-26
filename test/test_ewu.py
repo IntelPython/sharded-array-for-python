@@ -1,7 +1,8 @@
-import sharpy as sp
-import pytest
 import numpy
+import pytest
 from utils import device
+
+import sharpy as sp
 
 type_list = [sp.int32, sp.float32]
 

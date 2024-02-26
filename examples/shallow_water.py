@@ -23,12 +23,12 @@ Run with numpy backend
     python shallow_water.py -b numpy ...
 
 """
-import math
-import numpy
-import time as time_mod
 import argparse
-
+import math
 import os
+import time as time_mod
+
+import numpy
 
 device = os.getenv("SHARPY_USE_GPU", "")
 
@@ -36,8 +36,8 @@ device = os.getenv("SHARPY_USE_GPU", "")
 def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
         import sharpy as np
+        from sharpy import fini, init, sync
         from sharpy.numpy import fromfunction
-        from sharpy import init, fini, sync
 
         all_axes = [0, 1]
         init(False)

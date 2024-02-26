@@ -33,7 +33,6 @@ public:
   template <typename T>
   NDSlice(const std::vector<T> &v, const shape_type &shape)
       : _offsets(v.size()), _sizes(v.size()), _strides(v.size()) {
-    auto nd = v.size();
     auto i = 0;
     for (auto s : v) {
       compute_slice(s, shape[i], _offsets[i], _sizes[i], _strides[i]);

@@ -215,7 +215,7 @@ public:
   void printit(std::ostringstream &oss, uint64_t d, T *cptr) const {
     auto stride = _lData._strides[d];
     auto sz = _lData._sizes[d];
-    if (d == ndims() - 1) {
+    if (d == (uint64_t)ndims() - 1) {
       oss << "[";
       for (auto i = 0; i < sz; ++i) {
         oss << cptr[i * stride] << (i < sz - 1 ? " " : "");

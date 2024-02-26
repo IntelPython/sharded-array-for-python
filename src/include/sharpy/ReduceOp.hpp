@@ -6,13 +6,13 @@
 
 #pragma once
 
-#include "UtilsAndTypes.hpp"
 #include "FutureArray.hpp"
+#include "UtilsAndTypes.hpp"
 #include "p2c_ids.hpp"
 
 namespace SHARPY {
 struct ReduceOp {
   static FutureArray *op(ReduceOpId op, const FutureArray &a,
-                       const dim_vec_type &dim);
+                         const dim_vec_type &dim);
 };
 } // namespace SHARPY

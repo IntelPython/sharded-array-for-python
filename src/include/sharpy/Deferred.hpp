@@ -124,7 +124,9 @@ Deferred::future_type defer(Ts &&...args) {
                      true);
 }
 
-static void defer(nullptr_t) { push_runable(Runable::ptr_type()); }
+[[maybe_unused]] static void defer(nullptr_t) {
+  push_runable(Runable::ptr_type());
+}
 
 struct UnDeferred : public Deferred {
   UnDeferred(array_i::ptr_type ptr) { set_value(std::move(ptr)); }

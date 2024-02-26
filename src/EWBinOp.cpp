@@ -121,7 +121,6 @@ struct DeferredEWBinOp : public Deferred {
     auto bv = dm.getDependent(builder, Registry::get(_b));
 
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
-    auto bTyp = bv.getType().cast<::imex::ndarray::NDArrayType>();
     auto outElemType =
         ::imex::ndarray::toMLIR(builder, SHARPY::jit::getPTDType(_dtype));
     auto outTyp = aTyp.cloneWith(shape(), outElemType);

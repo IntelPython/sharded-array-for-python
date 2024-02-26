@@ -4,9 +4,9 @@
     Intel Distributed Runtime for MLIR
 */
 
-#include <sharpy/NDArray.hpp>
 #include <sharpy/MPITransceiver.hpp>
 #include <sharpy/MemRefType.hpp>
+#include <sharpy/NDArray.hpp>
 
 #include <imex/Dialect/NDArray/IR/NDArrayDefs.h>
 
@@ -29,8 +29,7 @@ inline SHARPY::id_type get_guid() { return ++_nguid; }
 // Transceiver * theTransceiver = MPITransceiver();
 
 template <typename T> T *mr_to_ptr(void *ptr, intptr_t offset) {
-  auto mr = reinterpret_cast<intptr_t *>(ptr);
-  return reinterpret_cast<T *>(ptr) + offset; // &mr.aligned[mr.offset]
+  return reinterpret_cast<T *>(ptr) + offset;
 }
 
 // abstract handle providing an abstract wait method
@@ -119,7 +118,7 @@ id_t idtr_init_array(const uint64_t *shape, uint64_t nD) {
 }
 
 id_t _idtr_init_array(void *alloced, void *aligned, intptr_t offset,
-                        intptr_t size, intptr_t stride, uint64_t nD) {
+                      intptr_t size, intptr_t stride, uint64_t nD) {
   return idtr_init_array(mr_to_ptr<uint64_t>(aligned, offset), nD);
 }
 
@@ -182,7 +181,8 @@ static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ndarray::ReduceOpId rop) {
 }
 
 // convert element type/dtype from MLIR to sharpy
-static SHARPY::DTypeId mlir2sharpy(const ::imex::ndarray::DType dt) {
+[[maybe_unused]] static SHARPY::DTypeId
+mlir2sharpy(const ::imex::ndarray::DType dt) {
   switch (dt) {
   case ::imex::ndarray::DType::F64:
     return SHARPY::FLOAT64;
@@ -230,19 +230,19 @@ void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
            [sizes, strides, tStarts, tSizes, nd, N, out](auto *ptr) {
              auto buff = static_cast<decltype(ptr)>(out);
 
-             for (auto i = 0; i < N; ++i) {
+             for (auto i = 0ul; i < N; ++i) {
                auto szs = &tSizes[i * nd];
                if (szs[0] > 0) {
                  auto sts = &tStarts[i * nd];
                  uint64_t off = 0;
-                 for (int64_t r = 0; r < nd; ++r) {
+                 for (auto r = 0ul; r < nd; ++r) {
                    off += sts[r] * strides[r];
                  }
                  SHARPY::forall(0, &ptr[off], szs, strides, nd,
-                              [&buff](const auto *in) {
-                                *buff = *in;
-                                ++buff;
-                              });
+                                [&buff](const auto *in) {
+                                  *buff = *in;
+                                  ++buff;
+                                });
                }
              }
            });
@@ -255,12 +255,12 @@ void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
   dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(in);
 
-    for (auto i = 0; i < N; ++i) {
+    for (auto i = 0ul; i < N; ++i) {
       auto szs = &tSizes[i * nd];
       if (szs[0] > 0) {
         auto sts = &tStarts[i * nd];
         uint64_t off = 0;
-        for (int64_t r = 0; r < nd; ++r) {
+        for (auto r = 0ul; r < nd; ++r) {
           off += sts[r] * strides[r];
         }
         SHARPY::forall(0, &ptr[off], szs, strides, nd, [&buff](auto *out) {
@@ -277,8 +277,8 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
            const int64_t *strides, const uint64_t *chunks, uint64_t nd,
            uint64_t start, uint64_t end, T *&out) {
   auto stride = strides[d];
-  auto sz = sizes[d];
-  auto chunk = chunks[d];
+  uint64_t sz = sizes[d];
+  uint64_t chunk = chunks[d];
   uint64_t first = 0;
   if (pos < start) {
     first = (start - pos) / chunk;
@@ -291,7 +291,7 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
     if (stride == 1) {
       memcpy(out, cptr, n * sizeof(T));
     } else {
-      for (auto i = 0; i < n; ++i) {
+      for (auto i = 0ul; i < n; ++i) {
         out[i] = cptr[i * stride];
       }
     }
@@ -320,7 +320,7 @@ void bufferizeN(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
   dispatch(dtype, cptr,
            [sizes, strides, tStarts, tEnds, nd, N, out, &chunks](auto *ptr) {
              auto buff = static_cast<decltype(ptr)>(out);
-             for (auto i = 0; i < N; ++i) {
+             for (auto i = 0ul; i < N; ++i) {
                auto start = tStarts[i];
                auto end = tEnds[i];
                if (end > start) {
@@ -368,11 +368,11 @@ TYPED_REDUCEALL(i1, bool);
 /// @brief reshape array
 /// We assume array is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank, int64_t *gShapePtr,
-                   void *lDataPtr, int64_t *lShapePtr, int64_t *lStridesPtr,
-                   int64_t *lOffsPtr, int64_t oRank, int64_t *oGShapePtr,
-                   void *oDataPtr, int64_t *oShapePtr, int64_t *oOffsPtr,
-                   SHARPY::Transceiver *tc) {
+void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
+                   int64_t *gShapePtr, void *lDataPtr, int64_t *lShapePtr,
+                   int64_t *lStridesPtr, int64_t *lOffsPtr, int64_t oRank,
+                   int64_t *oGShapePtr, void *oDataPtr, int64_t *oShapePtr,
+                   int64_t *oOffsPtr, SHARPY::Transceiver *tc) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
@@ -408,7 +408,7 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank, int64_t *gShapePtr
   buff[me * 4 + 3] = myTSz;
   ::std::vector<int> counts(N, 4);
   ::std::vector<int> dspl(N);
-  for (auto i = 0; i < N; ++i) {
+  for (auto i = 0ul; i < N; ++i) {
     dspl[i] = 4 * i;
   }
   tc->gather(buff.data(), counts.data(), dspl.data(), SHARPY::INT64,
@@ -425,7 +425,7 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank, int64_t *gShapePtr
   std::vector<int64_t> lsEnds(N, 0);
   int64_t totSSz = 0;
 
-  for (auto i = 0; i < N; ++i) {
+  for (auto i = 0ul; i < N; ++i) {
     int64_t *curr = &buff[i * 4];
     auto xOff = curr[0];
     auto xEnd = xOff + curr[1];
@@ -450,7 +450,8 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank, int64_t *gShapePtr
     }
   }
 
-  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype), 2); // FIXME debug value
+  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype),
+                         2); // FIXME debug value
   bufferizeN(lDataPtr, sharpytype, lShapePtr, lStridesPtr, lsOffs.data(),
              lsEnds.data(), lRank, N, outbuff.data());
   auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
@@ -485,7 +486,7 @@ extern "C" {
       int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
       void *lOffsDescr, int64_t rank, void *lDescr, int64_t oGShapeRank,       \
       void *oGShapeDescr, int64_t oOffsRank, void *oOffsDescr, int64_t oRank,  \
-      void *oDescr, SHARPY::Transceiver *tc) {                                   \
+      void *oDescr, SHARPY::Transceiver *tc) {                                 \
     _idtr_reshape<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr, rank,  \
                         lDescr, oGShapeRank, oGShapeDescr, oOffsRank,          \
                         oOffsDescr, oRank, oDescr, tc);                        \
@@ -556,11 +557,12 @@ struct UHCache {
   UHCache &operator=(UHCache &&) = default;
 };
 
-UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff,
-                    int64_t *ownedShape, int64_t *ownedStride, int64_t *bbOff,
-                    int64_t *bbShape, int64_t *leftHaloShape,
-                    int64_t *leftHaloStride, int64_t *rightHaloShape,
-                    int64_t *rightHaloStride, SHARPY::Transceiver *tc) {
+UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
+                    int64_t *ownedOff, int64_t *ownedShape,
+                    int64_t *ownedStride, int64_t *bbOff, int64_t *bbShape,
+                    int64_t *leftHaloShape, int64_t *leftHaloStride,
+                    int64_t *rightHaloShape, int64_t *rightHaloStride,
+                    SHARPY::Transceiver *tc) {
   UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
   cE._lTotalRecvSize = 0;
@@ -580,7 +582,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff
   }
   ::std::vector<int> counts(nworkers, ndims * 2);
   ::std::vector<int> offsets(nworkers);
-  for (auto i = 0; i < nworkers; ++i) {
+  for (auto i = 0ul; i < nworkers; ++i) {
     offsets[i] = 2 * ndims * i;
   }
   tc->gather(bbTable.data(), counts.data(), offsets.data(), SHARPY::INT64,
@@ -612,7 +614,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff
   cE._rBufferStart.resize(nworkers * ndims, 0);
   cE._rBufferSize.resize(nworkers * ndims, 0);
 
-  for (auto i = 0; i < nworkers; ++i) {
+  for (auto i = 0ul; i < nworkers; ++i) {
     if (i == myWorkerIndex) {
       continue;
     }
@@ -677,7 +679,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff
   // compute offset in a contiguous receive buffer
   cE._lRecvOff[0] = 0;
   cE._rRecvOff[0] = 0;
-  for (auto i = 1; i < nworkers; ++i) {
+  for (auto i = 1ul; i < nworkers; ++i) {
     cE._lRecvOff[i] = cE._lRecvOff[i - 1] + cE._lRecvSize[i - 1];
     cE._rRecvOff[i] = cE._rRecvOff[i - 1] + cE._rRecvSize[i - 1];
   }
@@ -691,7 +693,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims, int64_t *ownedOff
   cE._rRecvBufferSize.resize(nworkers * ndims, 0);
 
   // deduce receive shape for unpack
-  for (auto i = 0; i < nworkers; ++i) {
+  for (auto i = 0ul; i < nworkers; ++i) {
     if (cE._bufferizeLRecv && cE._lRecvSize[i] != 0) {
       cE._lTotalRecvSize += cE._lRecvSize[i];
       cE._lRecvBufferSize[i * ndims] = cE._lRecvSize[i] / bbTotCols; // nrows
@@ -842,7 +844,7 @@ void *_idtr_update_halo(SHARPY::Transceiver *tc, int64_t gShapeRank,
 extern "C" {
 #define TYPED_UPDATE_HALO(_sfx, _typ)                                          \
   void *_idtr_update_halo_##_sfx(                                              \
-      SHARPY::Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,            \
+      SHARPY::Transceiver *tc, int64_t gShapeRank, void *gShapeDescr,          \
       int64_t oOffRank, void *oOffDescr, int64_t oDataRank, void *oDataDescr,  \
       int64_t bbOffRank, void *bbOffDescr, int64_t bbShapeRank,                \
       void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,                 \

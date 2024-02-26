@@ -12,7 +12,7 @@ def get_locals(obj):
 
 def from_locals(objs):
     arg = objs if isinstance(objs, (list, tuple)) else [objs]
-    return ndarray(_csp._from_locals(arg))
+    return ndarray.ndarray(_csp._from_locals(arg))
 
 
 def gather(obj, root=_csp._Ranks._REPLICATED):

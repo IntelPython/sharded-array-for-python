@@ -1,7 +1,8 @@
-import sharpy as sp
 import numpy
-from utils import runAndCompare, device
 import pytest
+from utils import device, runAndCompare
+
+import sharpy as sp
 
 
 class TestSetGet:

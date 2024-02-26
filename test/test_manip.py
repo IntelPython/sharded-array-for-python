@@ -1,10 +1,12 @@
-import sharpy as sp
-import numpy
-from utils import runAndCompare, device
-import pytest
 import itertools
-from mpi4py import MPI
 import os
+
+import numpy
+import pytest
+from mpi4py import MPI
+from utils import device, runAndCompare
+
+import sharpy as sp
 
 
 class TestManip:

@@ -1,5 +1,6 @@
-from .. import _sharpy as _csp
 import ndarray
+
+from .. import _sharpy as _csp
 
 
 def manual_seed(s=None):

@@ -1,7 +1,8 @@
-import sharpy as sp
 import numpy
-from utils import runAndCompare, mpi_dtypes, device
 import pytest
+from utils import device, mpi_dtypes, runAndCompare
+
+import sharpy as sp
 
 mpi_idtypes = [  # FIXME
     # sp.int64,

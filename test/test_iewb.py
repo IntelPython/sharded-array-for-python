@@ -1,6 +1,7 @@
-import sharpy as sp
 import pytest
 from utils import device
+
+import sharpy as sp
 
 
 class TestIEWB:

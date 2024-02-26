@@ -477,8 +477,8 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   }
 
   // add return statement
-  auto ret_value = builder.create<::mlir::func::ReturnOp>(
-      builder.getUnknownLoc(), ret_values);
+  (void)builder.create<::mlir::func::ReturnOp>(builder.getUnknownLoc(),
+                                               ret_values);
 
   return 2 * sz;
 }
@@ -486,7 +486,6 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
 void DepManager::deliver(std::vector<intptr_t> &outputV, uint64_t sz) {
   auto output = outputV.data();
   size_t pos = 0;
-  int rv = 0;
 
   auto getMR = [](int rank, auto buff, void *&allocated, void *&aligned,
                   intptr_t &offset, intptr_t *&sizes, intptr_t *&strides) {

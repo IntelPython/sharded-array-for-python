@@ -151,8 +151,8 @@ private:
     InOut(id_type guid = 0, const ::mlir::Value &value = nullptr,
           const SetResFunc &setResFunc = nullptr, int rank = 0,
           bool isDist = false, const std::vector<ReadyFunc> &readyFuncs = {})
-        : _guid(guid), _rank(rank), _value(value), _isDist(isDist),
-          _setResFunc(setResFunc), _readyFuncs(readyFuncs) {}
+        : _guid(guid), _value(value), _setResFunc(setResFunc), _rank(rank),
+          _isDist(isDist), _readyFuncs(readyFuncs) {}
   };
   using InOutList = std::vector<InOut>;
 

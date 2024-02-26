@@ -1,5 +1,5 @@
-from .. import _sharpy as _csp
 from .. import __impl
+from .. import _sharpy as _csp
 from ..ndarray import ndarray
 
 

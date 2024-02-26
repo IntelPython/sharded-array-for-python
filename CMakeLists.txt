@@ -68,7 +68,18 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(AddIMEX)
 
 # macro for mlir root directory
-add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}")
+add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}" FORTIFY_SOURCE=2 USE_MKL=1)
+add_compile_options(
+    "-ftemplate-backtrace-limit=0"
+    "-flarge-source-files"
+    "-Wall" "-Wformat" "-fPIC" "-Wno-comment"
+    "$<$<CONFIG:DEBUG>:-fstack-protector>"
+    "$<$<CONFIG:RELEASE>:-flto>"
+    "$<$<CONFIG:RELEASE>:-z>"
+    "$<$<CONFIG:RELEASE>:noexecstack>"
+    "$<$<CONFIG:RELEASE>:-fstack-protector-strong>"
+)
+add_link_options("-pie" "$<$<CONFIG:RELEASE>:-Wl,-z,relro,-z,now>")
 
 #find_package(OpenMP)
 
@@ -127,8 +138,6 @@ pybind11_add_module(_sharpy MODULE ${SHARPYSrcs} ${Hpps})
 add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
 set(AllTargets _sharpy idtr)
 
-add_compile_definitions(USE_MKL=1)
-add_compile_options("-ftemplate-backtrace-limit=0")
 include_directories(
   ${PROJECT_SOURCE_DIR}/src/include
   ${PROJECT_SOURCE_DIR}/third_party/bitsery/include

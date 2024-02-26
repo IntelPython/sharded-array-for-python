@@ -6,14 +6,14 @@
 
 #pragma once
 
-#include "PyTypes.hpp"
 #include "FutureArray.hpp"
+#include "PyTypes.hpp"
 
 namespace SHARPY {
 
 struct Random {
   static FutureArray *rand(DTypeId dtype, const shape_type &shp,
-                         const py::object &lower, const py::object &upper);
+                           const py::object &lower, const py::object &upper);
   static void seed(uint64_t s);
 };
 } // namespace SHARPY

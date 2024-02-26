@@ -141,7 +141,7 @@ void MPIMediator::listen() {
     return;
 
   constexpr int BSZ = 256;
-  MPI_Request request_in = MPI_REQUEST_NULL, request_out = MPI_REQUEST_NULL;
+  MPI_Request request_in = MPI_REQUEST_NULL;
   Buffer rbuff;
   // Issue async recv request
   Buffer buff(BSZ);
@@ -151,7 +151,6 @@ void MPIMediator::listen() {
     MPI_Status status;
     // Wait for any request
     MPI_Wait(&request_in, &status);
-    rank_type requester = status.MPI_SOURCE;
     int cnt;
     MPI_Get_count(&status, MPI_CHAR, &cnt);
     buff.resize(cnt);
@@ -169,6 +168,8 @@ void MPIMediator::listen() {
       break;
     }
 #if 0
+    rank_type requester = status.MPI_SOURCE;
+    MPI_Request request_out = MPI_REQUEST_NULL;
         case PULL_TAG: {
             uint64_t id;
             ser.value8b(id);

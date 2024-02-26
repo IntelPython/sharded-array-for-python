@@ -73,7 +73,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
       }
 
       const char *clientArgs[args.size() + 1];
-      for (int i = 0; i < args.size(); ++i)
+      for (auto i = 0ul; i < args.size(); ++i)
         clientArgs[i] = args[i].c_str();
       clientArgs[args.size()] = nullptr;
 

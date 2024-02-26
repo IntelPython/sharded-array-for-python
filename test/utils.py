@@ -1,7 +1,9 @@
+from os import getenv
+
 import numpy
+
 import sharpy
 from sharpy.numpy import fromfunction
-from os import getenv
 
 sharpy.fromfunction = fromfunction
 

@@ -1,10 +1,12 @@
+import os
+
 import numpy as np
+import pytest
 from mpi4py import MPI
+from utils import device
+
 import sharpy as sp
 from sharpy import _sharpy_cw
-from utils import device
-import pytest
-import os
 
 
 @pytest.mark.skipif(_sharpy_cw, reason="Only applicable to SPMD mode")

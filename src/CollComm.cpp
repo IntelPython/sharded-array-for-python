@@ -22,8 +22,7 @@ void bufferize(NDArray::ptr_type a_ptr, void *outPtr) {
 
 // @param outPtr touched only if on root and/or root==REPLICATED or if not
 // distributed
-void gather_array(NDArray::ptr_type a_ptr, rank_type root,
-                   void *outPtr) {
+void gather_array(NDArray::ptr_type a_ptr, rank_type root, void *outPtr) {
   auto trscvr = a_ptr->transceiver();
 
   if (!trscvr || a_ptr->owner() == REPLICATED) {
@@ -58,7 +57,7 @@ void gather_array(NDArray::ptr_type a_ptr, rank_type root,
 
   // compute each pranks local contribution
   int64_t curr = 0;
-  for (auto i = 0; i < nranks; ++i) {
+  for (auto i = 0ul; i < nranks; ++i) {
     assert(szsAndOffs[i * 2] * myTileSz == curr);
     displacements[i] = curr;
     counts[i] = szsAndOffs[i * 2 + 1] * myTileSz;

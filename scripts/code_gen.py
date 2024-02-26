@@ -1,4 +1,5 @@
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.dirname(sys.argv[1])))
 exec(f"import {os.path.basename(sys.argv[1]).split('.')[0]} as api")

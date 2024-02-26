@@ -1,5 +1,6 @@
-import sharpy as sp
 from utils import device
+
+import sharpy as sp
 
 
 class TestTemporaries:

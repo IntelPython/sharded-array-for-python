@@ -5,8 +5,8 @@
 */
 
 #include "sharpy/Random.hpp"
-#include "sharpy/NDArray.hpp"
 #include "sharpy/Factory.hpp"
+#include "sharpy/NDArray.hpp"
 #include <bitsery/traits/vector.h>
 
 namespace SHARPY {
@@ -66,7 +66,7 @@ struct DeferredRandomOp : public Deferred {
 };
 
 FutureArray *Random::rand(DTypeId dtype, const shape_type &shape,
-                        const py::object &lower, const py::object &upper) {
+                          const py::object &lower, const py::object &upper) {
   return new FutureArray(defer<DeferredRandomOp>(
       shape, to_native<double>(lower), to_native<double>(upper), dtype));
 }

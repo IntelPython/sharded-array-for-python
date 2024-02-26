@@ -32,9 +32,8 @@ struct CollComm {
   static map_info_type map(const PVSlice &n_slc, const PVSlice &o_slc);
 
   template <typename T, typename U>
-  static array_i::ptr_type
-  coll_copy(std::shared_ptr<NDArray> b_ptr,
-            const std::shared_ptr<NDArray> &a_ptr) {
+  static array_i::ptr_type coll_copy(std::shared_ptr<NDArray> b_ptr,
+                                     const std::shared_ptr<NDArray> &a_ptr) {
 #if 0
         assert(! a_ptr->is_sliced() && ! b_ptr->is_sliced());
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
@@ -54,9 +53,9 @@ struct CollComm {
   }
 
   template <typename T, typename U>
-  static std::array<int, 4>
-  coll_map(const std::shared_ptr<NDArray> &b_ptr,
-           const std::shared_ptr<NDArray> &a_ptr, std::vector<U> &rbuff) {
+  static std::array<int, 4> coll_map(const std::shared_ptr<NDArray> &b_ptr,
+                                     const std::shared_ptr<NDArray> &a_ptr,
+                                     std::vector<U> &rbuff) {
 #if 0
         auto info = CollComm::map(b_ptr->slice(), a_ptr->slice());
 

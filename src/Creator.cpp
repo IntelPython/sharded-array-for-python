@@ -62,7 +62,7 @@ struct DeferredFull : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     ::mlir::SmallVector<::mlir::Value> shp(rank());
-    for (auto i = 0; i < rank(); ++i) {
+    for (auto i = 0ul; i < rank(); ++i) {
       shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
     }
 

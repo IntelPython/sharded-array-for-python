@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 # Copyright (c) 2015, Intel Corporation
 #
 # Redistribution and use in source and binary forms, with or without
@@ -55,7 +53,8 @@
 #
 # *******************************************************************
 
-import sys, os
+import os
+import sys
 
 print(
     "Python version = ", str(sys.version_info.major) + "." + str(sys.version_info.minor)

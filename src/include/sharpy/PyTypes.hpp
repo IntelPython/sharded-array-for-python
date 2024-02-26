@@ -103,7 +103,7 @@ py::tuple _make_tuple(const T &v, const SZ &sz, const EL &el) {
   default:
     auto tpl = py::make_tuple(el(v, 0), el(v, 1), el(v, 2), el(v, 3), el(v, 4),
                               el(v, 5), el(v, 6), el(v, 7));
-    for (auto i = 8; i < n; ++i) {
+    for (auto i = 8ul; i < n; ++i) {
       tpl += py::make_tuple(el(v, i));
     }
     return tpl;

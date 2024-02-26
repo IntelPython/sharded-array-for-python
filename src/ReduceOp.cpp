@@ -124,8 +124,6 @@ struct DeferredReduceOp : public Deferred {
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, Registry::get(_a));
-    ::mlir::Type dtype =
-        av.getType().cast<::imex::ndarray::NDArrayType>().getElementType();
     // return type 0d with same dtype as input
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
