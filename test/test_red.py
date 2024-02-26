@@ -1,8 +1,6 @@
 import pytest
 from utils import runAndCompare
 
-import sharpy as sp
-
 
 class TestRed:
     @pytest.mark.skip(reason="FIXME reshape")
@@ -10,7 +8,7 @@ class TestRed:
         def doit(aapi, **kwargs):
             a = aapi.arange(0, 64, 1, dtype=aapi.int64, **kwargs)
             b = aapi.reshape(a, (8, 8))
-            return aapi.sum(a)
+            return aapi.sum(b)
 
         assert runAndCompare(doit, False)
 

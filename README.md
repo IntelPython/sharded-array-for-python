@@ -23,7 +23,7 @@ export IMEXROOT=<your-IMEX-install-dir>
 ## Building sharpy
 
 ```bash
-python setup.py develop
+python -m pip install .
 ```
 
 If your compiler does not default to a recent (e.g. g++ >= 9) version, try something like `CC=gcc-9 CXX=g++-9 python setup.py develop`

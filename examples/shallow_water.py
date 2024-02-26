@@ -99,19 +99,31 @@ def run(n, backend, datatype, benchmark_mode):
 
     # coordinate arrays
     x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype, device=device
+        lambda i, j: xmin + i * dx + dx / 2,
+        (nx, ny),
+        dtype=dtype,
+        device=device,
     )
     y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype, device=device
+        lambda i, j: ymin + j * dy + dy / 2,
+        (nx, ny),
+        dtype=dtype,
+        device=device,
     )
     x_u_2d = fromfunction(
         lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype, device=device
     )
     y_u_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx + 1, ny), dtype=dtype, device=device
+        lambda i, j: ymin + j * dy + dy / 2,
+        (nx + 1, ny),
+        dtype=dtype,
+        device=device,
     )
     x_v_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny + 1), dtype=dtype, device=device
+        lambda i, j: xmin + i * dx + dx / 2,
+        (nx, ny + 1),
+        dtype=dtype,
+        device=device,
     )
     y_v_2d = fromfunction(
         lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype, device=device
@@ -189,7 +201,9 @@ def run(n, backend, datatype, benchmark_mode):
         return bath * np.full(T_shape, 1.0, dtype, device=device)
 
     # inital elevation
-    u0, v0, e0 = exact_solution(0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d)
+    u0, v0, e0 = exact_solution(
+        0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d
+    )
     e[:, :] = e0
     u[:, :] = u0
     v[:, :] = v0
@@ -229,10 +243,14 @@ def run(n, backend, datatype, benchmark_mode):
         hu[1:-1, :] = 0.5 * (H[:-1, :] + H[1:, :]) * u[1:-1, :]
         hv[:, 1:-1] = 0.5 * (H[:, :-1] + H[:, 1:]) * v[:, 1:-1]
 
-        dedt = -1.0 * ((hu[1:, :] - hu[:-1, :]) / dx + (hv[:, 1:] - hv[:, :-1]) / dy)
+        dedt = -1.0 * (
+            (hu[1:, :] - hu[:-1, :]) / dx + (hv[:, 1:] - hv[:, :-1]) / dy
+        )
 
         # total depth at F points
-        H_at_f[1:-1, 1:-1] = 0.25 * (H[1:, 1:] + H[:-1, 1:] + H[1:, :-1] + H[:-1, :-1])
+        H_at_f[1:-1, 1:-1] = 0.25 * (
+            H[1:, 1:] + H[:-1, 1:] + H[1:, :-1] + H[:-1, :-1]
+        )
         H_at_f[0, 1:-1] = 0.5 * (H[0, 1:] + H[0, :-1])
         H_at_f[-1, 1:-1] = 0.5 * (H[-1, 1:] + H[-1, :-1])
         H_at_f[1:-1, 0] = 0.5 * (H[1:, 0] + H[:-1, 0])
@@ -312,6 +330,7 @@ def run(n, backend, datatype, benchmark_mode):
     initial_v = None
     initial_e = None
     tic = time_mod.perf_counter()
+    block_tic = 0
     for i in range(nt + 1):
         sync()
         t = i * dt
@@ -356,9 +375,12 @@ def run(n, backend, datatype, benchmark_mode):
             info(
                 f"{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} "
                 f"u={u_max:7.5f} q={q_max:8.5f} dV={diff_v: 6.3e} "
-                f"PE={total_pe:7.2e} KE={total_ke:7.2e} dE={diff_e: 6.3e}" + tcpu_str
+                f"PE={total_pe:7.2e} KE={total_ke:7.2e} dE={diff_e: 6.3e}"
+                + tcpu_str
             )
-            if not benchmark_mode and (elev_max > 1e3 or not math.isfinite(elev_max)):
+            if not benchmark_mode and (
+                elev_max > 1e3 or not math.isfinite(elev_max)
+            ):
                 raise ValueError(f"Invalid elevation value: {elev_max}")
             i_export += 1
             next_t_export = i_export * t_export
@@ -372,7 +394,9 @@ def run(n, backend, datatype, benchmark_mode):
     duration = time_mod.perf_counter() - tic
     info(f"Duration: {duration:.2f} s")
 
-    e_exact = exact_solution(t, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d)[2]
+    e_exact = exact_solution(t, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d)[
+        2
+    ]
     err2 = (e_exact - e) * (e_exact - e) * dx * dy / lx / ly
     err_L2 = math.sqrt(float(np.sum(err2, all_axes)))
     info(f"L2 error: {err_L2:7.15e}")

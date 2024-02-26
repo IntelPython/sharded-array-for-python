@@ -1,0 +1,21 @@
+name: pre-commit
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions: read-all
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    - name: Version of clang-format
+      run: |
+        clang-format --version
+    - uses: pre-commit/action@v3.0.1

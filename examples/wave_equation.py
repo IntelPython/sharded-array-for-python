@@ -99,10 +99,16 @@ def run(n, backend, datatype, benchmark_mode):
 
     # coordinate arrays
     x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype, device=device
+        lambda i, j: xmin + i * dx + dx / 2,
+        (nx, ny),
+        dtype=dtype,
+        device=device,
     )
     y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype, device=device
+        lambda i, j: ymin + j * dy + dy / 2,
+        (nx, ny),
+        dtype=dtype,
+        device=device,
     )
 
     T_shape = (nx, ny)
@@ -207,6 +213,7 @@ def run(n, backend, datatype, benchmark_mode):
     next_t_export = 0
     initial_v = None
     tic = time_mod.perf_counter()
+    block_tic = 0
     for i in range(nt + 1):
         sync()
         t = i * dt
@@ -233,7 +240,9 @@ def run(n, backend, datatype, benchmark_mode):
                 f"{i_export:2d} {i:4d} {t:.3f} elev={elev_max:7.5f} "
                 f"u={u_max:7.5f} dV={diff_v: 6.3e} " + tcpu_str
             )
-            if not benchmark_mode and (elev_max > 1e3 or not math.isfinite(elev_max)):
+            if not benchmark_mode and (
+                elev_max > 1e3 or not math.isfinite(elev_max)
+            ):
                 raise ValueError(f"Invalid elevation value: {elev_max}")
             i_export += 1
             next_t_export = i_export * t_export

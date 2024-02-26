@@ -31,13 +31,6 @@ class ndarray:
                 f"{method} = lambda self, other: ndarray(_csp.EWBinOp.op(_csp.{METHOD}, self._t, other._t if isinstance(other, ndarray) else other))"
             )
 
-    # inplace operators still lead to an assignment, needs more involved analysis
-    # for method in api.api_categories["IEWBinOp"]:
-    #     METHOD = method.upper()
-    #     exec(
-    #         f"{method} = lambda self, other: (self, _csp.IEWBinOp.op(_csp.{METHOD}, self._t, other._t if isinstance(other, ndarray) else other)[0])"
-    #     )
-
     for method in api.api_categories["EWUnyOp"]:
         if method.startswith("__"):
             METHOD = method.upper()
@@ -69,4 +62,6 @@ class ndarray:
             raise ValueError(
                 f"Mismatching data type in setitem: {value._t.dtype}, expecting {self._t.dtype}"
             )
-        self._t.__setitem__(key, value._t if isinstance(value, ndarray) else value)
+        self._t.__setitem__(
+            key, value._t if isinstance(value, ndarray) else value
+        )

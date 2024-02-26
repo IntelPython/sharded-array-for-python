@@ -1,5 +1,3 @@
-import os
-
 import sharpy as sp
 
 

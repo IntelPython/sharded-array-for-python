@@ -161,7 +161,9 @@ def run(nopt, backend, iterations, datatype):
 
         fini = sync = lambda x=None: None
         if comm is not None:
-            assert comm.Get_size() == 1, "Numpy backend only supports serial execution."
+            assert (
+                comm.Get_size() == 1
+            ), "Numpy backend only supports serial execution."
     else:
         raise ValueError(f'Unknown backend: "{backend}"')
 

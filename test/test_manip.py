@@ -45,7 +45,9 @@ class TestManip:
         assert numpy.allclose(sp.to_numpy(a), [5, 5, 5, 3, 4, 5, 6, 7])
 
     @pytest.mark.skipif(
-        len(device) or MPI.COMM_WORLD.size > 1 or os.getenv("SHARPY_FORCE_DIST"),
+        len(device)
+        or MPI.COMM_WORLD.size > 1
+        or os.getenv("SHARPY_FORCE_DIST"),
         reason="FIXME GPU and multi-proc",
     )
     def test_astype_copy(self):

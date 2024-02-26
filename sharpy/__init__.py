@@ -13,7 +13,6 @@ https://data-apis.org/array-api/latest
 # At this point there are no checks of input arguments whatsoever, arguments
 # are simply forwarded as-is.
 
-_bool = bool
 from importlib import import_module
 from os import getenv
 from typing import Any
@@ -21,7 +20,7 @@ from typing import Any
 from . import _sharpy as _csp
 from . import array_api as api
 from . import spmd
-from ._sharpy import BOOL as bool
+from ._sharpy import BOOL as _bool
 from ._sharpy import FLOAT32 as float32
 from ._sharpy import FLOAT64 as float64
 from ._sharpy import INT8 as int8
@@ -37,7 +36,7 @@ from ._sharpy import init as _init
 from ._sharpy import sync
 from .ndarray import ndarray
 
-_sharpy_cw = _bool(int(getenv("SHARPY_CW", False)))
+_sharpy_cw = bool(int(getenv("SHARPY_CW", False)))
 
 pi = 3.1415926535897932384626433
 
@@ -61,7 +60,9 @@ for op in api.api_categories["EWBinOp"]:
 for op in api.api_categories["EWUnyOp"]:
     if not op.startswith("__"):
         OP = op.upper()
-        exec(f"{op} = lambda this: ndarray(_csp.EWUnyOp.op(_csp.{OP}, this._t))")
+        exec(
+            f"{op} = lambda this: ndarray(_csp.EWUnyOp.op(_csp.{OP}, this._t))"
+        )
 
 for func in api.api_categories["Creator"]:
     FUNC = func.upper()
@@ -96,13 +97,6 @@ for func in api.api_categories["ReduceOp"]:
         f"{func} = lambda this, dim=None: ndarray(_csp.ReduceOp.op(_csp.{FUNC}, this._t, dim if dim else []))"
     )
 
-# for func in api.api_categories["ManipOp"]:
-#     FUNC = func.upper()
-#     if func == "reshape":
-#         exec(
-#             f"{func} = lambda this, /, shape, *, copy=None: ndarray(_csp.ManipOp.reshape(this._t, shape, copy))"
-#         )
-
 for func in api.api_categories["LinAlgOp"]:
     FUNC = func.upper()
     if func in [
@@ -128,12 +122,14 @@ if _fb_env is not None:
         _fb_lib = import_module(_fb_env)
 
         def __init__(self, fname: str, mod=None) -> None:
-            "get callable with name 'fname' from fallback-lib or throw exception"
+            """get callable with name 'fname' from fallback-lib
+            or throw exception"""
             self._mod = mod if mod else _fallback._fb_lib
             self._func = getattr(self._mod, fname)
 
         def __call__(self, *args: Any, **kwds: Any) -> Any:
-            "convert ndarrays args to fallback arrays, call fallback-lib and return converted ndarray"
+            """convert ndarrays args to fallback arrays,
+            call fallback-lib and return converted ndarray"""
             nargs = []
             nkwds = {}
             for arg in args:
@@ -141,7 +137,9 @@ if _fb_env is not None:
                     spmd.get_locals(arg)[0] if isinstance(arg, ndarray) else arg
                 )
             for k, v in kwds.items():
-                nkwds[k] = spmd.get_locals(v)[0] if isinstance(v, ndarray) else v
+                nkwds[k] = (
+                    spmd.get_locals(v)[0] if isinstance(v, ndarray) else v
+                )
 
             res = self._func(*nargs, **nkwds)
             return (
@@ -152,7 +150,8 @@ if _fb_env is not None:
 
         def __getattr__(self, name):
             """Attempt to find a fallback in current fallback object.
-            This might be necessary if we call something like dt.linalg.norm(...)
+            This might be necessary if we call something like
+            dt.linalg.norm(...)
             """
             return _fallback(name, self._func)
 

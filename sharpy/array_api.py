@@ -21,7 +21,8 @@ api_categories = OrderedDict(
             "bool",
         ],
         "Creator": [
-            "arange",  # (start, /, stop=None, step=1, *, dtype=None, device=None)
+            "arange",  # (start, /, stop=None, step=1, *,
+            # dtype=None, device=None)
             "asarray",  # (obj, /, *, dtype=None, device=None, copy=None)
             "empty",
             "empty_like",  # (x, /, *, dtype=None, device=None)
@@ -29,7 +30,8 @@ api_categories = OrderedDict(
             "from_dlpack",  # (x, /)
             "full",
             "full_like",  # (x, /, fill_value, *, dtype=None, device=None)
-            "linspace",  # (start, stop, /, num, *, dtype=None, device=None, endpoint=True)
+            "linspace",  # (start, stop, /, num, *, dtype=None, device=None,
+            # endpoint=True)
             "meshgrid",  # (*arrays, indexing=’xy’)
             "ones",
             "ones_like",  # (x, /, *, dtype=None, device=None)

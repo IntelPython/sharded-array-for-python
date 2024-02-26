@@ -52,7 +52,9 @@ class TestEWB:
     def test_add4(self):
         for dtyp in mpi_idtypes:
             n = 16
-            a = sp.fromfunction(lambda i, j: i, (n, n), dtype=dtyp, device=device)
+            a = sp.fromfunction(
+                lambda i, j: i, (n, n), dtype=dtyp, device=device
+            )
             b = sp.ones((n, n), dtype=dtyp, device=device)
             c = a + b
             a[:, :] = a[:, :] + c[:, :]
@@ -143,7 +145,7 @@ class TestEWB:
 
     @pytest.mark.skip(reason="FIXME")
     def test_prod_het(self):
-        a = sp.full([16, 16], 2, sp.float32, **kwargs)
+        a = sp.full([16, 16], 2, sp.float32, device=device)
         b = sp.full([16, 16], 2, sp.int32, device=device)
         c = a * b
         r = sp.sum(c, [0, 1])

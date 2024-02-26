@@ -57,7 +57,8 @@ import os
 import sys
 
 print(
-    "Python version = ", str(sys.version_info.major) + "." + str(sys.version_info.minor)
+    "Python version = ",
+    str(sys.version_info.major) + "." + str(sys.version_info.minor),
 )
 if sys.version_info >= (33, 3):
     from time import process_time as timer
@@ -81,7 +82,8 @@ def main():
     if len(sys.argv) < 3:
         print("argument count = ", len(sys.argv))
         sys.exit(
-            "Usage: ./stencil <# iterations> <array dimension> [<star/stencil> <radius>]"
+            "Usage: ./stencil <# iterations> <array dimension>"
+            " [<star/stencil> <radius>]"
         )
 
     iterations = int(sys.argv[1])
@@ -182,7 +184,9 @@ def main():
                 b = n - r
                 for s in range(-r, r + 1):
                     for t in range(-r, r + 1):
-                        B[r:b, r:b] += W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
+                        B[r:b, r:b] += (
+                            W[r + t, r + s] * A[r + t : b + t, r + s : b + s]
+                        )
         A[:, :] = A + 1.0
 
     np.sync()
@@ -205,10 +209,17 @@ def main():
     if abs(norm - reference_norm) < epsilon:
         print("Solution validates")
     else:
-        print("ERROR: L1 norm = ", norm, " Reference L1 norm = ", reference_norm)
+        print(
+            "ERROR: L1 norm = ", norm, " Reference L1 norm = ", reference_norm
+        )
     flops = (2 * stencil_size + 1) * active_points
     avgtime = stencil_time / iterations
-    print("Rate (MFlops/s): ", 1.0e-6 * flops / avgtime, " Avg time (s): ", avgtime)
+    print(
+        "Rate (MFlops/s): ",
+        1.0e-6 * flops / avgtime,
+        " Avg time (s): ",
+        avgtime,
+    )
 
 
 if __name__ == "__main__":

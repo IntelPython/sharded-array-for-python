@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import pytest
 from mpi4py import MPI
@@ -33,25 +31,21 @@ class TestSPMD:
 
     def test_get_locals(self):
         a = sp.ones((32, 32), sp.float32, device=device)
-        l = sp.spmd.get_locals(a)[0]
-        l[0, 0] = 0
+        la = sp.spmd.get_locals(a)[0]
+        la[0, 0] = 0
         MPI.COMM_WORLD.barrier()
         c = sp.sum(a, [0, 1])
         v = 32 * 32 - MPI.COMM_WORLD.size
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
 
-    # @pytest.mark.skipif(
-    #     MPI.COMM_WORLD.size == 1, and os.getenv("SHARPY_FORCE_DIST", "") == "",
-    #     reason="FIXME extra memref.copy",
-    # )
     @pytest.mark.skip(reason="FIXME imex-remove-temporaries")
     def test_get_locals_of_view(self):
         a = sp.ones((32, 32), sp.float32, device=device)
         b = a[0:32:2, 0:32:2]
-        l = sp.spmd.get_locals(b)[0]
-        assert len(l) > 0
-        l[0, 0] = 0
+        lb = sp.spmd.get_locals(b)[0]
+        assert len(lb) > 0
+        lb[0, 0] = 0
         MPI.COMM_WORLD.barrier()
         c = sp.sum(a, [0, 1])
         v = 32 * 32 - MPI.COMM_WORLD.size
@@ -60,11 +54,15 @@ class TestSPMD:
 
     @pytest.mark.skip(reason="FIXME reshape")
     def test_gather1(self):
-        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10])
+        a = sp.reshape(
+            sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]
+        )
         b = sp.spmd.gather(a)
         c = np.sum(b)
         v = np.sum(
-            np.reshape(np.arange(0, 110, 1, dtype=np.float32, device=device), (11, 10))
+            np.reshape(
+                np.arange(0, 110, 1, dtype=np.float32, device=device), (11, 10)
+            )
         )
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
@@ -79,11 +77,15 @@ class TestSPMD:
 
     @pytest.mark.skip(reason="FIXME reshape")
     def test_gather_strided1(self):
-        a = sp.reshape(sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10])
+        a = sp.reshape(
+            sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]
+        )
         b = sp.spmd.gather(a[4:12:2, 1:11:3])
         c = np.sum(b)
         v = np.sum(
-            np.reshape(np.arange(0, 110, 1, dtype=np.float32), (11, 10))[4:12:2, 1:11:3]
+            np.reshape(np.arange(0, 110, 1, dtype=np.float32), (11, 10))[
+                4:12:2, 1:11:3
+            ]
         )
         assert float(c) == v
         MPI.COMM_WORLD.barrier()

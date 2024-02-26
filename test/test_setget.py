@@ -74,7 +74,9 @@ class TestSetGet:
     def test_setitem6(self):
         def doit(aapi, **kwargs):
             n = 16
-            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs)
+            a = aapi.fromfunction(
+                lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs
+            )
             b = aapi.zeros((n + 1, n + 1), aapi.float32, **kwargs)
 
             b[1:n, 1:n] = a[1:n, 1:n]
@@ -86,7 +88,9 @@ class TestSetGet:
         # Note: assert halo does not segfault
         def doit(aapi, **kwargs):
             n = 1024
-            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs)
+            a = aapi.fromfunction(
+                lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs
+            )
             b = aapi.zeros((n, n), aapi.float32, **kwargs)
 
             b[1:n, 1:n] = a[1:n, 1:n]
@@ -100,7 +104,9 @@ class TestSetGet:
         # Note: assert halo does not segfault
         def doit(aapi, **kwargs):
             n = 1024
-            a = aapi.fromfunction(lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs)
+            a = aapi.fromfunction(
+                lambda i, j: i, (n, n), dtype=aapi.float32, **kwargs
+            )
             b = aapi.zeros((n, n), aapi.float32, **kwargs)
 
             b[0, 1:n] = 1.0 * a[0, 1:n]

@@ -1,3 +1,6 @@
+src/include/sharpy/p2c_ids.hpp
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
