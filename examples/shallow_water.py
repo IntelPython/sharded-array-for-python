@@ -27,44 +27,56 @@ import argparse
 import math
 import os
 import time as time_mod
+from functools import partial
 
 import numpy
 
-device = os.getenv("SHARPY_USE_GPU", "")
+try:
+    import mpi4py
+
+    mpi4py.rc.finalize = False
+    from mpi4py import MPI
+
+    comm_rank = MPI.COMM_WORLD.Get_rank()
+    comm = MPI.COMM_WORLD
+except ImportError:
+    comm_rank = 0
+    comm = None
+
+
+def info(s):
+    if comm_rank == 0:
+        print(s)
 
 
 def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
         import sharpy as np
         from sharpy import fini, init, sync
-        from sharpy.numpy import fromfunction
+        from sharpy.numpy import fromfunction as _fromfunction
+
+        device = os.getenv("SHARPY_USE_GPU", "")
+        create_full = partial(np.full, device=device)
+        fromfunction = partial(_fromfunction, device=device)
 
         all_axes = [0, 1]
         init(False)
-
-        try:
-            import mpi4py
-
-            mpi4py.rc.finalize = False
-            from mpi4py import MPI
-
-            comm_rank = MPI.COMM_WORLD.Get_rank()
-        except ImportError:
-            comm_rank = 0
 
     elif backend == "numpy":
         import numpy as np
         from numpy import fromfunction
 
+        if comm is not None:
+            assert (
+                comm.Get_size() == 1
+            ), "Numpy backend only supports serial execution."
+
+        create_full = np.full
+
         fini = sync = lambda x=None: None
         all_axes = None
-        comm_rank = 0
     else:
         raise ValueError(f'Unknown backend: "{backend}"')
-
-    def info(s):
-        if comm_rank == 0:
-            print(s)
 
     info(f"Using backend: {backend}")
 
@@ -102,32 +114,24 @@ def run(n, backend, datatype, benchmark_mode):
         lambda i, j: xmin + i * dx + dx / 2,
         (nx, ny),
         dtype=dtype,
-        device=device,
     )
     y_t_2d = fromfunction(
         lambda i, j: ymin + j * dy + dy / 2,
         (nx, ny),
         dtype=dtype,
-        device=device,
     )
-    x_u_2d = fromfunction(
-        lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype, device=device
-    )
+    x_u_2d = fromfunction(lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype)
     y_u_2d = fromfunction(
         lambda i, j: ymin + j * dy + dy / 2,
         (nx + 1, ny),
         dtype=dtype,
-        device=device,
     )
     x_v_2d = fromfunction(
         lambda i, j: xmin + i * dx + dx / 2,
         (nx, ny + 1),
         dtype=dtype,
-        device=device,
     )
-    y_v_2d = fromfunction(
-        lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype, device=device
-    )
+    y_v_2d = fromfunction(lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype)
 
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
@@ -144,32 +148,32 @@ def run(n, backend, datatype, benchmark_mode):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    e = np.full(T_shape, 0.0, dtype, device=device)
-    u = np.full(U_shape, 0.0, dtype, device=device)
-    v = np.full(V_shape, 0.0, dtype, device=device)
+    e = create_full(T_shape, 0.0, dtype)
+    u = create_full(U_shape, 0.0, dtype)
+    v = create_full(V_shape, 0.0, dtype)
 
     # potential vorticity
-    q = np.full(F_shape, 0.0, dtype, device=device)
+    q = create_full(F_shape, 0.0, dtype)
 
     # bathymetry
-    h = np.full(T_shape, 0.0, dtype, device=device)
+    h = create_full(T_shape, 0.0, dtype)
 
-    hu = np.full(U_shape, 0.0, dtype, device=device)
-    hv = np.full(V_shape, 0.0, dtype, device=device)
+    hu = create_full(U_shape, 0.0, dtype)
+    hv = create_full(V_shape, 0.0, dtype)
 
-    dudy = np.full(F_shape, 0.0, dtype, device=device)
-    dvdx = np.full(F_shape, 0.0, dtype, device=device)
+    dudy = create_full(F_shape, 0.0, dtype)
+    dvdx = create_full(F_shape, 0.0, dtype)
 
     # vector invariant form
-    H_at_f = np.full(F_shape, 0.0, dtype, device=device)
+    H_at_f = create_full(F_shape, 0.0, dtype)
 
     # auxiliary variables for RK time integration
-    e1 = np.full(T_shape, 0.0, dtype, device=device)
-    u1 = np.full(U_shape, 0.0, dtype, device=device)
-    v1 = np.full(V_shape, 0.0, dtype, device=device)
-    e2 = np.full(T_shape, 0.0, dtype, device=device)
-    u2 = np.full(U_shape, 0.0, dtype, device=device)
-    v2 = np.full(V_shape, 0.0, dtype, device=device)
+    e1 = create_full(T_shape, 0.0, dtype)
+    u1 = create_full(U_shape, 0.0, dtype)
+    v1 = create_full(V_shape, 0.0, dtype)
+    e2 = create_full(T_shape, 0.0, dtype)
+    u2 = create_full(U_shape, 0.0, dtype)
+    v2 = create_full(V_shape, 0.0, dtype)
 
     def exact_solution(t, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d):
         """
@@ -198,7 +202,7 @@ def run(n, backend, datatype, benchmark_mode):
         Water depth at rest
         """
         bath = 1.0
-        return bath * np.full(T_shape, 1.0, dtype, device=device)
+        return bath * create_full(T_shape, 1.0, dtype)
 
     # inital elevation
     u0, v0, e0 = exact_solution(

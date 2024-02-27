@@ -23,7 +23,9 @@ Examples:
 
 """
 import argparse
+import os
 import time as time_mod
+from functools import partial
 
 import numpy
 
@@ -45,7 +47,28 @@ def info(s):
         print(s)
 
 
-def initialize(np, nopt, seed, dtype):
+def naive_erf(x):
+    """
+    Error function (erf) implementation
+
+    Adapted from formula 7.1.26 in
+    Abramowitz and Stegun, "Handbook of Mathematical Functions", 1965.
+    """
+    y = numpy.abs(x)
+
+    a1 = 0.254829592
+    a2 = -0.284496736
+    a3 = 1.421413741
+    a4 = -1.453152027
+    a5 = 1.061405429
+    p = 0.3275911
+
+    t = 1.0 / (1.0 + p * y)
+    f = (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t
+    return numpy.sign(x) * (1.0 - f * numpy.exp(-y * y))
+
+
+def initialize(create_full, nopt, seed, dtype):
     """
     Initialize arrays.
 
@@ -85,15 +108,15 @@ def initialize(np, nopt, seed, dtype):
     # t = random.uniform(TL, TH, nopt)
 
     # constant values
-    price = np.full((nopt,), 49.81959369901096, dtype)
-    strike = np.full((nopt,), 40.13264789835957, dtype)
-    t = np.full((nopt,), 1.8994311692123782, dtype)
+    price = create_full((nopt,), 49.81959369901096, dtype)
+    strike = create_full((nopt,), 40.13264789835957, dtype)
+    t = create_full((nopt,), 1.8994311692123782, dtype)
     # parameters
     rate = RISK_FREE
     volatility = VOLATILITY
     # output arrays
-    call = np.zeros((nopt,), dtype)  # 16.976097804669887
-    put = np.zeros((nopt,), dtype)  # 0.34645174725098116
+    call = create_full((nopt,), 0.0, dtype)  # 16.976097804669887
+    put = create_full((nopt,), 0.0, dtype)  # 0.34645174725098116
 
     return (price, strike, t, rate, volatility, call, put)
 
@@ -153,17 +176,23 @@ def run(nopt, backend, iterations, datatype):
         import sharpy as np
         from sharpy import fini, init, sync
 
-        init(False)
+        device = os.getenv("SHARPY_USE_GPU", "")
+        create_full = partial(np.full, device=device)
         erf = np.erf
+
+        init(False)
     elif backend == "numpy":
         import numpy as np
-        from scipy.special import erf
 
-        fini = sync = lambda x=None: None
+        erf = naive_erf
+
         if comm is not None:
             assert (
                 comm.Get_size() == 1
             ), "Numpy backend only supports serial execution."
+
+        create_full = np.full
+        fini = sync = lambda x=None: None
     else:
         raise ValueError(f'Unknown backend: "{backend}"')
 
@@ -179,7 +208,7 @@ def run(nopt, backend, iterations, datatype):
     info(f"Datatype: {datatype}")
 
     # initialize
-    args = initialize(np, nopt, seed, dtype)
+    args = initialize(create_full, nopt, seed, dtype)
     sync()
 
     def eval():
