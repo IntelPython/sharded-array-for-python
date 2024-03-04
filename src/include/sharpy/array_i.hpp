@@ -122,10 +122,6 @@ public:
 
   // size of a single element (in bytes)
   virtual int item_size() const = 0;
-  // store array information in form of corresponding
-  // jit::JIT::DistMemRefDescriptor
-  // @return stored size in number of intptr_t
-  virtual void add_to_args(std::vector<void *> &args) const = 0;
   // mark as deallocated
   virtual void markDeallocated() = 0;
   virtual bool isAllocated() = 0;

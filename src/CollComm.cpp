@@ -5,6 +5,8 @@
 namespace SHARPY {
 
 void bufferize(NDArray::ptr_type a_ptr, void *outPtr) {
+  if (!outPtr)
+    return;
   dispatch(a_ptr->dtype(), a_ptr->data(), [&a_ptr, outPtr](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(outPtr);
     auto shp = a_ptr->local_shape();

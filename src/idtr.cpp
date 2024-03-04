@@ -29,6 +29,9 @@ inline SHARPY::id_type get_guid() { return ++_nguid; }
 // Transceiver * theTransceiver = MPITransceiver();
 
 template <typename T> T *mr_to_ptr(void *ptr, intptr_t offset) {
+  if (!ptr) {
+    throw std::runtime_error("Fatal: cannot handle offset on nullptr");
+  }
   return reinterpret_cast<T *>(ptr) + offset;
 }
 
@@ -91,7 +94,7 @@ uint64_t idtr_nprocs(SHARPY::Transceiver *tc) {
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
 #endif
-  return tc->nranks();
+  return tc ? tc->nranks() : 1;
 }
 #pragma weak _idtr_nprocs = idtr_nprocs
 #pragma weak _mlir_ciface__idtr_nprocs = idtr_nprocs
@@ -102,7 +105,7 @@ uint64_t idtr_prank(SHARPY::Transceiver *tc) {
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
 #endif
-  return tc->rank();
+  return tc ? tc->rank() : 0;
 }
 #pragma weak _idtr_prank = idtr_prank
 #pragma weak _mlir_ciface__idtr_prank = idtr_prank
@@ -226,6 +229,9 @@ mlir2sharpy(const ::imex::ndarray::DType dt) {
 void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
                const int64_t *strides, const int64_t *tStarts,
                const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
+  if (!cptr || !sizes || !strides || !tStarts || !tSizes) {
+    return;
+  }
   dispatch(dtype, cptr,
            [sizes, strides, tStarts, tSizes, nd, N, out](auto *ptr) {
              auto buff = static_cast<decltype(ptr)>(out);
@@ -252,6 +258,9 @@ void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
 void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
             const int64_t *strides, const int64_t *tStarts,
             const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
+  if (!in || !sizes || !strides || !tStarts || !tSizes || !out) {
+    return;
+  }
   dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(in);
 
@@ -276,6 +285,9 @@ template <typename T>
 void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
            const int64_t *strides, const uint64_t *chunks, uint64_t nd,
            uint64_t start, uint64_t end, T *&out) {
+  if (!cptr || !sizes || !strides || !chunks || !out) {
+    return;
+  }
   auto stride = strides[d];
   uint64_t sz = sizes[d];
   uint64_t chunk = chunks[d];
@@ -311,6 +323,9 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
 void bufferizeN(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
                 const int64_t *strides, const int64_t *tStarts,
                 const int64_t *tEnds, uint64_t nd, uint64_t N, void *out) {
+  if (!cptr || !sizes || !strides || !tStarts || !tEnds || !out) {
+    return;
+  }
   std::vector<uint64_t> chunks(nd);
   chunks[nd - 1] = 1;
   for (uint64_t i = 1; i < nd; ++i) {
@@ -377,6 +392,10 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
 #endif
+  if (!gShapePtr || !lDataPtr || !lShapePtr || !lStridesPtr || !lOffsPtr ||
+      !oGShapePtr || !oDataPtr || !oShapePtr || !oOffsPtr || !tc) {
+    throw std::runtime_error("Fatal: received nullptr in reshape");
+  }
 
   assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
                          std::multiplies<int64_t>()) ==
@@ -730,6 +749,13 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
 #endif
+
+  if (!ownedOff || !ownedShape || !ownedStride || !bbOff || !bbShape ||
+      !ownedData || !leftHaloShape || !leftHaloStride || !leftHaloData ||
+      !rightHaloShape || !rightHaloStride || !rightHaloData || !tc) {
+    throw std::runtime_error("Fatal error: received nullptr in update_halo.");
+  }
+
   auto nworkers = tc->nranks();
   if (nworkers <= 1 || getenv("SHARPY_SKIP_COMM"))
     return nullptr;
@@ -823,6 +849,11 @@ void *_idtr_update_halo(SHARPY::Transceiver *tc, int64_t gShapeRank,
                         void *bbOffDescr, int64_t bbShapeRank,
                         void *bbShapeDescr, int64_t lHaloRank, void *lHaloDescr,
                         int64_t rHaloRank, void *rHaloDescr, int64_t key) {
+
+  if (!gShapeDescr || !oOffDescr || !oDataDescr || !bbOffDescr ||
+      !bbShapeDescr || !lHaloDescr || !rHaloDescr) {
+    throw std::runtime_error("Fatal error: received nullptr in update_halo.");
+  }
 
   auto sharpytype = SHARPY::DTYPE<T>::value;
 

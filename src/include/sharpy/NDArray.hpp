@@ -187,10 +187,6 @@ public:
   /// @return size of one element in number of bytes
   virtual int item_size() const override { return sizeof_dtype(_dtype); }
 
-  /// add array to list of args in the format expected by MLIR
-  /// assuming array has ndims dims.
-  virtual void add_to_args(std::vector<void *> &args) const override;
-
   /// @return locally owned data as DynMemref
   const DynMemRef &owned_data() const { return _lData; }
   /// @return left halo as DynMemref

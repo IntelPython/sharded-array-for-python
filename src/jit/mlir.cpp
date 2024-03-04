@@ -238,6 +238,10 @@ void DepManager::finalizeAndRun() {
   if (osz > 0 || !input.empty()) {
     // compile and run the module
     auto output = _jit.run(_module, _fname, input, osz);
+    // we assume we only store memrefdescriptors, e.g. arrays of inptr_t
+    for (auto p : input) {
+      delete[] reinterpret_cast<intptr_t *>(p);
+    }
     if (output.size() != osz)
       throw std::runtime_error("failed running jit");
 

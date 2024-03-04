@@ -57,6 +57,8 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, const shape_type &shp,
   }
   _lData = DynMemRef(nds, allocated, allocated, 0, sizes, strides);
   assert(team() == 0 || transceiver() == getTransceiver());
+  delete[] sizes;
+  delete[] strides;
 }
 
 // incomplete, useful for computing meta information
@@ -230,37 +232,6 @@ int64_t NDArray::__int__() const {
     res = static_cast<float>(ptr[this->_lData._offset]);
   });
   return res;
-}
-
-void NDArray::add_to_args(std::vector<void *> &args) const {
-  int ndims = this->ndims();
-  auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
-    intptr_t *buff = new intptr_t[memref_sz(ndims)];
-    buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
-    buff[1] = reinterpret_cast<intptr_t>(mr._aligned);
-    buff[2] = static_cast<intptr_t>(mr._offset);
-    memcpy(buff + 3, mr._sizes, ndims * sizeof(intptr_t));
-    memcpy(buff + 3 + ndims, mr._strides, ndims * sizeof(intptr_t));
-    return buff;
-  }; // FIXME memory leak?
-
-  if (team() == 0 || ndims == 0) {
-    // no-dist-mode
-    args.push_back(storeMR(_lData));
-  } else {
-    args.push_back(storeMR(_lhsHalo));
-    args.push_back(storeMR(_lData));
-    args.push_back(storeMR(_rhsHalo));
-    // local offsets last
-    auto buff = new intptr_t[memref_sz(1)];
-    assert(5 == memref_sz(1));
-    buff[0] = reinterpret_cast<intptr_t>(_lOffsets.data());
-    buff[1] = buff[0];
-    buff[2] = 0;
-    buff[3] = ndims;
-    buff[4] = 1;
-    args.push_back(buff);
-  }
 }
 
 void NDArray::replicate() {
