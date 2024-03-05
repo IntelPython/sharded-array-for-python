@@ -14,8 +14,8 @@
 namespace SHARPY {
 
 struct GetItem {
-  using py_promise_type = std::promise<py::handle>;
-  using py_future_type = std::shared_future<py::handle>;
+  using py_promise_type = std::promise<py::object>;
+  using py_future_type = std::shared_future<py::object>;
 
   static FutureArray *__getitem__(const FutureArray &a,
                                   const std::vector<py::slice> &v);

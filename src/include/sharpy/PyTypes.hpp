@@ -11,13 +11,6 @@ namespace py = pybind11;
 
 namespace SHARPY {
 
-template <> inline bool SharedBaseObject<py::object>::needGIL() const {
-  return true;
-}
-template <> inline bool SharedBaseObject<py::handle>::needGIL() const {
-  return true;
-}
-
 template <typename T> py::object get_impl_dtype() {
   return get_impl_dtype(DTYPE<T>::value);
 };

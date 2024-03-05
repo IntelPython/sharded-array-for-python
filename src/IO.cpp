@@ -7,10 +7,13 @@
 #include "sharpy/IO.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
-#include "sharpy/PyTypes.hpp"
 #include "sharpy/SetGetItem.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
+
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
 
 namespace SHARPY {
 

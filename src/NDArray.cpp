@@ -12,10 +12,6 @@
 #include <algorithm>
 #include <iostream>
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-namespace py = pybind11;
-
 namespace SHARPY {
 
 NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
@@ -136,14 +132,8 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
 }
 
 NDArray::~NDArray() {
-  if (_base) {
-    if (_base->needGIL()) {
-      py::gil_scoped_acquire acquire;
-      delete _base;
-    } else {
-      delete _base;
-    }
-  }
+  if (_base)
+    delete _base;
 }
 
 // **************************************************************************
