@@ -28,11 +28,11 @@ if(DEFINED ENV{IMEXROOT})
 else()
   set(IMEX_ROOT ${CONDA_PREFIX})
 endif()
+message("ll ${IMEX_ROOT}")
 if(MKLROOT STREQUAL UNSET OR TBBROOT STREQUAL UNSET)
   message(FATAL_ERROR "MKLROOT and TBBROOT not set (nor CONDA_PREFIX)")
 endif()
 
-set(ZLIB_LIBRARY /usr/lib/x86_64-linux-gnu/libz.a)
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -50,13 +50,9 @@ message(STATUS "Expected IMEX sha: \"${EXPECTED_IMEX_SHA}\"")
 # Deps
 # ===============
 # Find dependent packages like IMEX, Python3 and NumPy
-find_package(ZLIB)
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_package(pybind11 CONFIG)
-# FindMPI does not work with iMPI conda packages
-set(MPI_INCLUDE_PATH $ENV{I_MPI_ROOT}/include)
-set(MPI_CXX_LIBRARIES $ENV{I_MPI_ROOT}/lib/libmpi.so $ENV{I_MPI_ROOT}/lib/libmpicxx.so)
-# find_package(MPI REQUIRED CXX)
+find_package(MPI REQUIRED)
 find_package(LLVM REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 find_package(MLIR REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
@@ -186,7 +182,6 @@ target_link_libraries(_sharpy PRIVATE
     LLVMX86AsmParser
     idtr
     tbb
-    ${ZLIB_LIBRARIES}
 )
 target_link_libraries(idtr PRIVATE
     ${MPI_CXX_LIBRARIES}

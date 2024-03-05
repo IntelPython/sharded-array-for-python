@@ -26,10 +26,11 @@ class build_ext(build_ext_orig):
         build_temp.mkdir(parents=True, exist_ok=True)
         extdir = pathlib.Path(self.get_ext_fullpath(ext.name))
         extdir.parent.mkdir(parents=True, exist_ok=True)
+
         # example of cmake args
         config = "Debug"  # if self.debug else 'RelWithDebInfo' #'Release'
         cmake_args = [
-            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir.parent.absolute()}",
+            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + str(extdir.parent.absolute()),
             "-DCMAKE_BUILD_TYPE=" + config,
             "-DCMAKE_VERBOSE_MAKEFILE=ON",
             "-G=Ninja",
