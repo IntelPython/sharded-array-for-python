@@ -119,17 +119,22 @@ void init(bool cw) {
 
 // #########################################################################
 
-/// trigger compile&run and return future value
+/// trigger compile&run and return python object
 #define PY_SYNC_RETURN(_f)                                                     \
-  int vtWaitSym, vtSHARPYClass;                                                \
-  VT(VT_classdef, "sharpy", &vtSHARPYClass);                                   \
-  VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                           \
-  VT(VT_begin, vtWaitSym);                                                     \
-  py::gil_scoped_release release;                                              \
-  Service::run();                                                              \
-  auto r = (_f).get();                                                         \
-  VT(VT_end, vtWaitSym);                                                       \
-  return r
+  {                                                                            \
+    int vtWaitSym, vtSHARPYClass;                                              \
+    VT(VT_classdef, "sharpy", &vtSHARPYClass);                                 \
+    VT(VT_funcdef, "wait", vtSHARPYClass, &vtWaitSym);                         \
+    VT(VT_begin, vtWaitSym);                                                   \
+    py::handle res;                                                            \
+    {                                                                          \
+      py::gil_scoped_release release;                                          \
+      Service::run();                                                          \
+      res = (_f).get();                                                        \
+    }                                                                          \
+    VT(VT_end, vtWaitSym);                                                     \
+    return py::reinterpret_steal<py::object>(res);                             \
+  }
 
 /// trigger compile&run and return given attribute _x
 #define SYNC_RETURN(_f, _a)                                                    \
@@ -139,7 +144,7 @@ void init(bool cw) {
   VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  auto r = (_f).get().get()->_a();                                             \
+  auto r = (_f).get().get() -> _a();                                           \
   VT(VT_end, vtWaitSym);                                                       \
   return r
 

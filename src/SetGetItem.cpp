@@ -32,22 +32,23 @@ namespace py = pybind11;
 namespace SHARPY {
 
 template <typename T> struct mk_array {
-  template <typename C> static py::object op(C &&shp, void *&outPtr) {
+  template <typename C> static py::handle op(C &&shp, void *&outPtr) {
     auto ary = py::array_t<T>(std::forward<C>(shp));
     outPtr = ary.mutable_data();
-    return ary;
+    return ary.release();
   }
 };
 
 template <typename T> struct wrap_array {
   template <typename C, typename S>
-  static py::object op(C &&shp, S &&str, void *data, const py::handle &handle) {
+  static py::handle op(C &&shp, S &&str, void *data, const py::handle &handle) {
     return py::array(std::forward<C>(shp), std::forward<S>(str),
-                     reinterpret_cast<T *>(data), handle);
+                     reinterpret_cast<T *>(data), handle)
+        .release();
   }
 };
 
-py::object wrap(NDArray::ptr_type tnsr, const py::handle &handle) {
+py::handle wrap(NDArray::ptr_type tnsr, const py::handle &handle) {
   auto tmp_shp = tnsr->local_shape();
   auto tmp_str = tnsr->local_strides();
   auto nd = tnsr->ndims();
@@ -71,14 +72,22 @@ struct DeferredGetLocals
 
   DeferredGetLocals() = default;
   DeferredGetLocals(const array_i::future_type &a, py::handle &handle)
-      : _a(a.guid()), _handle(handle) {}
+      : _a(a.guid()), _handle(handle) {
+    py::gil_scoped_acquire acquire;
+    _handle.inc_ref();
+  }
+  ~DeferredGetLocals() {
+    py::gil_scoped_acquire acquire;
+    _handle.dec_ref();
+  }
 
   void run() override {
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     assert(a_ptr);
     auto res = wrap(a_ptr, _handle);
-    set_value(py::make_tuple(res));
+    auto tpl = py::make_tuple(py::reinterpret_steal<py::object>(res));
+    set_value(tpl.release());
   }
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
@@ -116,7 +125,7 @@ struct DeferredGather
     bool sendonly = _root != REPLICATED && _root != myrank;
 
     void *outPtr = nullptr;
-    py::object res;
+    py::handle res;
     if (!sendonly || !trscvr) {
       auto tmp = a_ptr->shape();
       std::vector<ssize_t> tmpv(tmp, &tmp[a_ptr->ndims()]);
