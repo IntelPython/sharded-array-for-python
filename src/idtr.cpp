@@ -352,13 +352,16 @@ using MRIdx1d = SHARPY::Unranked1DMemRefType<int64_t>;
 // FIXME hard-coded for contiguous layout
 template <typename T>
 void _idtr_reduce_all(int64_t dataRank, void *dataDescr, int op) {
+  auto tc = SHARPY::getTransceiver();
+  if (!tc)
+    return;
   SHARPY::UnrankedMemRefType<T> data(dataRank, dataDescr);
   assert(dataRank == 0 || (dataRank == 1 && data.strides()[0] == 1));
   auto d = data.data();
   auto t = SHARPY::DTYPE<T>::value;
   auto r = dataRank ? data.sizes()[0] : 1;
   auto o = mlir2sharpy(static_cast<imex::ndarray::ReduceOpId>(op));
-  SHARPY::getTransceiver()->reduce_all(d, t, r, o);
+  tc->reduce_all(d, t, r, o);
 }
 
 extern "C" {

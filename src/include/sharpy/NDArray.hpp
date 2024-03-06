@@ -19,25 +19,6 @@
 namespace SHARPY {
 class Transceiver;
 
-/// @brief use this to provide a base object to the array
-// such a base object can own shared data
-// you might need to implement reference counting
-struct BaseObj {
-  virtual ~BaseObj() {}
-};
-
-/// @brief Simple implementation of BaseObj for ref-counting types
-/// @tparam T ref-counting type, such as py::object of std::shared_Ptr
-/// we keep an object of the ref-counting type. Normal ref-counting/destructors
-/// will take care of the rest.
-template <typename T> struct SharedBaseObject : public BaseObj {
-  SharedBaseObject(const SharedBaseObject &) = default;
-  SharedBaseObject(SharedBaseObject &&) = default;
-  SharedBaseObject(const T &o) : _base(o) {}
-  SharedBaseObject(T &&o) : _base(std::forward<T>(o)) {}
-  T _base;
-};
-
 /// The actual implementation of the SHARPYensor, implementing the array_i
 /// interface. It holds the array data and some meta information. The member
 /// attributes are mostly inspired by the needs of interacting with MLIR. It

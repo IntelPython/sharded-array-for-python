@@ -119,9 +119,8 @@ jobs:
           . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
           . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
           MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python -m pip install . -v
-          # SHARPY_ROOT=`pip show -f sharpy | grep Location | awk '{print $2}'`
-          # for some reason we cannot use the idtr from the install, not even a copy works
-          libidtr=`ls ${PWD}/build/lib.linux-x86_64-cpython-*/sharpy/libidtr.so`
+          libidtr=$(pip show -f sharpy | grep Location | awk '{print $2}' | tr -d '\n')
+          libidtr=${libidtr}/$(pip show -f sharpy | grep libidtr | awk '{print $1}' | tr -d '\n')
           echo "SHARPY_IDTR_SO=${libidtr}" >> $GITHUB_ENV
           echo $SHARPY_IDTR_SO
       - name: Test SHARPY (pytest)
