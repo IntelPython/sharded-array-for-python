@@ -34,7 +34,7 @@ If your compiler does not default to a recent (e.g. g++ >= 9) version, try somet
 # single rank
 pytest test
 # distributed on multiple ($N) ranks/processes
-SHARPY_IDTR_SO=`pwd`/sharpy/libidtr.so mpirun -n $N python -m pytest test
+mpirun -n $N python -m pytest test
 ```
 
 ## Running
@@ -57,13 +57,13 @@ sp.fini()
 Assuming the above is in file `simple.py` a single-process run is executed like
 
 ```bash
-SHARPY_IDTR_SO=`pwd`/sharpy/libidtr.so python simple.py
+python simple.py
 ```
 
 and multi-process run is executed like
 
 ```bash
-SHARPY_IDTR_SO=`pwd`/sharpy/libidtr.so mpirun -n 5 python simple.py
+mpirun -n 5 python simple.py
 ```
 
 ### Distributed Execution without mpirun
@@ -76,7 +76,7 @@ Additionally SHARPY_MPI_HOSTS can be used to control the host to use for spawnin
 The following command will run the stencil example on 3 MPI ranks:
 
 ```bash
-SHARPY_IDTR_SO=`pwd`/sharpy/libidtr.so \
+SHARPY_FALLBACK=numpy \
   SHARPY_MPI_SPAWN=2 \
   SHARPY_MPI_EXECUTABLE=`which python` \
   SHARPY_MPI_EXE_ARGS="examples/stencil-2d.py 10 2000 star 2" \

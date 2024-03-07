@@ -6,6 +6,28 @@ import sharpy as sp
 
 
 class TestIO:
+    @pytest.mark.parametrize("backend", ["opencl:", "level-zero:", "cuda:", ""])
+    @pytest.mark.parametrize("device", ["host", "gpu", "cpu", "accelerator"])
+    @pytest.mark.parametrize("subdev", [":2", ""])
+    def test_device_input_valid(self, backend, device, subdev):
+        a = sp.ones((4,), device=f"{backend}{device}{subdev}")
+        assert a.size == 4
+
+    @pytest.mark.parametrize(
+        "device",
+        [
+            "opencl3:gpu",
+            "opencl:hostx",
+            "opencl:cpu:r",
+            "opencl:gpu::1",
+            "opencl::gpu:1",
+        ],
+    )
+    def test_device_input_invalid(self, device):
+        with pytest.raises(ValueError, match="Invalid device string: *"):
+            a = sp.ones((4,), device=device)
+            assert a.size == 4
+
     @pytest.mark.skip(reason="FIXME reshape")
     def test_to_numpy2d(self):
         a = sp.reshape(

@@ -44,6 +44,7 @@ using namespace pybind11::literals; // to bring _a
 #include "sharpy/itac.hpp"
 #include "sharpy/jit/mlir.hpp"
 
+#include <fstream>
 #include <iostream>
 
 namespace SHARPY {
@@ -96,9 +97,13 @@ void fini() {
   finied = true;
 }
 
-void init(bool cw) {
+void init(bool cw, std::string libidtr) {
   if (inited)
     return;
+
+  if (!std::ifstream(libidtr)) {
+    throw std::runtime_error(std::string("Cannot find libidtr.so"));
+  }
 
   init_transceiver(new MPITransceiver(cw));
   init_mediator(new MPIMediator());
@@ -107,12 +112,12 @@ void init(bool cw) {
             << cpu << std::endl;
   if (cw) {
     if (getTransceiver()->rank()) {
-      process_promises();
+      process_promises(libidtr);
       fini();
       exit(0);
     }
   }
-  pprocessor = new std::thread(process_promises);
+  pprocessor = new std::thread(process_promises, libidtr);
   inited = true;
   finied = false;
 }

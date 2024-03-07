@@ -13,6 +13,8 @@ https://data-apis.org/array-api/latest
 # At this point there are no checks of input arguments whatsoever, arguments
 # are simply forwarded as-is.
 
+import os
+import re
 from importlib import import_module
 from os import getenv
 from typing import Any
@@ -42,8 +44,11 @@ pi = 3.1415926535897932384626433
 
 
 def init(cw=None):
+    libidtr = os.path.join(os.path.dirname(__file__), "libidtr.so")
+    assert os.path.isfile(libidtr), "libidtr.so not found"
+
     cw = _sharpy_cw if cw is None else cw
-    _init(cw)
+    _init(cw, libidtr)
 
 
 def to_numpy(a):
@@ -64,31 +69,42 @@ for op in api.api_categories["EWUnyOp"]:
             f"{op} = lambda this: ndarray(_csp.EWUnyOp.op(_csp.{OP}, this._t))"
         )
 
+
+def _validate_device(device):
+    if len(device) == 0 or re.search(
+        r"^((opencl|level-zero|cuda):)?(host|gpu|cpu|accelerator)(:\d+)?$",
+        device,
+    ):
+        return device
+    else:
+        raise ValueError(f"Invalid device string: {device}")
+
+
 for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func == "full":
         exec(
-            f"{func} = lambda shape, val, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, val, dtype, device, team))"
+            f"{func} = lambda shape, val, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, val, dtype, _validate_device(device), team))"
         )
     elif func == "empty":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, None, dtype, device, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, None, dtype, _validate_device(device), team))"
         )
     elif func == "ones":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 1, dtype, device, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 1, dtype, _validate_device(device), team))"
         )
     elif func == "zeros":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 0, dtype, device, team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 0, dtype, _validate_device(device), team))"
         )
     elif func == "arange":
         exec(
-            f"{func} = lambda start, end, step, dtype=int64, device='', team=1: ndarray(_csp.Creator.arange(start, end, step, dtype, device, team))"
+            f"{func} = lambda start, end, step, dtype=int64, device='', team=1: ndarray(_csp.Creator.arange(start, end, step, dtype, _validate_device(device), team))"
         )
     elif func == "linspace":
         exec(
-            f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=1: ndarray(_csp.Creator.linspace(start, end, step, endpoint, dtype, device, team))"
+            f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=1: ndarray(_csp.Creator.linspace(start, end, step, endpoint, dtype, _validate_device(device), team))"
         )
 
 for func in api.api_categories["ReduceOp"]:
@@ -116,10 +132,17 @@ for func in api.api_categories["LinAlgOp"]:
 
 _fb_env = getenv("SHARPY_FALLBACK")
 if _fb_env is not None:
+    if not _fb_env.isalnum():
+        raise ValueError(f"Invalid SHARPY_FALLBACK value '{_fb_env}'")
 
     class _fallback:
         "Fallback to whatever is provided in SHARPY_FALLBACK"
-        _fb_lib = import_module(_fb_env)
+        try:
+            _fb_lib = import_module(_fb_env)
+        except ModuleNotFoundError:
+            raise ValueError(
+                f"Invalid SHARPY_FALLBACK value '{_fb_env}': module not found"
+            )
 
         def __init__(self, fname: str, mod=None) -> None:
             """get callable with name 'fname' from fallback-lib

@@ -55,7 +55,7 @@ def run(n, backend, datatype, benchmark_mode):
         from sharpy import fini, init, sync
         from sharpy.numpy import fromfunction as _fromfunction
 
-        device = os.getenv("SHARPY_USE_GPU", "")
+        device = os.getenv("SHARPY_DEVICE", "")
         create_full = partial(np.full, device=device)
         fromfunction = partial(_fromfunction, device=device)
 

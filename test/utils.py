@@ -7,7 +7,7 @@ from sharpy.numpy import fromfunction
 
 sharpy.fromfunction = fromfunction
 
-device = getenv("SHARPY_USE_GPU", "")
+device = getenv("SHARPY_DEVICE", "")
 
 
 def runAndCompare(func, do_gather=True):

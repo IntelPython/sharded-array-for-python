@@ -81,7 +81,7 @@ void Runable::fini() { _deferred.clear(); }
 // When execution is needed, the function signature (input args, return
 // statement) is finalized, the function gets compiled and executed. The loop
 // completes by calling run() on the requesting object.
-void process_promises() {
+void process_promises(const std::string &libidtr) {
   int vtProcessSym, vtSHARPYClass, vtPopSym;
   VT(VT_classdef, "sharpy", &vtSHARPYClass);
   VT(VT_funcdef, "process", vtSHARPYClass, &vtProcessSym);
@@ -89,7 +89,7 @@ void process_promises() {
   VT(VT_begin, vtProcessSym);
 
   bool done = false;
-  jit::JIT jit;
+  jit::JIT jit(libidtr);
   std::vector<Runable::ptr_type> deleters;
 
   do {

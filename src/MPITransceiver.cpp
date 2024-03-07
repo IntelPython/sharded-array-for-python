@@ -5,6 +5,8 @@
 */
 
 #include "sharpy/MPITransceiver.hpp"
+#include "sharpy/UtilsAndTypes.hpp"
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <mpi.h>
@@ -44,28 +46,32 @@ MPITransceiver::MPITransceiver(bool is_cw)
     // Ok, let's spawn the clients.
     // I need some information for the startup.
     // 1. Name of the executable (default is the current exe)
-    const char *_tmp = getenv("SHARPY_MPI_SPAWN");
-    if (_tmp) {
-      int nClientsToSpawn = atol(_tmp);
-      std::string clientExe;
+    int nClientsToSpawn = get_int_env("SHARPY_MPI_SPAWN", 0);
+    if (nClientsToSpawn) {
       std::vector<std::string> args;
-      _tmp = getenv("SHARPY_MPI_EXECUTABLE");
-      if (!_tmp) {
-        _tmp = getenv("PYTHON_EXE");
-        if (!_tmp)
+      std::string clientExe = get_text_env("SHARPY_MPI_EXECUTABLE");
+      std::string exeArgs;
+      if (clientExe.empty()) {
+        auto pythonExe = get_text_env("PYTHON_EXE");
+        if (pythonExe.empty())
           throw std::runtime_error("Spawning MPI processes requires setting "
                                    "'SHARPY_MPI_EXECUTABLE' or 'PYTHON_EXE'");
-        clientExe = _tmp;
+        if (!std::ifstream(pythonExe)) {
+          throw std::runtime_error("Invalid PYTHON_EXE");
+        }
+        clientExe = pythonExe;
         // 2. arguments
-        _tmp = "-c import sharpy as sp; sp.init(True)";
+        exeArgs += " -c import sharpy as sp; sp.init(True)";
         args.push_back("-c");
         args.push_back("import sharpy as sp; sp.init(True)");
       } else {
-        clientExe = _tmp;
+        if (!std::ifstream(clientExe)) {
+          throw std::runtime_error("Invalid SHARPY_MPI_EXECUTABLE.");
+        }
         // 2. arguments
-        _tmp = getenv("SHARPY_MPI_EXE_ARGS");
-        if (_tmp) {
-          std::istringstream iss(_tmp);
+        exeArgs = get_text_env("SHARPY_MPI_EXE_ARGS");
+        if (!exeArgs.empty()) {
+          std::istringstream iss(exeArgs);
           std::copy(std::istream_iterator<std::string>(iss),
                     std::istream_iterator<std::string>(),
                     std::back_inserter(args));
@@ -78,20 +84,19 @@ MPITransceiver::MPITransceiver(bool is_cw)
       clientArgs[args.size()] = nullptr;
 
       // 3. Special setting for MPI_Info: hosts
-      const char *clientHost = getenv("SHARPY_MPI_HOSTS");
-
+      auto clientHost = get_text_env("SHARPY_MPI_HOSTS");
       // Prepare MPI_Info object:
       MPI_Info clientInfo = MPI_INFO_NULL;
-      if (clientHost) {
+      if (!clientHost.empty()) {
         MPI_Info_create(&clientInfo);
         MPI_Info_set(clientInfo, const_cast<char *>("host"),
-                     const_cast<char *>(clientHost));
+                     const_cast<char *>(clientHost.c_str()));
         std::cerr << "[SHARPY " << rank << "] Set MPI_Info_set(\"host\", \""
                   << clientHost << "\")\n";
       }
       // Now spawn the client processes:
       std::cerr << "[SHARPY " << rank << "] Spawning " << nClientsToSpawn
-                << " MPI processes (" << clientExe << " " << _tmp << ")"
+                << " MPI processes (" << clientExe << " " << exeArgs << ")"
                 << std::endl;
       int *errCodes = new int[nClientsToSpawn];
       MPI_Comm interComm;

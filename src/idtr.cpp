@@ -7,6 +7,7 @@
 #include <sharpy/MPITransceiver.hpp>
 #include <sharpy/MemRefType.hpp>
 #include <sharpy/NDArray.hpp>
+#include <sharpy/UtilsAndTypes.hpp>
 
 #include <imex/Dialect/NDArray/IR/NDArrayDefs.h>
 
@@ -25,6 +26,9 @@ using container_type =
 static container_type garrays;
 static SHARPY::id_type _nguid = -1;
 inline SHARPY::id_type get_guid() { return ++_nguid; }
+
+static bool skip_comm = get_bool_env("SHARPY_SKIP_COMM");
+static bool no_async = get_bool_env("SHARPY_NO_ASYNC");
 
 // Transceiver * theTransceiver = MPITransceiver();
 
@@ -760,7 +764,7 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   }
 
   auto nworkers = tc->nranks();
-  if (nworkers <= 1 || getenv("SHARPY_SKIP_COMM"))
+  if (nworkers <= 1 || skip_comm)
     return nullptr;
 
   // not thread-safe
@@ -835,8 +839,7 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
     }
   };
 
-  if (cache->_bufferizeLRecv || cache->_bufferizeRRecv ||
-      getenv("SHARPY_NO_ASYNC")) {
+  if (cache->_bufferizeLRecv || cache->_bufferizeRRecv || no_async) {
     wait();
     return nullptr;
   }

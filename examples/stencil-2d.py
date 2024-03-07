@@ -118,7 +118,7 @@ def main():
     print("Data type            = double precision")
     print("Compact representation of stencil loop body")
 
-    device = os.getenv("SHARPY_USE_GPU", "")
+    device = os.getenv("SHARPY_DEVICE", "")
 
     # there is certainly a more Pythonic way to initialize W,
     # but it will have no impact on performance.

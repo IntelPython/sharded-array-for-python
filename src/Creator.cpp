@@ -22,7 +22,7 @@
 
 namespace SHARPY {
 
-static const char *FORCE_DIST = getenv("SHARPY_FORCE_DIST");
+static bool FORCE_DIST = get_bool_env("SHARPY_FORCE_DIST");
 
 inline uint64_t mkTeam(uint64_t team) {
   if (team && (FORCE_DIST || getTransceiver()->nranks() > 1)) {

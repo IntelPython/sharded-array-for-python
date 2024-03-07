@@ -26,7 +26,7 @@ namespace jit {
 class DepManager;
 }
 
-extern void process_promises();
+extern void process_promises(const std::string &libidtr);
 
 // interface for promises/tasks to generate MLIR or execute immediately.
 struct Runable {

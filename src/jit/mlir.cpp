@@ -36,6 +36,7 @@
 #include "sharpy/jit/mlir.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/Registry.hpp"
+#include "sharpy/UtilsAndTypes.hpp"
 
 // #include "llvm/Support/InitLLVM.h"
 
@@ -787,14 +788,13 @@ static const char *gpu_pipeline =
     "finalize-memref-to-llvm,"
     "reconcile-unrealized-casts";
 
+std::string _passes = get_text_env("SHARPY_PASSES");
 static const char *pass_pipeline =
-    getenv("SHARPY_PASSES")
-        ? getenv("SHARPY_PASSES")
-        : (getenv("SHARPY_USE_GPU") ? gpu_pipeline : cpu_pipeline);
+    _passes != "" ? _passes.c_str() : (useGPU() ? gpu_pipeline : cpu_pipeline);
 
-JIT::JIT()
+JIT::JIT(const std::string &libidtr)
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
-      _verbose(0), _jit_opt_level(3) {
+      _verbose(0), _jit_opt_level(3), _idtrlib(libidtr) {
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
   ::mlir::DialectRegistry registry;
@@ -817,10 +817,7 @@ JIT::JIT()
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");
 
-  const char *v_ = getenv("SHARPY_VERBOSE");
-  if (v_) {
-    _verbose = std::stoi(v_);
-  }
+  _verbose = get_int_env("SHARPY_VERBOSE");
   // some verbosity
   if (_verbose) {
     std::cerr << "SHARPY_PASSES=\"" << pass_pipeline << "\"" << std::endl;
@@ -833,43 +830,44 @@ JIT::JIT()
       _pm.enableIRPrinting();
   }
 
-  const char *envptr = getenv("SHARPY_USE_CACHE");
-  envptr = envptr ? envptr : "1";
-  {
-    auto c = std::string(envptr);
-    _useCache = c == "1" || c == "y" || c == "Y" || c == "on" || c == "ON";
-    std::cerr << "enableObjectDump=" << _useCache << std::endl;
-  }
-  const char *ol_ = getenv("SHARPY_OPT_LEVEL");
-  if (ol_) {
-    _jit_opt_level = std::stoi(ol_);
-    if (_jit_opt_level < 0 || _jit_opt_level > 3) {
-      throw std::runtime_error(std::string("Bad optimization level: ") + ol_);
-    }
+  _useCache = get_bool_env("SHARPY_USE_CACHE", 1);
+  std::cerr << "enableObjectDump=" << _useCache << std::endl;
+  _jit_opt_level = get_int_env("SHARPY_OPT_LEVEL", 3);
+  if (_jit_opt_level < 0 || _jit_opt_level > 3) {
+    throw std::runtime_error(std::string("Invalid SHARPY_OPT_LEVEL"));
   }
 
-  const char *mlirRoot = getenv("MLIRROOT");
-  mlirRoot = mlirRoot ? mlirRoot : CMAKE_MLIR_ROOT;
-  _crunnerlib = std::string(mlirRoot) + "/lib/libmlir_c_runner_utils.so";
-  _runnerlib = std::string(mlirRoot) + "/lib/libmlir_runner_utils.so";
+  std::string mlirRoot = get_text_env("MLIRROOT");
+  mlirRoot = !mlirRoot.empty() ? mlirRoot : std::string(CMAKE_MLIR_ROOT);
+  _crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
+  _runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
+  if (!std::ifstream(_crunnerlib)) {
+    throw std::runtime_error(
+        std::string("Cannot find libmlir_c_runner_utils.so"));
+  }
+  if (!std::ifstream(_runnerlib)) {
+    throw std::runtime_error(
+        std::string("Cannot find libmlir_runner_utils.so"));
+  }
 
-  const char *idtrlib = getenv("SHARPY_IDTR_SO");
-  idtrlib = idtrlib ? idtrlib : "libidtr.so";
-
-  auto useGPU = getenv("SHARPY_USE_GPU");
-  if (useGPU) {
-    const char *gpuxlibstr = getenv("SHARPY_GPUX_SO");
-    if (gpuxlibstr) {
+  if (useGPU()) {
+    auto gpuxlibstr = get_text_env("SHARPY_GPUX_SO");
+    if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      const char *imexRoot = getenv("IMEXROOT");
-      imexRoot = imexRoot ? imexRoot : CMAKE_IMEX_ROOT;
-      _gpulib = std::string(imexRoot) + "/lib/liblevel-zero-runtime.so";
+      std::string imexRoot = get_text_env("IMEXROOT");
+      imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
+      _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      if (!std::ifstream(_gpulib)) {
+        throw std::runtime_error(
+            std::string("Cannot find liblevel-zero-runtime.so"));
+      }
     }
-    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), idtrlib,
-                       _gpulib.c_str()};
+    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
+                       _idtrlib.c_str(), _gpulib.c_str()};
   } else {
-    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(), idtrlib};
+    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
+                       _idtrlib.c_str()};
   }
 
   // detect target architecture
@@ -897,6 +895,9 @@ JIT::JIT()
 void init() {
   assert(sizeof(intptr_t) == sizeof(void *));
   assert(sizeof(intptr_t) == sizeof(int64_t));
+  if (!isText(pass_pipeline)) {
+    throw std::runtime_error("Invalid SHARPY_PASSES");
+  }
 
   ::mlir::registerAllPasses();
   ::imex::registerAllPasses();

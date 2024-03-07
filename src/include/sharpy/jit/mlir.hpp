@@ -113,10 +113,10 @@ void init();
 void fini();
 
 // A class to manage the MLIR business (compilation and execution).
-// Just a stub for now, will need to be extended with paramters and maybe more.
+// Just a stub for now, will need to be extended with parameters and maybe more.
 class JIT {
 public:
-  JIT();
+  JIT(const std::string &libidtr);
   // run
   std::vector<intptr_t> run(::mlir::ModuleOp &, const std::string &,
                             std::vector<void *> &, size_t);
@@ -135,7 +135,7 @@ private:
   bool _useCache;
   int _jit_opt_level;
   ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
-  std::string _crunnerlib, _runnerlib, _gpulib;
+  std::string _crunnerlib, _runnerlib, _idtrlib, _gpulib;
 };
 
 /// Manages input/output (array) dependencies

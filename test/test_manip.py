@@ -47,7 +47,7 @@ class TestManip:
     @pytest.mark.skipif(
         len(device)
         or MPI.COMM_WORLD.size > 1
-        or os.getenv("SHARPY_FORCE_DIST"),
+        or os.getenv("SHARPY_FORCE_DIST") is not None,
         reason="FIXME GPU and multi-proc",
     )
     def test_astype_copy(self):

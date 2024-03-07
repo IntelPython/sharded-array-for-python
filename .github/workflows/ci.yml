@@ -26,16 +26,16 @@ jobs:
           token: ${{ secrets.PATIMEX }}
           path: third_party/imex
           ref: ${{ env.IMEX_SHA }}
-      - name: Cache miniconda
-        id: cache-miniconda
-        uses: actions/cache@v3
-        env:
-          MINICONDA_CACHE_NUMBER: 2  # Increase to reset cache
-        with:
-          path: third_party/install/miniconda/**
-          key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.txt') }}
+      # - name: Cache miniconda
+      #   id: cache-miniconda
+      #   uses: actions/cache@v3
+      #   env:
+      #     MINICONDA_CACHE_NUMBER: 2  # Increase to reset cache
+      #   with:
+      #     path: third_party/install/miniconda/**
+      #     key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.txt') }}
       - name: Miniconda
-        if: steps.cache-miniconda.outputs.cache-hit != 'true'
+        # if: steps.cache-miniconda.outputs.cache-hit != 'true'
         run: |
           rm -rf "$GITHUB_WORKSPACE"/third_party/install/miniconda
           mkdir -p "$GITHUB_WORKSPACE"/third_party/install
@@ -50,12 +50,12 @@ jobs:
           cd -
           conda create --file conda-env.txt --name sharpy
           conda clean -a -y
-      - name: Setup miniconda
-        if: steps.cache-miniconda.outputs.cache-hit == 'true'
-        run: |
-          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/bin" >> $GITHUB_PATH
-          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/condabin" >> $GITHUB_PATH
-          export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
+      # - name: Setup miniconda
+      #   if: steps.cache-miniconda.outputs.cache-hit == 'true'
+      #   run: |
+      #     echo "$GITHUB_WORKSPACE/third_party/install/miniconda/bin" >> $GITHUB_PATH
+      #     echo "$GITHUB_WORKSPACE/third_party/install/miniconda/condabin" >> $GITHUB_PATH
+      #     export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
       - name: Setup LLVM Cache Var
         run: |
           echo 'LLVM_SHA<<EOF' >> $GITHUB_ENV

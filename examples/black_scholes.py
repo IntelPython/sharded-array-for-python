@@ -176,7 +176,7 @@ def run(nopt, backend, iterations, datatype):
         import sharpy as np
         from sharpy import fini, init, sync
 
-        device = os.getenv("SHARPY_USE_GPU", "")
+        device = os.getenv("SHARPY_DEVICE", "")
         create_full = partial(np.full, device=device)
         erf = np.erf
 

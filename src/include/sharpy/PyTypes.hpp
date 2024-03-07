@@ -53,38 +53,6 @@ _downcast<bool>(a_ptr));
   }
 }
 
-inline py::module_
-get_array_impl(const py::object & =
-                   py::none()) { // FIXME ary.attr("__array_namespace__")();
-  static const char *_array_impl = nullptr;
-  if (_array_impl == nullptr) {
-    _array_impl = getenv("DDPNP_ARRAY");
-    if (_array_impl == nullptr)
-      _array_impl = "numpy";
-  }
-  py::module_ _array_ns = py::module_::import(_array_impl);
-  return _array_ns;
-}
-
-inline const py::object &get_impl_dtype(const DTypeId dt) {
-  static py::object _dtypes[DTYPE_LAST]{py::none()};
-  if (_dtypes[FLOAT32].is(py::none())) {
-    auto mod = get_array_impl();
-    _dtypes[FLOAT32] = mod.attr("float32");
-    _dtypes[FLOAT64] = mod.attr("float64");
-    _dtypes[INT16] = mod.attr("int16");
-    _dtypes[INT32] = mod.attr("int32");
-    _dtypes[INT64] = mod.attr("int64");
-#if 0 // FIXME torch
-        _dtypes[UINT16] = mod.attr("uint16");
-        _dtypes[UINT32] = mod.attr("uint32");
-        _dtypes[UINT64] = mod.attr("uint64");
-#endif
-    _dtypes[BOOL] = mod.attr("bool");
-  }
-  return _dtypes[dt];
-}
-
 template <typename T, typename SZ, typename EL>
 py::tuple _make_tuple(const T &v, const SZ &sz, const EL &el) {
   const auto n = sz(v);
