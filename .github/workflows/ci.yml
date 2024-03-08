@@ -1,9 +1,15 @@
 name: GitHub Actions Demo
 run-name: ${{ github.actor }} CI for sharpy
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 defaults:
   run:
     shell: bash
+env:
+  IMEX_CACHE_NUMBER: 4  # Increase to reset cache
 jobs:
   build_and_test:
     runs-on: tpi-ubuntu-latest
@@ -14,122 +20,61 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: recursive
-      - name: Setup IMEX Cache Var
+      - name: Setup env
         run: |
+          INSTALLED_DIR="$(realpath $GITHUB_WORKSPACE)/third_party/install"
+          echo "INSTALLED_DIR=$INSTALLED_DIR" >> "$GITHUB_ENV"
+          CONDA_ROOT="$(realpath $GITHUB_WORKSPACE/..)/install/miniconda3"
+          echo "CONDA_ROOT=$CONDA_ROOT" >> "$GITHUB_ENV"
           echo 'IMEX_SHA<<EOF' >> $GITHUB_ENV
           cat imex_version.txt >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
-      - name: Checkout IMEX
-        uses: actions/checkout@v3
+      - name: Restore IMEX cache
+        id: cache-imex
+        uses: actions/cache/restore@v3
         with:
-          repository: intel-innersource/frameworks.ai.mlir.mlir-extensions
-          token: ${{ secrets.PATIMEX }}
-          path: third_party/imex
-          ref: ${{ env.IMEX_SHA }}
-      # - name: Cache miniconda
-      #   id: cache-miniconda
-      #   uses: actions/cache@v3
-      #   env:
-      #     MINICONDA_CACHE_NUMBER: 2  # Increase to reset cache
-      #   with:
-      #     path: third_party/install/miniconda/**
-      #     key: ${{ runner.os }}-miniconda-${{ env.MINICONDA_CACHE_NUMBER }}-${{ hashFiles('conda-env.txt') }}
-      - name: Miniconda
-        # if: steps.cache-miniconda.outputs.cache-hit != 'true'
-        run: |
-          rm -rf "$GITHUB_WORKSPACE"/third_party/install/miniconda
-          mkdir -p "$GITHUB_WORKSPACE"/third_party/install
-          cd "$GITHUB_WORKSPACE"/third_party
-          wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-          bash Miniconda3-latest-Linux-x86_64.sh -u -b -f -p $GITHUB_WORKSPACE/third_party/install/miniconda
-          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/bin" >> $GITHUB_PATH
-          echo "$GITHUB_WORKSPACE/third_party/install/miniconda/condabin" >> $GITHUB_PATH
-          export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate
-          cd -
-          conda create --file conda-env.txt --name sharpy
-          conda clean -a -y
-      # - name: Setup miniconda
-      #   if: steps.cache-miniconda.outputs.cache-hit == 'true'
-      #   run: |
-      #     echo "$GITHUB_WORKSPACE/third_party/install/miniconda/bin" >> $GITHUB_PATH
-      #     echo "$GITHUB_WORKSPACE/third_party/install/miniconda/condabin" >> $GITHUB_PATH
-      #     export PATH=$GITHUB_WORKSPACE/third_party/install/miniconda/bin:${PATH}
-      - name: Setup LLVM Cache Var
-        run: |
-          echo 'LLVM_SHA<<EOF' >> $GITHUB_ENV
-          cat third_party/imex/build_tools/llvm_version.txt >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
-      - name: Cache LLVM-MLIR
-        id: cache-llvm-mlir
-        uses: actions/cache@v3
-        env:
-          LLVM_CACHE_NUMBER: 1  # Increase to reset cache
-        with:
-          path: third_party/install/llvm-mlir/**
-          key: ${{ runner.os }}-build-llvm-${{ env.LLVM_CACHE_NUMBER }}-${{ env.LLVM_SHA }}
-      - name: Build LLVM MLIR
-        if: steps.cache-llvm-mlir.outputs.cache-hit != 'true'
-        run: |
-          echo "INFO: Need to rebuild LLVM-MLIR. Previous installation for MLIR not found"
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
-          np=`nproc`
-          pushd third_party
-          if [ -d "llvm-project" ]; then rm -rf llvm-project; fi
-          mkdir llvm-project || exit 1
-          cd llvm-project || exit 1
-          git init
-          git remote add origin https://github.com/llvm/llvm-project || exit 1
-          git fetch origin ${{ env.LLVM_SHA }} || exit 1
-          git reset --hard FETCH_HEAD || exit 1
-          if [ -d "$GITHUB_WORKSPACE/third_party/imex/build_tools/patches" ]; then git apply $GITHUB_WORKSPACE/third_party/imex/build_tools/patches/*.patch; fi
-          cd -
-          mkdir -p build/llvm-mlir || exit 1
-          cd build/llvm-mlir || exit 1
-          cmake ../../llvm-project/llvm -GNinja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=mlir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_ENABLE_RTTI=ON -DLLVM_INSTALL_UTILS=ON -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_ENABLE_ZSTD=OFF -DLLVM_DISTRIBUTION_COMPONENTS="llvm-headers;llvm-libraries;cmake-exports;FileCheck;count;not;mlir-headers;mlir-libraries;mlir-cmake-exports;mlir-tblgen;mlir-cpu-runner" -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE"/third_party/install/llvm-mlir
-          cmake --build . -j ${np} || exit 1
-          cmake --install . || exit 1
-          cp bin/FileCheck $GITHUB_WORKSPACE/third_party/install/llvm-mlir/bin/
-          cp bin/count $GITHUB_WORKSPACE/third_party/install/llvm-mlir/bin/
-          cp bin/not $GITHUB_WORKSPACE/third_party/install/llvm-mlir/bin/
-          popd
-      - name: Cache IMEX
-        id: cache-imex-mlir
-        uses: actions/cache@v3
-        env:
-          IMEX_CACHE_NUMBER: 1  # Increase to reset cache
-        with:
-          path: third_party/install/imex/**
+          path: third_party/install/**
           key: ${{ runner.os }}-build-imex-${{ env.IMEX_CACHE_NUMBER }}-${{ env.IMEX_SHA }}
-      - name: Build IMEX
-        if: steps.cache-imex-mlir.outputs.cache-hit != 'true'
+      - name: Miniconda
         run: |
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
-          mkdir -p third_party/build/imex
-          pushd third_party/build/imex
-          MLIR_DIR=$GITHUB_WORKSPACE/third_party/install/llvm-mlir cmake $GITHUB_WORKSPACE/third_party/imex -DCMAKE_BUILD_TYPE=debug -G Ninja
-          cmake --build . -j ${np} || exit 1
-          cmake --install . --prefix=$GITHUB_WORKSPACE/third_party/install/imex || exit 1
-          popd
+          env
+          rm -rf $CONDA_ROOT
+          cd $GITHUB_WORKSPACE/..
+          rm -f Miniconda3-*.sh
+          CPKG=Miniconda3-latest-Linux-x86_64.sh
+          wget -q https://repo.anaconda.com/miniconda/$CPKG
+          bash $CPKG -u -b -f -p $CONDA_ROOT
+          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+          conda install -c conda-forge --override-channels python git-lfs conda-build
+          # aahhhh bug in conda somewhere
+          sed -i "s,\#\!/usr/bin/env python,#\!$CONDA_ROOT/bin/python," $CONDA_ROOT/*bin/conda
+          conda clean --all -y
       - name: Build SHARPY
         run: |
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
-          MLIRROOT=$GITHUB_WORKSPACE/third_party/install/llvm-mlir IMEXROOT=$GITHUB_WORKSPACE/third_party/install/imex python -m pip install . -v
-          libidtr=$(pip show -f sharpy | grep Location | awk '{print $2}' | tr -d '\n')
-          libidtr=${libidtr}/$(pip show -f sharpy | grep libidtr | awk '{print $1}' | tr -d '\n')
-          echo "SHARPY_IDTR_SO=${libidtr}" >> $GITHUB_ENV
-          echo $SHARPY_IDTR_SO
+          env
+          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+          cd conda-recipe
+          conda build --numpy 1.26 -c conda-forge --override-channels --no-anaconda-upload --no-test .
+      - name: Save IMEX cache
+        uses: actions/cache/save@v3
+        if: steps.cache-imex.outputs.cache-hit != 'true'
+        with:
+          path: third_party/install/**
+          key: ${{ runner.os }}-build-imex-${{ env.IMEX_CACHE_NUMBER }}-${{ env.IMEX_SHA }}
+      - name: Install SHARPY
+        run: |
+          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+          conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest
+          conda activate sharpy
       - name: Test SHARPY (pytest)
         run: |
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
+          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+          conda activate sharpy
           cd test
-          echo $SHARPY_IDTR_SO
-          ldd $SHARPY_IDTR_SO
           pytest . -v -s
           SHARPY_FORCE_DIST=1 pytest . -v -s
           mpirun -n 2 pytest . -v -s
@@ -138,8 +83,9 @@ jobs:
           cd -
       - name: Run examples
         run: |
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/etc/profile.d/conda.sh
-          . $GITHUB_WORKSPACE/third_party/install/miniconda/bin/activate sharpy
+          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+          conda activate sharpy
           cd examples
           SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 1024 star 4
           SHARPY_FALLBACK=numpy SHARPY_FORCE_DIST=1 python -u ./stencil-2d.py 5 1024 star 4
@@ -167,7 +113,3 @@ jobs:
           mpirun -n 3 python -u ./black_scholes.py
           mpirun -n 4 python -u ./black_scholes.py
           cd -
-      - name: Cleanup
-        run: |
-          pip list
-          pip uninstall -y sharpy

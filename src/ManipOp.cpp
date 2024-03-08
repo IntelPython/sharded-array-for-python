@@ -72,7 +72,7 @@ struct DeferredReshape : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_RESHAPE; }
+  FactoryId factory() const override { return F_RESHAPE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -132,7 +132,7 @@ struct DeferredAsType : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_ASTYPE; }
+  FactoryId factory() const override { return F_ASTYPE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -191,7 +191,7 @@ struct DeferredToDevice : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_TODEVICE; }
+  FactoryId factory() const override { return F_TODEVICE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

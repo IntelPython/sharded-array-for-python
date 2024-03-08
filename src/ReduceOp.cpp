@@ -113,7 +113,7 @@ struct DeferredReduceOp : public Deferred {
       : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
-  void run() {
+  void run() override {
 #if 0
         const auto a = std::move(Registry::get(_a).get());
         set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
@@ -141,16 +141,16 @@ struct DeferredReduceOp : public Deferred {
                const intptr_t *o_strides, void *r_allocated, void *r_aligned,
                intptr_t r_offset, const intptr_t *r_sizes,
                const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          this->set_value(std::move(mk_tnsr(
+          this->set_value(mk_tnsr(
               this->guid(), _dtype, this->shape(), this->device(), this->team(),
               l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
               o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, std::move(loffs))));
+              r_offset, r_sizes, r_strides, std::move(loffs)));
         });
     return false;
   }
 
-  FactoryId factory() const { return F_REDUCEOP; }
+  FactoryId factory() const override { return F_REDUCEOP; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

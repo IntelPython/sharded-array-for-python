@@ -155,7 +155,7 @@ void MPIMediator::listen() {
     MPI_Get_count(&status, MPI_CHAR, &cnt);
     buff.resize(cnt);
 
-    Deserializer ser{buff.begin(), cnt};
+    Deserializer ser{buff.begin(), static_cast<size_t>(cnt)};
     int tag;
     ser.value<sizeof(tag)>(tag);
 

@@ -1,0 +1,64 @@
+{% set version = "0.2" %}
+{% set required_compiler_and_mkl_version = "2024.0" %}
+{% set excluded_compiler_version1 = "2024.0.1" %}
+{% set excluded_compiler_version2 = "2024.0.2" %}
+
+package:
+  name: sharpy
+  version: {{version}}
+
+source:
+    git_url:  ../
+
+requirements:
+  host:
+    - python
+    - cmake >=3.26
+    - git
+    - setuptools
+    - numpy x.x
+    - pybind11
+    - ninja
+    - tbb-devel
+    - impi-devel
+    - mpi4py
+    - wheel
+  build:
+    # - {{compiler('cxx')}}
+    # - {{compiler('dpcpp')}} >={{required_compiler_and_mkl_version}},!={{excluded_compiler_version1}},!={{excluded_compiler_version2}} # [not osx]
+  run:
+    - numpy x.x
+    - tbb
+    - impi_rt
+    - mpi4py
+
+build:
+  number: 0
+  detect_binary_files_with_prefix: False
+  ignore_prefix_files: True
+  script_env:
+    - GITHUB_WORKSPACE
+
+test:
+  script_env:
+    - GITHUB_WORKSPACE
+  imports:
+    - sharpy
+
+about:
+  home: http://github.com/IntelPython/sharpy
+  license: BSD-3-Clause
+  license_file: ../LICENSE
+  summary: Distributed Array for Python on CPU and GPU
+  description: |
+    <strong>This software package is not ready for production use and
+    and merely a proof of concept implementation.</strong>
+    <br/><br/>
+    <strong>LEGAL NOTICE: Use of this software package is subject to the
+    software license agreement (as set forth above, in the license section of
+    the installed Conda package and/or the README file) and all notices,
+    disclaimers or license terms for third party or open source software
+    included in or with the software.</strong>
+    <br/><br/>
+    EULA: <a href="https://opensource.org/licenses/BSD-3-Clause" target="_blank">BSD-3-Clause</a>
+    <br/><br/>

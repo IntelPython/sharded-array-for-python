@@ -1,0 +1,40 @@
+diff --git a/cmake/modules/FindSyclRuntime.cmake b/cmake/modules/FindSyclRuntime.cmake
+index 0eefdf6d..8d8fbd62 100644
+--- a/cmake/modules/FindSyclRuntime.cmake
++++ b/cmake/modules/FindSyclRuntime.cmake
+@@ -27,20 +27,26 @@
+ 
+ include(FindPackageHandleStandardArgs)
+ 
+-if(NOT DEFINED ENV{CMPLR_ROOT})
++if(NOT DEFINED ENV{CMPLR_ROOT} AND NOT DEFINED ENV{SYCL_DIR})
+     message(WARNING "Please make sure to install Intel DPC++ Compiler and run setvars.(sh/bat)")
+     message(WARNING "You can download standalone Intel DPC++ Compiler from https://www.intel.com/content/www/us/en/developer/articles/tool/oneapi-standalone-components.html#compilers")
++    message(Warning "Alternatively, you can set environment SYCL_DIR to the install dir of SYCL")
+ else()
+-    get_filename_component(ONEAPI_VER "$ENV{CMPLR_ROOT}" NAME)
+-    if(ONEAPI_VER VERSION_LESS 2024.0)
+-        if(LINUX OR (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
+-            set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}/linux")
+-        elseif(WIN32)
+-            set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}/windows")
+-        endif()
++    if(DEFINED ENV{SYCL_DIR})
++        set(SyclRuntime_ROOT "$ENV{SYCL_DIR}")
+     else()
+-        set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}")
++        get_filename_component(ONEAPI_VER "$ENV{CMPLR_ROOT}" NAME)
++        if(ONEAPI_VER VERSION_LESS 2024.0)
++            if(LINUX OR (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
++                set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}/linux")
++            elseif(WIN32)
++                set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}/windows")
++            endif()
++        else()
++            set(SyclRuntime_ROOT "$ENV{CMPLR_ROOT}")
++        endif()
+     endif()
++
+     list(APPEND SyclRuntime_INCLUDE_DIRS "${SyclRuntime_ROOT}/include")
+     list(APPEND SyclRuntime_INCLUDE_DIRS "${SyclRuntime_ROOT}/include/sycl")
+ 

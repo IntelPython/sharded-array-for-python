@@ -12,7 +12,7 @@
 namespace SHARPY {
 
 class NDSlice;
-class Runable;
+struct Runable;
 
 class Mediator {
 public:

@@ -114,18 +114,6 @@
 namespace SHARPY {
 namespace jit {
 
-static ::mlir::Type makeSignlessType(::mlir::Type type) {
-  if (auto shaped = type.dyn_cast<::mlir::ShapedType>()) {
-    auto origElemType = shaped.getElementType();
-    auto signlessElemType = makeSignlessType(origElemType);
-    return shaped.clone(signlessElemType);
-  } else if (auto intType = type.dyn_cast<::mlir::IntegerType>()) {
-    if (!intType.isSignless())
-      return ::mlir::IntegerType::get(intType.getContext(), intType.getWidth());
-  }
-  return type;
-}
-
 ::mlir::SmallVector<::mlir::Attribute> mkEnvs(::mlir::Builder &builder,
                                               int64_t rank,
                                               const std::string &device,
@@ -225,7 +213,7 @@ DepManager::DepManager(jit::JIT &jit) : _jit(jit), _builder(&jit.context()) {
 
 void DepManager::finalizeAndRun() {
   // get input buffers (before results!)
-  auto input = std::move(finalize_inputs());
+  auto input = finalize_inputs();
   // create return statement and adjust function type
   uint64_t osz = handleResult(_builder);
   // also request generation of c-wrapper function

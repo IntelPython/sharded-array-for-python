@@ -30,19 +30,15 @@ class build_ext(build_ext_orig):
         config = "Debug"  # if self.debug else 'RelWithDebInfo' #'Release'
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir.parent.absolute()}",
-            "-DCMAKE_BUILD_TYPE=" + config,
+            f"-DCMAKE_BUILD_TYPE={config}",
             "-DCMAKE_VERBOSE_MAKEFILE=ON",
             "-G=Ninja",
             "-DLLVM_ENABLE_LLD=ON",
+            f"-DCMAKE_PREFIX_PATH={os.getenv('CONDA_PREFIX')}/lib/cmake",
         ]
 
         # example of build args
-        build_args = [
-            "--config",
-            config,
-            "-j4"
-            # '--', '-j4'
-        ]
+        build_args = ["--config", config]
 
         os.chdir(str(build_temp))
         self.spawn(["cmake", str(cwd)] + cmake_args)
@@ -55,7 +51,7 @@ class build_ext(build_ext_orig):
 
 setup(
     name="sharpy",
-    version="0.1",
+    version="0.2",
     description="Distributed array and more",
     packages=["sharpy", "sharpy.numpy"],  # "sharpy.torch"],
     ext_modules=[CMakeExtension("sharpy/_sharpy")],

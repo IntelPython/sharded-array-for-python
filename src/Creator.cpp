@@ -81,16 +81,16 @@ struct DeferredFull : public Deferred {
                intptr_t r_offset, const intptr_t *r_sizes,
                const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
           assert(rank == this->rank());
-          this->set_value(std::move(mk_tnsr(
+          this->set_value(mk_tnsr(
               this->guid(), _dtype, this->shape(), this->device(), this->team(),
               l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
               o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, std::move(loffs))));
+              r_offset, r_sizes, r_strides, std::move(loffs)));
         });
     return false;
   }
 
-  FactoryId factory() const { return F_FULL; }
+  FactoryId factory() const override { return F_FULL; }
 
   template <typename S> void serialize(S &ser) {
     // ser.template container<sizeof(shape_type::value_type)>(_shape, 8);
@@ -143,16 +143,16 @@ struct DeferredArange : public Deferred {
                const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
           assert(rank == 1);
           assert(o_strides[0] == 1);
-          this->set_value(std::move(mk_tnsr(
+          this->set_value(mk_tnsr(
               this->guid(), _dtype, this->shape(), this->device(), this->team(),
               l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
               o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, std::move(loffs))));
+              r_offset, r_sizes, r_strides, std::move(loffs)));
         });
     return false;
   }
 
-  FactoryId factory() const { return F_ARANGE; }
+  FactoryId factory() const override { return F_ARANGE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_start)>(_start);
@@ -203,16 +203,16 @@ struct DeferredLinspace : public Deferred {
                const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
           assert(rank == 1);
           assert(l_strides[0] == 1);
-          this->set_value(std::move(mk_tnsr(
+          this->set_value(mk_tnsr(
               this->guid(), _dtype, this->shape(), this->device(), this->team(),
               l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
               o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, std::move(loffs))));
+              r_offset, r_sizes, r_strides, std::move(loffs)));
         });
     return false;
   }
 
-  FactoryId factory() const { return F_ARANGE; }
+  FactoryId factory() const override { return F_ARANGE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_start)>(_start);

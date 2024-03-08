@@ -33,7 +33,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
   DeferredService(Op op = SERVICE_LAST) : _a(), _op(op) {}
   DeferredService(Op op, id_type id) : _a(id), _op(op) {}
 
-  void run() {
+  void run() override {
     switch (_op) {
     case RUN:
       set_value(true);
@@ -64,7 +64,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
     return false;
   }
 
-  FactoryId factory() const { return F_SERVICE; }
+  FactoryId factory() const override { return F_SERVICE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -80,7 +80,7 @@ struct DeferredReplicate : public Deferred {
   DeferredReplicate() : _a() {}
   DeferredReplicate(const array_i::future_type &a) : _a(a.guid()) {}
 
-  void run() {
+  void run() override {
     const auto a = std::move(Registry::get(_a).get());
     auto sharpy = dynamic_cast<NDArray *>(a.get());
     assert(sharpy);
@@ -93,7 +93,7 @@ struct DeferredReplicate : public Deferred {
     return true;
   }
 
-  FactoryId factory() const { return F_REPLICATE; }
+  FactoryId factory() const override { return F_REPLICATE; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

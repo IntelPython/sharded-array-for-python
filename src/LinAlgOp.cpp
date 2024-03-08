@@ -129,13 +129,13 @@ struct DeferredLinAlgOp : public Deferred {
                    int axis)
       : _a(a.guid()), _b(b.guid()), _axis(axis) {}
 
-  void run() {
+  void run() override {
     // const auto a = std::move(Registry::get(_a).get());
     // const auto b = std::move(Registry::get(_b).get());
     // set_value(std::move(TypeDispatch<x::LinAlgOp>(a, b, _axis)));
   }
 
-  FactoryId factory() const { return F_LINALGOP; }
+  FactoryId factory() const override { return F_LINALGOP; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

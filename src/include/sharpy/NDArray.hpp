@@ -78,8 +78,8 @@ public:
   virtual ~NDArray();
 
   // mark local data and halos as deallocated
-  void markDeallocated();
-  bool isAllocated();
+  void markDeallocated() override;
+  bool isAllocated() override;
 
   // @return pointer to raw data
   void *data();

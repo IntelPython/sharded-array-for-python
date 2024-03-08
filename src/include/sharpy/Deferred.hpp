@@ -124,7 +124,7 @@ Deferred::future_type defer(Ts &&...args) {
                      true);
 }
 
-[[maybe_unused]] static void defer(nullptr_t) {
+[[maybe_unused]] static void defer(std::nullptr_t) {
   push_runable(Runable::ptr_type());
 }
 
@@ -133,7 +133,7 @@ struct UnDeferred : public Deferred {
 
   void run() override {}
 
-  FactoryId factory() const {
+  FactoryId factory() const override {
     throw(std::runtime_error("No Factory for Undeferred."));
   }
 };
@@ -157,7 +157,7 @@ struct DeferredLambda : public Runable {
     return _g(b, l, d);
   }
 
-  FactoryId factory() const {
+  FactoryId factory() const override {
     throw(std::runtime_error("No Factory for DeferredLambda."));
   }
 };

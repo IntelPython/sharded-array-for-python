@@ -41,7 +41,7 @@ struct DeferredRandomOp : public Deferred {
                    DTypeId dtype)
       : _shape(shape), _lower(lower), _upper(upper), _dtype(dtype) {}
 
-  void run() {
+  void run() override {
 #if 0
         switch(_dtype) {
         case FLOAT64:
@@ -55,7 +55,7 @@ struct DeferredRandomOp : public Deferred {
 #endif // if 0
   }
 
-  FactoryId factory() const { return F_RANDOM; }
+  FactoryId factory() const override { return F_RANDOM; }
 
   template <typename S> void serialize(S &ser) {
     ser.template container<sizeof(shape_type::value_type)>(_shape, 8);

@@ -100,7 +100,7 @@ struct DeferredIEWBinOp : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_IEWBINOP; }
+  FactoryId factory() const override { return F_IEWBINOP; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

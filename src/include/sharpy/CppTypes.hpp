@@ -371,6 +371,6 @@ enum FactoryId : int {
 // size of memreftype in number of intptr_t's
 inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
 inline uint64_t ndarray_sz(int rank, bool isDist) {
-  return memref_sz(rank) + isDist ? 2 * memref_sz(rank) + memref_sz(1) : 0;
+  return memref_sz(rank) + (isDist ? 2 * memref_sz(rank) + memref_sz(1) : 0);
 };
 } // namespace SHARPY

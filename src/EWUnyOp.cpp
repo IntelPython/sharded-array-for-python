@@ -244,7 +244,7 @@ struct DeferredEWUnyOp : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_EWUNYOP; }
+  FactoryId factory() const override { return F_EWUNYOP; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);

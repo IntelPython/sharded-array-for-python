@@ -138,7 +138,7 @@ struct CollComm {
                                  DTYPE<B>::value);
         return {(uint64_t)disp_send[rank], (uint64_t)disp_recv[rank]};
 #endif
-    return {-1, -1};
+    return {0, 0};
   }
 };
 } // namespace SHARPY

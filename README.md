@@ -1,5 +1,7 @@
 [![.github/workflows/ci.yml](https://github.com/intel-sandbox/sharpy/actions/workflows/ci.yml/badge.svg)](https://github.com/intel-sandbox/sharpy/actions/workflows/ci.yml)
 
+***This software package is not ready for production use and and merely a proof of concept implementation.***
+
 # Distributed Python Array
 
 A array implementation following the [array API as defined by the data-API consortium](https://data-apis.org/array-api/latest/index.html).

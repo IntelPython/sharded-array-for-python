@@ -80,7 +80,7 @@ struct DeferredFromLocal : public Deferred {
     return true;
   }
 
-  FactoryId factory() const { return F_FROMLOCALS; }
+  FactoryId factory() const override { return F_FROMLOCALS; }
 
   template <typename S> void serialize(S &ser) {}
 };

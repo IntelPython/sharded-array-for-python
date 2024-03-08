@@ -95,7 +95,7 @@ struct DeferredGetLocals
     return true;
   }
 
-  FactoryId factory() const { return F_GETLOCALS; }
+  FactoryId factory() const override { return F_GETLOCALS; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -146,7 +146,7 @@ struct DeferredGather
     return true;
   }
 
-  FactoryId factory() const { return F_GATHER; }
+  FactoryId factory() const override { return F_GATHER; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -186,7 +186,7 @@ struct DeferredSetItem : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_SETITEM; }
+  FactoryId factory() const override { return F_SETITEM; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
@@ -238,7 +238,7 @@ struct DeferredMap : public Deferred {
     return true;
   }
 
-  FactoryId factory() const { return F_MAP; }
+  FactoryId factory() const override { return F_MAP; }
 
   template <typename S> void serialize(S &ser) {
     assert(false);
@@ -255,11 +255,10 @@ struct DeferredGetItem : public Deferred {
 
   DeferredGetItem() = default;
   DeferredGetItem(const array_i::future_type &a, NDSlice &&v)
-      : Deferred(a.dtype(), std::move(shape_type(v.sizes())), a.device(),
-                 a.team()),
+      : Deferred(a.dtype(), shape_type(v.sizes()), a.device(), a.team()),
         _a(a.guid()), _slc(std::move(v)) {}
 
-  void run() {
+  void run() override {
     // const auto a = std::move(Registry::get(_a).get());
     // set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
   }
@@ -300,7 +299,7 @@ struct DeferredGetItem : public Deferred {
     return false;
   }
 
-  FactoryId factory() const { return F_GETITEM; }
+  FactoryId factory() const override { return F_GETITEM; }
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
