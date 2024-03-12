@@ -17,7 +17,7 @@ def sharpy_script(tmp_path):
 import os
 device = os.getenv("SHARPY_DEVICE", "")
 sp.init(False)
-a = a = sp.ones((4,), device=device)
+a = sp.ones((4,), device=device)
 assert a.size == 4
 print("SUCCESS")
 sp.fini()"""

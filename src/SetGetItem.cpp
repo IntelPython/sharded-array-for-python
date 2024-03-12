@@ -127,13 +127,8 @@ struct DeferredGather
     void *outPtr = nullptr;
     py::handle res;
     if (!sendonly || !trscvr) {
-      auto tmp = a_ptr->shape();
-      std::vector<ssize_t> tmpv(tmp, &tmp[a_ptr->ndims()]);
-      // numpy treats 0d arrays as empty arrays, not as a scalar as we do
-      if (tmpv.empty()) {
-        tmpv.emplace_back(1);
-      }
-      res = dispatch<mk_array>(a_ptr->dtype(), std::move(tmpv), outPtr);
+      std::vector<ssize_t> shp(a_ptr->shape());
+      res = dispatch<mk_array>(a_ptr->dtype(), std::move(shp), outPtr);
     }
 
     gather_array(a_ptr, _root, outPtr);
@@ -309,9 +304,37 @@ struct DeferredGetItem : public Deferred {
 
 // ***************************************************************************
 
+// extract "start", "stop", "step" int attrs from py::slice
+std::optional<int> getSliceAttr(const py::slice &slice, const char *name) {
+  auto obj = getattr(slice, name);
+  if (py::isinstance<py::none>(obj)) {
+    return std::nullopt;
+  } else if (py::isinstance<py::int_>(obj)) {
+    return std::optional<int>{obj.cast<int>()};
+  } else {
+    throw std::invalid_argument("Invalid indices");
+  }
+};
+
+// check that multi-dimensional slice start does not exceed given shape
+void validateSlice(const shape_type &shape,
+                   const std::vector<py::slice> &slices) {
+  auto dim = shape.size();
+  for (std::size_t i = 0; i < dim; i++) {
+    auto start = getSliceAttr(slices[i], "start");
+    if (start && start.value() >= shape[i]) {
+      std::stringstream msg;
+      msg << "index " << start.value() << " is out of bounds for axis " << i
+          << " with size " << shape[i] << "\n";
+      throw std::out_of_range(msg.str());
+    }
+  }
+}
+
 FutureArray *GetItem::__getitem__(const FutureArray &a,
                                   const std::vector<py::slice> &v) {
   auto afut = a.get();
+  validateSlice(afut.shape(), v);
   NDSlice slc(v, afut.shape());
   return new FutureArray(defer<DeferredGetItem>(afut, std::move(slc)));
 }
@@ -328,9 +351,10 @@ GetItem::py_future_type GetItem::gather(const FutureArray &a, rank_type root) {
 FutureArray *SetItem::__setitem__(FutureArray &a,
                                   const std::vector<py::slice> &v,
                                   const py::object &b) {
-  auto bb =
-      Creator::mk_future(b, a.get().device(), a.get().team(), a.get().dtype());
-  a.put(defer<DeferredSetItem>(a.get(), bb.first->get(), v));
+  auto afut = a.get();
+  validateSlice(afut.shape(), v);
+  auto bb = Creator::mk_future(b, afut.device(), afut.team(), afut.dtype());
+  a.put(defer<DeferredSetItem>(afut, bb.first->get(), v));
   if (bb.second)
     delete bb.first;
   return &a;

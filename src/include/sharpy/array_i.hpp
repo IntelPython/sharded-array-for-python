@@ -106,7 +106,7 @@ public:
   /// @return array's element type
   virtual DTypeId dtype() const = 0;
   /// @return array's shape
-  virtual const int64_t *shape() const = 0;
+  virtual const shape_type &shape() const = 0;
   /// @return number of dimensions of array
   virtual int ndims() const = 0;
   /// @return global number of elements in array

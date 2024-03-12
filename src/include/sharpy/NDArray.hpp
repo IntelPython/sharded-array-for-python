@@ -97,8 +97,8 @@ public:
   virtual DTypeId dtype() const override { return ArrayMeta::dtype(); }
 
   /// @return array's shape
-  virtual const int64_t *shape() const override {
-    return ArrayMeta::shape().data();
+  virtual const shape_type &shape() const override {
+    return ArrayMeta::shape();
   }
 
   /// @returnnumber of dimensions of array

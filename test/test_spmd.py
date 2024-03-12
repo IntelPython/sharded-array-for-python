@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
-from mpi4py import MPI
 from utils import device
 
 import sharpy as sp
+from mpi4py import MPI
 from sharpy import _sharpy_cw
 
 
@@ -73,6 +73,12 @@ class TestSPMD:
         c = np.sum(b)
         v = np.sum(np.arange(0, 110, 1, dtype=np.float32))
         assert float(c) == v
+        MPI.COMM_WORLD.barrier()
+
+    def test_gather_0d(self):
+        a = sp.full((), 5, dtype=sp.int32, device=device)
+        b = sp.spmd.gather(a)
+        assert float(b) == 5
         MPI.COMM_WORLD.barrier()
 
     @pytest.mark.skip(reason="FIXME reshape")

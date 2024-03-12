@@ -33,3 +33,15 @@ if len(device) == 0:
         sharpy.int8,
         sharpy.uint8,
     ]
+
+
+def dtypeIsInt(dtype):
+    mpi_int_types = [
+        sharpy.int8,
+        sharpy.int32,
+        sharpy.int64,
+        sharpy.uint8,
+        sharpy.uint32,
+        sharpy.uint64,
+    ]
+    return dtype in mpi_int_types

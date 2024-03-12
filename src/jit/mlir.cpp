@@ -314,8 +314,8 @@ static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
     auto typ = getMRType(ndims, impl->owned_data(), elType);
     _func.insertArgument(idx, typ, {}, loc);
     _inputs.push_back(storeMR(impl->owned_data()));
-    auto arTyp = getTType(builder, impl->dtype(), impl->device(),
-                          {impl->shape(), ndims});
+    auto arTyp =
+        getTType(builder, impl->dtype(), impl->device(), impl->shape());
     val = _builder.create<::imex::ndarray::FromMemRefOp>(
         loc, arTyp, _func.getArgument(idx));
     _lastIn += 1;
@@ -355,7 +355,7 @@ static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
 
     auto darTyp =
         getTType(builder, impl->dtype(), impl->device(), {ownShape, ndims},
-                 impl->team(), {impl->shape(), ndims}, {impl->local_offsets()},
+                 impl->team(), impl->shape(), {impl->local_offsets()},
                  {lhShape, ndims}, {rhShape, ndims});
 
     val = _builder.create<::imex::dist::InitDistArrayOp>(

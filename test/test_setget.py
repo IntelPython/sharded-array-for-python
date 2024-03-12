@@ -179,3 +179,27 @@ class TestSetGet:
         a[:, :] = b
         a2 = sp.to_numpy(a)
         assert numpy.all(a2 == 2)
+
+    @pytest.fixture(
+        params=[
+            ((6,), (slice(6, None))),
+            ((6,), (slice(7, 10))),
+            ((6, 5), (slice(7, None), slice(None, None))),
+            ((6, 5), (slice(None, None), slice(6, None))),
+            ((6, 5, 4), (slice(None, None), slice(None, None), slice(6, None))),
+        ],
+    )
+    def shape_and_slices(self, request):
+        return request.param[0], request.param[1]
+
+    def test_get_invalid_bounds(self, shape_and_slices):
+        shape, slices = shape_and_slices
+        with pytest.raises(IndexError):
+            a = sp.ones(shape, dtype=sp.float64)
+            b = a[slices]  # noqa: F841
+
+    def test_set_invalid_bounds(self, shape_and_slices):
+        shape, slices = shape_and_slices
+        with pytest.raises(IndexError):
+            a = sp.ones(shape, dtype=sp.float64)
+            a[slices] = 1.0
