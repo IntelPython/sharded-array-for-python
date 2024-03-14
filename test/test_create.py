@@ -20,6 +20,7 @@ def shape(request):
         (sp.ones, 1.0),
         (sp.zeros, 0.0),
     ],
+    ids=["ones", "zeros"],
 )
 def creator(request):
     return request.param[0], request.param[1]
@@ -48,3 +49,19 @@ def test_full_shapes(expected_value, shape):
     a = sp.full(shape, value, dtype=datatype, device=device)
     assert tuple(a.shape) == shape
     assert numpy.allclose(sp.to_numpy(a), [expected_value])
+
+
+def test_create_invalid_shape(creator):
+    shape = (6, -5)
+    datatype = sp.int32
+    func, expected_value = creator
+    with pytest.raises(ValueError):
+        a = func(shape, dtype=datatype, device=device)  # noqa: F841
+
+
+def test_full_invalid_shape():
+    shape = (6, -5)
+    value = 5
+    datatype = sp.int32
+    with pytest.raises(ValueError):
+        a = sp.full(shape, value, dtype=datatype, device=device)  # noqa: F841

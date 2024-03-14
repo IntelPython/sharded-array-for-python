@@ -31,13 +31,25 @@ inline uint64_t mkTeam(uint64_t team) {
   return 0;
 }
 
+// check that shape elements are non-negative
+void validateShape(const shape_type &shape) {
+  for (auto &v : shape) {
+    if (v < 0) {
+      throw std::invalid_argument(
+          "invalid shape, negative dimensions are not allowed\n");
+    }
+  }
+}
+
 struct DeferredFull : public Deferred {
   PyScalar _val;
 
   DeferredFull() = default;
   DeferredFull(const shape_type &shape, PyScalar val, DTypeId dtype,
                const std::string &device, uint64_t team)
-      : Deferred(dtype, shape, device, team), _val(val) {}
+      : Deferred(dtype, shape, device, team), _val(val) {
+    validateShape(shape);
+  }
 
   template <typename T> struct ValAndDType {
     static ::mlir::Value op(::mlir::OpBuilder &builder,
