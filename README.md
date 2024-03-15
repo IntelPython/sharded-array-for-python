@@ -141,3 +141,36 @@ Currently only a subset of the Array API is covered by sharpy
   - `sharpy.spmd.gather` gathers the distributed array and forms a single, local and contiguous copy of the data as a numpy array
   - `sharpy.spmd.get_locals` return the local part of the distributed array as a numpy array
 - sharpy allows providing a fallback array implementation. By setting SHARPY_FALLBACK to a python package it will call that package if a given function is not provided by sharpy. It will pass sharpy arrays as (gathered) numpy-arrays.
+
+## Environment variables
+
+### Compile time variables
+
+Required to compile `sharpy`:
+
+- `MLIRROOT`: Set path to MLIR install root.
+- `IMEXROOT`: Set path to Intel MLIR Extensions install root.
+
+### Optional runtime variables
+
+- `SHARPY_VERBOSE`: Set verbosity level. Accepted values 0-4, default 0.
+- `SHARPY_FALLBACK`: Python package to call in case a function is not found in `sharpy`. For example, setting `SHARPY_FALLBACK=numpy` means that calling `sharpy.linalg.norm` would call `numpy.linalg.norm` for the entire (gathered) array.
+- `SHARPY_PASSES`: Set MLIR pass pipeline. To see current pipeline run with `SHARPY_VERBOSE=1`.
+- `SHARPY_FORCE_DIST`: Force code generation in distributed mode even if executed on a single process.
+- `SHARPY_USE_CACHE`: Use in-memory JIT compile cache. Default 1.
+- `SHARPY_OPT_LEVEL`: Set MLIR JIT compiler optimization level. Accepted values 0-3, default 3.
+- `SHARPY_NO_ASYNC`: Do not use asynchronous MPI communication.
+- `SHARPY_SKIP_COMM`: Skip all MPI communications. For debugging purposes only, can lead to incorrect results.
+
+Device support:
+
+- `SHARPY_DEVICE`: Set desided device, e.g., `"cpu"`, or `"gpu:0"`. By default CPU is used.
+- `SHARPY_GPUX_SO`: Force path to GPU driver library file.
+
+For [spawning MPI processes](#distributed-execution-without-mpirun):
+
+- `SHARPY_MPI_SPAWN`: Number of MPI processes to spawn.
+- `SHARPY_MPI_EXECUTABLE`: The executable to spawn.
+- `SHARPY_MPI_EXE_ARGS`: Arguments to pass to the executable.
+- `SHARPY_MPI_HOSTS`: Comma-separated list of hosts for MPI.
+- `PYTHON_EXE`: Path to Python executable. Will be used if `SHARPY_MPI_EXECUTABLE` is undefined.
