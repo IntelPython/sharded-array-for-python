@@ -66,7 +66,7 @@ struct DeferredFull : public Deferred {
       } else if constexpr (std::is_integral_v<T>) {
         return ::imex::createInt(loc, builder, val._int, sizeof(T) * 8);
       }
-      assert("Unsupported dtype in dispatch");
+      throw std::runtime_error("Unsupported dtype in dispatch");
       return {};
     };
   };

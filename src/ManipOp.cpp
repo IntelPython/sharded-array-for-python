@@ -61,7 +61,7 @@ struct DeferredReshape : public Deferred {
                            o_sizes, o_strides, r_allocated, r_aligned, r_offset,
                            r_sizes, r_strides, std::move(loffs));
           if (_copy != COPY_ALWAYS) {
-            assert(!"copy-free reshape not supported");
+            throw std::runtime_error("copy-free reshape not supported");
             if (Registry::has(_a)) {
               t->set_base(Registry::get(_a).get());
             } // else _a is a temporary and was dropped
@@ -106,7 +106,10 @@ struct DeferredAsType : public Deferred {
     ::imex::ndarray::DType ndDType = dispatch<convDType>(dtype);
     auto mlirElType = ::imex::ndarray::toMLIR(builder, ndDType);
     auto arType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
-    assert(arType);
+    if (!arType) {
+      throw std::runtime_error(
+          "Encountered unexpected ndarray type in astype.");
+    }
     auto outType = arType.cloneWith(std::nullopt, mlirElType);
     auto res = builder.create<::imex::ndarray::CastElemTypeOp>(loc, outType, av,
                                                                copyAttr);
@@ -154,7 +157,10 @@ struct DeferredToDevice : public Deferred {
     auto av = dm.getDependent(builder, Registry::get(_a));
 
     auto srcType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
-    assert(srcType);
+    if (!srcType) {
+      throw std::runtime_error(
+          "Encountered unexpected ndarray type in to_device.");
+    }
     // copy envs, drop gpu env (if any)
     auto srcEnvs = srcType.getEnvironments();
     ::mlir::SmallVector<::mlir::Attribute> envs;
@@ -205,7 +211,7 @@ FutureArray *ManipOp::reshape(const FutureArray &a, const shape_type &shape,
                     : (copy.cast<bool>() ? DeferredReshape::COPY_ALWAYS
                                          : DeferredReshape::COPY_NEVER);
   if (doCopy == DeferredReshape::COPY_NEVER) {
-    assert(!"zero-copy reshape not supported");
+    throw std::runtime_error("zero-copy reshape not supported");
   }
   doCopy = DeferredReshape::COPY_ALWAYS;
   return new FutureArray(defer<DeferredReshape>(a.get(), shape, doCopy));

@@ -86,12 +86,17 @@ struct DeferredFromLocal : public Deferred {
 };
 
 GetItem::py_future_type IO::to_numpy(const FutureArray &a) {
-  assert(!getTransceiver()->is_cw() || getTransceiver()->rank() == 0);
+  if (getTransceiver()->is_cw() && getTransceiver()->rank() != 0) {
+    throw std::runtime_error(
+        "In c/w mode, to_numpy is only supported on rank 0");
+  }
   return GetItem::gather(a, getTransceiver()->is_cw() ? 0 : REPLICATED);
 }
 
 FutureArray *IO::from_locals(const std::vector<py::array> &a) {
-  assert(a.size() == 1);
+  if (a.size() != 1) {
+    throw std::runtime_error("from_locals only supports a single local array");
+  }
   return new FutureArray(defer<DeferredFromLocal>(a.front()));
 }
 

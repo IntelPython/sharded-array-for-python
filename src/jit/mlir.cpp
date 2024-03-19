@@ -284,7 +284,9 @@ static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
                                        const NDArray *impl) {
   id_type guid = impl->guid();
   // this must not yet be an input argument to the jit function
-  assert(!findInOut(guid));
+  if (findInOut(guid)) {
+    throw std::runtime_error("Internal error: array already added");
+  }
 
   auto idx = _lastIn;
   size_t ndims = impl->ndims();
@@ -348,7 +350,9 @@ static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
 
     ::imex::ValVec lOffs;
     for (size_t i = 0; i < ndims; ++i) {
-      assert(!::mlir::ShapedType::isDynamic(impl->local_offsets()[i]));
+      if (::mlir::ShapedType::isDynamic(impl->local_offsets()[i])) {
+        throw std::runtime_error("dynamic local offsets not supported");
+      }
       lOffs.emplace_back(
           ::imex::createIndex(loc, builder, impl->local_offsets()[i]));
     }
@@ -374,7 +378,9 @@ std::vector<void *> DepManager::finalize_inputs() {
 }
 
 void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb) {
-  assert(!findInOut(guid));
+  if (findInOut(guid)) {
+    throw std::runtime_error("Internal error: array already added");
+  }
   auto tmp = _inOut.emplace_back(InOut(guid, val, cb));
 }
 
@@ -657,57 +663,60 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
     module.dump();
 
   auto maybeEngine = ::mlir::ExecutionEngine::create(module, opts);
-  assert(maybeEngine && "failed to construct an execution engine");
+  if (!maybeEngine) {
+    throw std::runtime_error("failed to construct an execution engine");
+  }
   return std::move(maybeEngine.get());
 }
 
-static const char *cpu_pipeline = "ndarray-dist,"
-                                  "func.func(dist-coalesce),"
-                                  "func.func(dist-infer-elementwise-cores),"
-                                  "convert-dist-to-standard,"
-                                  "canonicalize,"
-                                  "overlap-comm-and-compute,"
-                                  "add-comm-cache-keys,"
-                                  "lower-distruntime-to-idtr,"
-                                  "convert-ndarray-to-linalg,"
-                                  "canonicalize,"
-                                  "func.func(tosa-to-linalg),"
-                                  "func.func(tosa-to-tensor),"
-                                  "canonicalize,"
-                                  "linalg-fuse-elementwise-ops,"
-                                  // "convert-shape-to-std,"
-                                  "arith-expand,"
-                                  "memref-expand,"
-                                  "arith-bufferize,"
-                                  // "func-bufferize,"
-                                  "func.func(empty-tensor-to-alloc-tensor),"
-                                  "func.func(scf-bufferize),"
-                                  "func.func(tensor-bufferize),"
-                                  "func.func(bufferization-bufferize),"
-                                  "func.func(linalg-bufferize),"
-                                  "func.func(linalg-detensorize),"
-                                  "func.func(tensor-bufferize),"
-                                  "region-bufferize,"
-                                  "canonicalize,"
-                                  "func.func(finalizing-bufferize),"
-                                  "func.func(buffer-deallocation),"
-                                  "imex-remove-temporaries,"
-                                  "func.func(convert-linalg-to-parallel-loops),"
-                                  "func.func(scf-parallel-loop-fusion),"
-                                  "drop-regions,"
-                                  "canonicalize,"
-                                  "fold-memref-alias-ops,"
-                                  "expand-strided-metadata,"
-                                  "convert-math-to-funcs,"
-                                  "lower-affine,"
-                                  "convert-scf-to-cf,"
-                                  "finalize-memref-to-llvm,"
-                                  "convert-math-to-llvm,"
-                                  "convert-math-to-libm,"
-                                  "convert-func-to-llvm,"
-                                  "reconcile-unrealized-casts";
+static const std::string cpu_pipeline =
+    "ndarray-dist,"
+    "func.func(dist-coalesce),"
+    "func.func(dist-infer-elementwise-cores),"
+    "convert-dist-to-standard,"
+    "canonicalize,"
+    "overlap-comm-and-compute,"
+    "add-comm-cache-keys,"
+    "lower-distruntime-to-idtr,"
+    "convert-ndarray-to-linalg,"
+    "canonicalize,"
+    "func.func(tosa-to-linalg),"
+    "func.func(tosa-to-tensor),"
+    "canonicalize,"
+    "linalg-fuse-elementwise-ops,"
+    // "convert-shape-to-std,"
+    "arith-expand,"
+    "memref-expand,"
+    "arith-bufferize,"
+    // "func-bufferize,"
+    "func.func(empty-tensor-to-alloc-tensor),"
+    "func.func(scf-bufferize),"
+    "func.func(tensor-bufferize),"
+    "func.func(bufferization-bufferize),"
+    "func.func(linalg-bufferize),"
+    "func.func(linalg-detensorize),"
+    "func.func(tensor-bufferize),"
+    "region-bufferize,"
+    "canonicalize,"
+    "func.func(finalizing-bufferize),"
+    "func.func(buffer-deallocation),"
+    "imex-remove-temporaries,"
+    "func.func(convert-linalg-to-parallel-loops),"
+    "func.func(scf-parallel-loop-fusion),"
+    "drop-regions,"
+    "canonicalize,"
+    "fold-memref-alias-ops,"
+    "expand-strided-metadata,"
+    "convert-math-to-funcs,"
+    "lower-affine,"
+    "convert-scf-to-cf,"
+    "finalize-memref-to-llvm,"
+    "convert-math-to-llvm,"
+    "convert-math-to-libm,"
+    "convert-func-to-llvm,"
+    "reconcile-unrealized-casts";
 
-static const char *gpu_pipeline =
+static const std::string gpu_pipeline =
     "add-gpu-regions,"
     "canonicalize,"
     "ndarray-dist,"
@@ -776,9 +785,9 @@ static const char *gpu_pipeline =
     "finalize-memref-to-llvm,"
     "reconcile-unrealized-casts";
 
-std::string _passes = get_text_env("SHARPY_PASSES");
-static const char *pass_pipeline =
-    _passes != "" ? _passes.c_str() : (useGPU() ? gpu_pipeline : cpu_pipeline);
+const std::string _passes(get_text_env("SHARPY_PASSES"));
+static const std::string &pass_pipeline =
+    _passes != "" ? _passes : (useGPU() ? gpu_pipeline : cpu_pipeline);
 
 JIT::JIT(const std::string &libidtr)
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
@@ -825,17 +834,15 @@ JIT::JIT(const std::string &libidtr)
     throw std::runtime_error(std::string("Invalid SHARPY_OPT_LEVEL"));
   }
 
-  std::string mlirRoot = get_text_env("MLIRROOT");
+  auto mlirRoot(get_text_env("MLIRROOT"));
   mlirRoot = !mlirRoot.empty() ? mlirRoot : std::string(CMAKE_MLIR_ROOT);
   _crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
   if (!std::ifstream(_crunnerlib)) {
-    throw std::runtime_error(
-        std::string("Cannot find libmlir_c_runner_utils.so"));
+    throw std::runtime_error("Cannot find libmlir_c_runner_utils.so");
   }
   if (!std::ifstream(_runnerlib)) {
-    throw std::runtime_error(
-        std::string("Cannot find libmlir_runner_utils.so"));
+    throw std::runtime_error("Cannot find libmlir_runner_utils.so");
   }
 
   if (useGPU()) {
@@ -843,12 +850,11 @@ JIT::JIT(const std::string &libidtr)
     if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      std::string imexRoot = get_text_env("IMEXROOT");
+      auto imexRoot = get_text_env("IMEXROOT");
       imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
       _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
       if (!std::ifstream(_gpulib)) {
-        throw std::runtime_error(
-            std::string("Cannot find liblevel-zero-runtime.so"));
+        throw std::runtime_error("Cannot find liblevel-zero-runtime.so");
       }
     }
     _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
@@ -881,8 +887,8 @@ JIT::JIT(const std::string &libidtr)
 
 // register dialects and passes
 void init() {
-  assert(sizeof(intptr_t) == sizeof(void *));
-  assert(sizeof(intptr_t) == sizeof(int64_t));
+  static_assert(sizeof(intptr_t) == sizeof(void *));
+  static_assert(sizeof(intptr_t) == sizeof(int64_t));
   if (!isText(pass_pipeline)) {
     throw std::runtime_error("Invalid SHARPY_PASSES");
   }

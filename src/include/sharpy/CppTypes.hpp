@@ -231,7 +231,7 @@ static size_t dtype_bitwidth(DTypeId t) {
   case SHARPY::DTypeId::BOOL:
     return 1;
   default:
-    assert(!"Unknown DTypeId");
+    throw std::runtime_error("Unknown DTypeId");
   }
 }
 
@@ -242,7 +242,7 @@ static DTypeId get_float_dtype(size_t bitwidth) {
   case 32:
     return SHARPY::DTypeId::FLOAT32;
   default:
-    assert(!"Unknown bitwidth");
+    throw std::runtime_error("Unknown bitwidth");
   }
 }
 
@@ -257,7 +257,7 @@ static DTypeId get_int_dtype(size_t bitwidth) {
   case 8:
     return SHARPY::DTypeId::INT8;
   default:
-    assert(!"Unknown bitwidth");
+    throw std::runtime_error("Unknown bitwidth");
   }
 }
 
@@ -286,20 +286,20 @@ static DTypeId get_int_dtype(size_t bitwidth) {
 
 using RedOpType = ReduceOpId;
 
-inline RedOpType red_op(const char *op) {
-  if (!strcmp(op, "max"))
+inline RedOpType red_op(const std::string &op) {
+  if (op == "max")
     return MAX;
-  if (!strcmp(op, "min"))
+  if (op == "min")
     return MIN;
-  if (!strcmp(op, "sum"))
+  if (op == "sum")
     return SUM;
-  if (!strcmp(op, "prod"))
+  if (op == "prod")
     return PROD;
-  if (!strcmp(op, "mean"))
+  if (op == "mean")
     return MEAN;
-  if (!strcmp(op, "std"))
+  if (op == "std")
     return STD;
-  if (!strcmp(op, "var"))
+  if (op == "var")
     return VAR;
   throw std::logic_error("unsupported reduction operation");
 }

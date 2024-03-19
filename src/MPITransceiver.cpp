@@ -22,7 +22,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
   MPI_Initialized(&flag);
   if (!flag) {
     int provided;
-    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init_thread(nullptr, nullptr, MPI_THREAD_MULTIPLE, &provided);
     if (provided < MPI_THREAD_MULTIPLE) {
       throw std::runtime_error(
           "Your MPI implementation is not MPI_THREAD_MULTIPLE. "
@@ -36,6 +36,8 @@ MPITransceiver::MPITransceiver(bool is_cw)
     std::cerr << "MPI already initialized\n";
   }
 
+  // always abort if an MPI error occured
+  MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_ARE_FATAL);
   int nranks, rank;
   MPI_Comm_rank(_comm, &rank);
   MPI_Comm parentComm;
@@ -49,7 +51,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
     int nClientsToSpawn = get_int_env("SHARPY_MPI_SPAWN", 0);
     if (nClientsToSpawn) {
       std::vector<std::string> args;
-      std::string clientExe = get_text_env("SHARPY_MPI_EXECUTABLE");
+      auto clientExe = get_text_env("SHARPY_MPI_EXECUTABLE");
       std::string exeArgs;
       if (clientExe.empty()) {
         auto pythonExe = get_text_env("PYTHON_EXE");
@@ -78,7 +80,7 @@ MPITransceiver::MPITransceiver(bool is_cw)
         }
       }
 
-      const char *clientArgs[args.size() + 1];
+      std::vector<const char *> clientArgs(args.size() + 1);
       for (auto i = 0ul; i < args.size(); ++i)
         clientArgs[i] = args[i].c_str();
       clientArgs[args.size()] = nullptr;
@@ -100,10 +102,10 @@ MPITransceiver::MPITransceiver(bool is_cw)
                 << std::endl;
       int *errCodes = new int[nClientsToSpawn];
       MPI_Comm interComm;
-      int err =
-          MPI_Comm_spawn(const_cast<char *>(clientExe.c_str()),
-                         const_cast<char **>(clientArgs), nClientsToSpawn,
-                         clientInfo, 0, MPI_COMM_WORLD, &interComm, errCodes);
+      int err = MPI_Comm_spawn(const_cast<char *>(clientExe.c_str()),
+                               const_cast<char **>(clientArgs.data()),
+                               nClientsToSpawn, clientInfo, 0, MPI_COMM_WORLD,
+                               &interComm, errCodes);
       delete[] errCodes;
       if (err) {
         std::cerr << "[SHARPY " << rank

@@ -84,7 +84,9 @@ struct DeferredGetLocals
   void run() override {
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
-    assert(a_ptr);
+    if (!a_ptr) {
+      throw std::runtime_error("Expected NDArray in getlocals.");
+    }
     auto res = wrap(a_ptr, _handle);
     auto tpl = py::make_tuple(py::reinterpret_steal<py::object>(res));
     set_value(tpl.release());
@@ -119,7 +121,9 @@ struct DeferredGather
     // and then call AllGatherV via inplace operation.
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
-    assert(a_ptr);
+    if (!a_ptr) {
+      throw std::runtime_error("Expected NDArray in gather.");
+    }
     auto trscvr = a_ptr->transceiver();
     auto myrank = trscvr ? trscvr->rank() : 0;
     bool sendonly = _root != REPLICATED && _root != myrank;
@@ -204,7 +208,9 @@ struct DeferredMap : public Deferred {
   void run() override {
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
-    assert(a_ptr);
+    if (!a_ptr) {
+      throw std::runtime_error("Expected NDArray in map.");
+    }
     auto nd = a_ptr->ndims();
     auto lOffs = a_ptr->local_offsets();
     std::vector<int64_t> lIdx(nd);
@@ -236,7 +242,7 @@ struct DeferredMap : public Deferred {
   FactoryId factory() const override { return F_MAP; }
 
   template <typename S> void serialize(S &ser) {
-    assert(false);
+    throw std::runtime_error("Not implemented");
     ser.template value<sizeof(_a)>(_a);
     // nope ser.template value<sizeof(_func)>(_func);
   }
@@ -305,8 +311,9 @@ struct DeferredGetItem : public Deferred {
 // ***************************************************************************
 
 // extract "start", "stop", "step" int attrs from py::slice
-std::optional<int> getSliceAttr(const py::slice &slice, const char *name) {
-  auto obj = getattr(slice, name);
+std::optional<int> getSliceAttr(const py::slice &slice,
+                                const std::string &name) {
+  auto obj = getattr(slice, name.c_str());
   if (py::isinstance<py::none>(obj)) {
     return std::nullopt;
   } else if (py::isinstance<py::int_>(obj)) {

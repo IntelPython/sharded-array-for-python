@@ -10,10 +10,10 @@ VT_ErrorCode_t VT_begin(int) __attribute__((weak));
 VT_ErrorCode_t VT_end(int) __attribute__((weak));
 }
 #define VT(_sym, ...)                                                          \
-  if (_sym != NULL) {                                                          \
+  if (_sym != nullptr) {                                                       \
     _sym(__VA_ARGS__);                                                         \
   }
-#define HAS_ITAC() (VT_classdef != NULL)
+#define HAS_ITAC() (VT_classdef != nullptr)
 
 #else
 

@@ -413,17 +413,38 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
 
   auto N = tc->nranks();
   auto me = tc->rank();
+  if (N <= me) {
+    throw std::runtime_error("Fatal: rank must be < number of ranks");
+  }
 
   int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[lRank], 1,
                                 std::multiplies<int64_t>());
   int64_t mySz = cSz * lShapePtr[0];
+  if (mySz / cSz != lShapePtr[0]) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
   int64_t myOff = lOffsPtr[0] * cSz;
+  if (myOff / cSz != lOffsPtr[0]) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
   int64_t myEnd = myOff + mySz;
+  if (myEnd < myOff) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
   int64_t tCSz = std::accumulate(&oShapePtr[1], &oShapePtr[oRank], 1,
                                  std::multiplies<int64_t>());
   int64_t myTSz = tCSz * oShapePtr[0];
+  if (myTSz / tCSz != oShapePtr[0]) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
   int64_t myTOff = oOffsPtr[0] * tCSz;
+  if (myTOff / tCSz != oOffsPtr[0]) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
   int64_t myTEnd = myTOff + myTSz;
+  if (myTEnd < myTOff) {
+    throw std::runtime_error("Fatal: integer overflow in reshape");
+  }
 
   // First we allgather the current and target partitioning
 
@@ -591,6 +612,9 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
                     SHARPY::Transceiver *tc) {
   UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
+  if (myWorkerIndex >= nworkers) {
+    throw std::runtime_error("Fatal: rank must be < number of workers");
+  }
   cE._lTotalRecvSize = 0;
   cE._rTotalRecvSize = 0;
   cE._lTotalSendSize = 0;
@@ -600,7 +624,11 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
   // [ (w0 offsets) o_0, o_1, ..., o_ndims,
   //   (w0  shapes) s_0, s_1, ..., s_ndims,
   //   (w1 offsets) ... ]
-  ::std::vector<int64_t> bbTable(2 * ndims * nworkers);
+  auto nn = 2 * ndims * nworkers;
+  if (nn / 2 != ndims * nworkers) {
+    throw std::runtime_error("Fatal: integer overflow in getMetaData");
+  }
+  ::std::vector<int64_t> bbTable(nn);
   auto ptableStart = 2 * ndims * myWorkerIndex;
   for (int64_t i = 0; i < ndims; ++i) {
     bbTable[ptableStart + i] = bbOff[i];
@@ -663,6 +691,9 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         // target is rightHalo
         if (cE._bufferizeSend) {
           cE._rSendOff[i] = i ? cE._rSendOff[i - 1] + cE._rSendSize[i - 1] : 0;
+          if (cE._rSendOff[i] < cE._rSendOff[i - 1]) {
+            throw std::runtime_error("Fatal: integer overflow in getMetaData");
+          }
           cE._rBufferStart[i * ndims] = localRowStart;
           cE._rBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
@@ -678,6 +709,9 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         // target is leftHalo
         if (cE._bufferizeSend) {
           cE._lSendOff[i] = i ? cE._lSendOff[i - 1] + cE._lSendSize[i - 1] : 0;
+          if (cE._lSendOff[i] < cE._lSendOff[i - 1]) {
+            throw std::runtime_error("Fatal: integer overflow in getMetaData");
+          }
           cE._lBufferStart[i * ndims] = localRowStart;
           cE._lBufferSize[i * ndims] = nRows;
           for (auto j = 1; j < ndims; ++j) {
@@ -721,14 +755,25 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
   // deduce receive shape for unpack
   for (auto i = 0ul; i < nworkers; ++i) {
     if (cE._bufferizeLRecv && cE._lRecvSize[i] != 0) {
-      cE._lTotalRecvSize += cE._lRecvSize[i];
+      auto x = cE._lTotalRecvSize + cE._lRecvSize[i];
+      if (x < cE._lTotalRecvSize) {
+        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+      }
+      cE._lTotalRecvSize = x;
       cE._lRecvBufferSize[i * ndims] = cE._lRecvSize[i] / bbTotCols; // nrows
       for (auto j = 1; j < ndims; ++j) {
         cE._lRecvBufferSize[i * ndims + j] = bbShape[j]; // leftHaloShape[j]
       }
     }
     if (cE._bufferizeRRecv && cE._rRecvSize[i] != 0) {
-      cE._rTotalRecvSize += cE._rRecvSize[i];
+      auto x = cE._rTotalRecvSize + cE._rRecvSize[i];
+      if (x < cE._rTotalRecvSize) {
+        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+      }
+      cE._rTotalRecvSize = x;
+      if (cE._rTotalRecvSize < 0) {
+        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+      }
       cE._rRecvBufferSize[i * ndims] = cE._rRecvSize[i] / bbTotCols; // nrows
       for (auto j = 1; j < ndims; ++j) {
         cE._rRecvBufferSize[i * ndims + j] = bbShape[j]; // rightHaloShape[j]
@@ -784,16 +829,32 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   }
   cache = &(cIt->second);
 
-  auto nbytes = sizeof_dtype(sharpytype);
+  int64_t nbytes = sizeof_dtype(sharpytype);
   if (cache->_bufferizeLRecv) {
-    cache->_recvLBuff.resize(cache->_lTotalRecvSize * nbytes);
+    int64_t x = cache->_lTotalRecvSize * nbytes;
+    if (x / nbytes != cache->_lTotalRecvSize) {
+      throw std::runtime_error("Fatal: integer overflow in update_halo");
+    }
+    cache->_recvLBuff.resize(x);
   }
   if (cache->_bufferizeRRecv) {
-    cache->_recvRBuff.resize(cache->_rTotalRecvSize * nbytes);
+    int64_t x = cache->_rTotalRecvSize * nbytes;
+    if (x / nbytes != cache->_rTotalRecvSize) {
+      throw std::runtime_error("Fatal: integer overflow in update_halo");
+    }
+    cache->_recvRBuff.resize(x);
   }
   if (cache->_bufferizeSend) {
-    cache->_sendLBuff.resize(cache->_lTotalSendSize * nbytes);
-    cache->_sendRBuff.resize(cache->_rTotalSendSize * nbytes);
+    int64_t x = cache->_lTotalSendSize * nbytes;
+    if (x / nbytes != cache->_lTotalSendSize) {
+      throw std::runtime_error("Fatal: integer overflow in update_halo");
+    }
+    cache->_sendLBuff.resize(x);
+    x = cache->_rTotalSendSize * nbytes;
+    if (x / nbytes != cache->_rTotalSendSize) {
+      throw std::runtime_error("Fatal: integer overflow in update_halo");
+    }
+    cache->_sendRBuff.resize(x);
   }
 
   void *lRecvData =

@@ -17,6 +17,11 @@ if(DEFINED ENV{IMEXROOT})
 else()
   set(IMEX_ROOT ${CONDA_PREFIX})
 endif()
+if(DEFINED ENV{ZLIBROOT})
+  set(ZLIB_ROOT $ENV{ZLIBROOT})
+else()
+  set(ZLIB_ROOT ${CONDA_PREFIX})
+endif()
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -35,7 +40,9 @@ message(STATUS "Expected IMEX sha: \"${EXPECTED_IMEX_SHA}\"")
 # Deps
 # ===============
 # Find dependent packages like IMEX, Python3 and NumPy
-find_package(ZLIB REQUIRED)
+# find_package(ZLIB REQUIRED)
+find_library(LIBZ z NAMES libz.so libz.so.1 REQUIRED PATHS ${ZLIB_ROOT}/lib)
+message("FOUND zlib ${LIBZ}")
 find_package(TBB REQUIRED)
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
@@ -57,8 +64,9 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(AddMLIR)
 #include(AddIMEX)
 
-# macro for mlir root directory
-add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}" FORTIFY_SOURCE=2)
+# macro for mlir/imex root directories
+# __STDC_FORMAT_MACROS for PRIxPTR et al
+add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}" FORTIFY_SOURCE=2 __STDC_FORMAT_MACROS=1)
 add_compile_options(
     "-ftemplate-backtrace-limit=0"
     "$<$<STREQUAL:${CMAKE_CXX_COMPILER_ID},GNU>:-flarge-source-files>"
@@ -171,7 +179,7 @@ target_link_libraries(_sharpy PRIVATE
     LLVMX86AsmParser
     idtr
     TBB::tbb
-    ZLIB::ZLIB
+    ${LIBZ}
 )
 target_link_libraries(idtr PRIVATE
     ${MPI_CXX_LIBRARIES}

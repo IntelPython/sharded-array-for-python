@@ -82,9 +82,11 @@ struct DeferredReplicate : public Deferred {
 
   void run() override {
     const auto a = std::move(Registry::get(_a).get());
-    auto sharpy = dynamic_cast<NDArray *>(a.get());
-    assert(sharpy);
-    sharpy->replicate();
+    auto ary = dynamic_cast<NDArray *>(a.get());
+    if (!ary) {
+      throw std::runtime_error("Expected NDArray in replicate.");
+    }
+    ary->replicate();
     set_value(a);
   }
 

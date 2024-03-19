@@ -1,8 +1,13 @@
 # FIX dpcpp env
 set -ex
-export CC=gcc-11
-export CXX=g++-11
+if [ -n "${GCC}" ]; then
+    export CC=${GCC}
+fi
+if [ -n "${GXX}" ]; then
+    export CXX=${GXX}
+fi
 env
+conda list
 
 if [ -z ${GITHUB_WORKSPACE} ]; then
     INSTALLED_DIR=${SRC_DIR}/installed
@@ -31,7 +36,8 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
             exit 1
         fi
     fi
-    echo "Found SYCLDIR=${SYCL_DIR}"
+    # export SYCL_DIR=${CONDA_PREFIX}
+    echo "Using SYCLDIR=${SYCL_DIR}"
 
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
@@ -64,9 +70,9 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     rm -rf build/CMakeFiles/ build/CMakeCache.txt
     cmake -S ./llvm-project/llvm -B build \
         -GNinja \
-        -DCMAKE_PREFIX_PATH=$CONDA_PREFIX/lib/cmake \
-        -DCMAKE_CXX_COMPILER=$CXX \
-        -DCMAKE_C_COMPILER=$CC \
+        -DCMAKE_PREFIX_PATH=${CONDA_PREFIX}/lib/cmake \
+        -DCMAKE_CXX_COMPILER=${CXX} \
+        -DCMAKE_C_COMPILER=${CC} \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_ENABLE_PROJECTS=mlir \
         -DLLVM_ENABLE_ASSERTIONS=ON \
@@ -77,10 +83,10 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
         -DLLVM_ENABLE_ZSTD=OFF \
         -DLLVM_ENABLE_ZLIB=OFF \
         -DLLVM_EXTERNAL_PROJECTS="Imex"  \
-        -DIMEX_ENABLE_SYCL_RUNTIME=1 \
-        -DIMEX_ENABLE_L0_RUNTIME=1 \
         -DLLVM_EXTERNAL_IMEX_SOURCE_DIR=. \
-        -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero
+        -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
+        -DIMEX_ENABLE_SYCL_RUNTIME=1 \
+        -DIMEX_ENABLE_L0_RUNTIME=1
     cmake --build build
     cmake --install build --prefix=${INSTALLED_DIR}/imex
     popd
@@ -88,4 +94,5 @@ else
     echo "Found IMEX install, skipped building IMEX"
 fi
 
-MLIRROOT=${INSTALLED_DIR}/imex IMEXROOT=${INSTALLED_DIR}/imex ${PYTHON} -m pip install . -vv
+ls -l ${CONDA_PREFIX}/lib
+ZLIBROOT=${CONDA_PREFIX} MLIRROOT=${INSTALLED_DIR}/imex IMEXROOT=${INSTALLED_DIR}/imex ${PYTHON} -m pip install . -vv

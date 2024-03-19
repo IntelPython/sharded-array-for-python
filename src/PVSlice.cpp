@@ -110,7 +110,9 @@ int PVSlice::split_dim() const { return _base->split_dim(); }
 bool PVSlice::is_sliced() const { return base_shape() != shape(); }
 
 bool PVSlice::local_is_contiguous(rank_type rank) const {
-  assert(split_dim() == 0);
+  if (split_dim() != 0) {
+    throw std::runtime_error("Only split_dim == 0 is supported.");
+  }
   auto tshp = tile_shape(rank);
   auto tslc = tile_slice(rank);
   for (auto i = 0; i < ndims(); ++i) {

@@ -96,7 +96,10 @@ struct Slice {
   /// @param e End index to trim to
   ///
   Slice trim(value_type s, value_type e) const {
-    assert(_step > 0);
+    if (_step <= 0) {
+      throw std::runtime_error(
+          "Trimming slices with negative step is not supported");
+    }
     auto start = _start;
     if (s > _start) {
       auto m = (s - start) % _step;
@@ -122,7 +125,10 @@ struct Slice {
   }
 
   Slice overlap(const Slice &slc) const {
-    assert(_step == slc._step);
+    if (_step != slc._step) {
+      throw std::runtime_error(
+          "Overlap of slices with different steps is not supported");
+    }
     return trim(slc._start, slc._end);
   }
 
@@ -135,7 +141,9 @@ struct Slice {
   /// Check if the slice is valid
   ///
   void check() const {
-    assert((_start > _end && _step <= 0) || (_start < _end && _step >= 0));
+    if (!(_start > _end && _step <= 0) && !(_start < _end && _step >= 0)) {
+      throw std::runtime_error("Invalid slice");
+    }
   }
 
   ///
@@ -196,7 +204,10 @@ struct Slice {
   /// @return true if i is in slice
   ///
   bool covers(const value_type &i) const {
-    assert(_step > 0 && _start >= 0);
+    if (_step < 0 || _start < 0) {
+      throw std::runtime_error(
+          "covers() is not supported for slices with negative step or start");
+    }
     return (i >= _start && i < _end && ((i - (_start % _step)) % _step) == 0);
   }
 

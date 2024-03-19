@@ -47,28 +47,32 @@ public:
   NDArray(NDArray &&) = default;
 
   // construct from a and MLIR-jitted execution
-  NDArray(id_type guid, DTypeId dtype, shape_type gShape, std::string device,
-          uint64_t team, void *l_allocated, void *l_aligned, intptr_t l_offset,
-          const intptr_t *l_sizes, const intptr_t *l_strides, void *o_allocated,
-          void *o_aligned, intptr_t o_offset, const intptr_t *o_sizes,
-          const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-          intptr_t r_offset, const intptr_t *r_sizes, const intptr_t *r_strides,
+  NDArray(id_type guid, DTypeId dtype, shape_type gShape,
+          const std::string &device, uint64_t team, void *l_allocated,
+          void *l_aligned, intptr_t l_offset, const intptr_t *l_sizes,
+          const intptr_t *l_strides, void *o_allocated, void *o_aligned,
+          intptr_t o_offset, const intptr_t *o_sizes, const intptr_t *o_strides,
+          void *r_allocated, void *r_aligned, intptr_t r_offset,
+          const intptr_t *r_sizes, const intptr_t *r_strides,
           std::vector<int64_t> &&loffs, rank_type owner = NOOWNER);
 
   NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
-          std::string device, uint64_t team, rank_type owner = NOOWNER);
+          const std::string &device, uint64_t team, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
-  NDArray(id_type guid, const int64_t *shape, uint64_t N, std::string device,
-          uint64_t team, rank_type owner = NOOWNER);
+  NDArray(id_type guid, const int64_t *shape, uint64_t N,
+          const std::string &device, uint64_t team, rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
-  NDArray() : _owner(REPLICATED) { assert(ndims() <= 1); }
+  NDArray() : _owner(REPLICATED) {
+    if (ndims() > 1)
+      throw std::runtime_error("Incorrect NDArray construction.");
+  }
 
   // From numpy
   // FIXME multi-proc
   NDArray(id_type guid, DTypeId dtype, ssize_t ndims, const ssize_t *shape,
-          const intptr_t *strides, void *data, std::string device,
+          const intptr_t *strides, void *data, const std::string &device,
           uint64_t team);
 
   // set the base array
@@ -227,7 +231,10 @@ static typename NDArray::ptr_type mk_tnsr(Ts &&...args) {
 template <typename T, typename OP, bool PASSIDX>
 void forall_(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
              uint64_t nd, OP op, std::vector<int64_t> *idx) {
-  assert(!PASSIDX || idx);
+  if (PASSIDX && !idx) {
+    throw std::runtime_error(
+        "Internal error: cannot perform forall on nullptr.");
+  }
   auto stride = strides[d];
   auto sz = sizes[d];
   if (d == nd - 1) {

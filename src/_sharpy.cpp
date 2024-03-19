@@ -97,7 +97,7 @@ void fini() {
   finied = true;
 }
 
-void init(bool cw, std::string libidtr) {
+void init(bool cw, const std::string &libidtr) {
   if (inited)
     return;
 
