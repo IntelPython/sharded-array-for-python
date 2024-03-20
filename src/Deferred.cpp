@@ -52,7 +52,7 @@ Deferred::future_type Deferred::get_future() {
 Deferred::future_type defer_array(Runable::ptr_type &&_d, bool is_global) {
   Deferred *d = dynamic_cast<Deferred *>(_d.get());
   if (!d)
-    throw std::runtime_error("Expected Deferred Array promise");
+    throw std::invalid_argument("Expected Deferred Array promise");
   if (is_global) {
     _dist(d);
     if (d->guid() == Registry::NOGUID) {

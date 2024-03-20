@@ -37,7 +37,7 @@ public:
     for (auto s : v) {
       compute_slice(s, shape[i], _offsets[i], _sizes[i], _strides[i]);
       if (_strides[i] < 0) {
-        throw std::runtime_error("Negative stride is not supported");
+        throw std::out_of_range("Negative stride is not supported");
       }
       ++i;
     };

@@ -25,8 +25,7 @@ class TestIO:
     )
     def test_device_input_invalid(self, device):
         with pytest.raises(ValueError, match="Invalid device string: *"):
-            a = sp.ones((4,), device=device)
-            assert a.size == 4
+            sp.ones((4,), device=device)
 
     @pytest.mark.skip(reason="FIXME reshape")
     def test_to_numpy2d(self):

@@ -173,7 +173,7 @@ template <> struct TYPE<BOOL> {
   case BOOL:
     return sizeof(bool);
   default:
-    throw std::runtime_error("unknown dtype");
+    throw std::invalid_argument("unknown dtype");
   };
 };
 
@@ -231,7 +231,7 @@ static size_t dtype_bitwidth(DTypeId t) {
   case SHARPY::DTypeId::BOOL:
     return 1;
   default:
-    throw std::runtime_error("Unknown DTypeId");
+    throw std::invalid_argument("Unknown DTypeId");
   }
 }
 
@@ -242,7 +242,7 @@ static DTypeId get_float_dtype(size_t bitwidth) {
   case 32:
     return SHARPY::DTypeId::FLOAT32;
   default:
-    throw std::runtime_error("Unknown bitwidth");
+    throw std::invalid_argument("Unknown bitwidth");
   }
 }
 
@@ -257,7 +257,7 @@ static DTypeId get_int_dtype(size_t bitwidth) {
   case 8:
     return SHARPY::DTypeId::INT8;
   default:
-    throw std::runtime_error("Unknown bitwidth");
+    throw std::invalid_argument("Unknown bitwidth");
   }
 }
 

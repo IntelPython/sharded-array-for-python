@@ -56,7 +56,7 @@ def test_create_invalid_shape(creator):
     datatype = sp.int32
     func, expected_value = creator
     with pytest.raises(ValueError):
-        a = func(shape, dtype=datatype, device=device)  # noqa: F841
+        func(shape, dtype=datatype, device=device)
 
 
 def test_full_invalid_shape():
@@ -64,4 +64,12 @@ def test_full_invalid_shape():
     value = 5
     datatype = sp.int32
     with pytest.raises(ValueError):
-        a = sp.full(shape, value, dtype=datatype, device=device)  # noqa: F841
+        sp.full(shape, value, dtype=datatype, device=device)
+
+
+@pytest.mark.parametrize(
+    "start,end,step", [(0, 10, -1), (0, -10, 1), (0, 99999999999999999999, 1)]
+)
+def tests_arange_invalid(start, end, step):
+    with pytest.raises(TypeError):
+        sp.arange(start, end, step, dtype=sp.int32, device=device)

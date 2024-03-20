@@ -50,7 +50,7 @@ struct DeferredFromLocal : public Deferred {
         return FLOAT64;
       };
     };
-    throw std::runtime_error("Unsupported dtype");
+    throw std::invalid_argument("Unsupported dtype");
   }
 
   void run() override {

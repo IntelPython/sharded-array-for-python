@@ -40,7 +40,8 @@ template <typename D, FactoryId fid> struct FactoryImpl : public Factory {
   void serialize(Serializer &ser, const Runable *ptr) const {
     auto dfrd = dynamic_cast<const D *>(ptr);
     if (!dfrd)
-      throw std::runtime_error("Invalid Deferred object: dynamic cast failed");
+      throw std::invalid_argument(
+          "Invalid Deferred object: dynamic cast failed");
     const_cast<D *>(dfrd)->serialize(ser);
   }
 

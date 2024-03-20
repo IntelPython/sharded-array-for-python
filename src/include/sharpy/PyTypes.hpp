@@ -49,7 +49,7 @@ case BOOL:
 _downcast<bool>(a_ptr));
     */
   default:
-    throw std::runtime_error("unknown dtype");
+    throw std::invalid_argument("unknown dtype");
   }
 }
 

@@ -66,7 +66,7 @@ struct DeferredFull : public Deferred {
       } else if constexpr (std::is_integral_v<T>) {
         return ::imex::createInt(loc, builder, val._int, sizeof(T) * 8);
       }
-      throw std::runtime_error("Unsupported dtype in dispatch");
+      throw std::invalid_argument("Unsupported dtype in dispatch");
       return {};
     };
   };
@@ -131,7 +131,14 @@ struct DeferredArange : public Deferred {
                  {static_cast<shape_type::value_type>(
                      (end - start + step + (step < 0 ? 1 : -1)) / step)},
                  device, team),
-        _start(start), _end(end), _step(step) {}
+        _start(start), _end(end), _step(step) {
+    if (_start > _end && _step > -1ul) {
+      throw std::invalid_argument("start > end and step > -1 in arange");
+    }
+    if (_start < _end && _step < 1) {
+      throw std::invalid_argument("start < end and step < 1 in arange");
+    }
+  }
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
@@ -255,7 +262,7 @@ std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
     return {Creator::full({}, b, dtype, device, team), true};
   }
-  throw std::runtime_error(
+  throw std::invalid_argument(
       "Invalid right operand to elementwise binary operation");
 };
 

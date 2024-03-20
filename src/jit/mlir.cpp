@@ -158,7 +158,7 @@ namespace jit {
     return builder.getI1Type();
     break;
   default:
-    throw std::runtime_error("unknown dtype");
+    throw std::invalid_argument("unknown dtype");
   };
   return {};
 }

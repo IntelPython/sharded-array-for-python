@@ -39,7 +39,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
       set_value(true);
       break;
     default:
-      throw(std::runtime_error(
+      throw(std::invalid_argument(
           "Execution of unkown service operation requested."));
     }
   }
@@ -57,7 +57,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
     case RUN:
       return true;
     default:
-      throw(std::runtime_error(
+      throw(std::invalid_argument(
           "MLIR generation for unkown service operation requested."));
     }
 
@@ -84,7 +84,7 @@ struct DeferredReplicate : public Deferred {
     const auto a = std::move(Registry::get(_a).get());
     auto ary = dynamic_cast<NDArray *>(a.get());
     if (!ary) {
-      throw std::runtime_error("Expected NDArray in replicate.");
+      throw std::invalid_argument("Expected NDArray in replicate.");
     }
     ary->replicate();
     set_value(a);

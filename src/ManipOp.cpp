@@ -107,7 +107,7 @@ struct DeferredAsType : public Deferred {
     auto mlirElType = ::imex::ndarray::toMLIR(builder, ndDType);
     auto arType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
     if (!arType) {
-      throw std::runtime_error(
+      throw std::invalid_argument(
           "Encountered unexpected ndarray type in astype.");
     }
     auto outType = arType.cloneWith(std::nullopt, mlirElType);
@@ -158,7 +158,7 @@ struct DeferredToDevice : public Deferred {
 
     auto srcType = av.getType().dyn_cast<::imex::ndarray::NDArrayType>();
     if (!srcType) {
-      throw std::runtime_error(
+      throw std::invalid_argument(
           "Encountered unexpected ndarray type in to_device.");
     }
     // copy envs, drop gpu env (if any)

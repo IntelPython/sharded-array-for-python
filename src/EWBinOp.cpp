@@ -79,7 +79,7 @@ static ::imex::ndarray::EWBinOpId sharpy2mlir(const EWBinOpId bop) {
   case __RXOR__:
     return ::imex::ndarray::BITWISE_XOR;
   default:
-    throw std::runtime_error("Unknown/invalid elementwise binary operation");
+    throw std::invalid_argument("Unknown/invalid elementwise binary operation");
   }
 }
 

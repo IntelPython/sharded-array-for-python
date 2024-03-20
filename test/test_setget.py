@@ -196,7 +196,7 @@ class TestSetGet:
         shape, slices = shape_and_slices
         with pytest.raises(IndexError):
             a = sp.ones(shape, dtype=sp.float64)
-            b = a[slices]  # noqa: F841
+            a[slices]
 
     def test_set_invalid_bounds(self, shape_and_slices):
         shape, slices = shape_and_slices

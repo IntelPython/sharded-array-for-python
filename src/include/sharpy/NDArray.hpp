@@ -232,7 +232,7 @@ template <typename T, typename OP, bool PASSIDX>
 void forall_(uint64_t d, T *cptr, const int64_t *sizes, const int64_t *strides,
              uint64_t nd, OP op, std::vector<int64_t> *idx) {
   if (PASSIDX && !idx) {
-    throw std::runtime_error(
+    throw std::invalid_argument(
         "Internal error: cannot perform forall on nullptr.");
   }
   auto stride = strides[d];

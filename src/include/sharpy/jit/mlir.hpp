@@ -93,7 +93,7 @@ inline ::imex::ndarray::DType getPTDType(DTypeId dt) {
   case BOOL:
     return PT_DTYPE<TYPE<BOOL>::dtype>::value;
   default:
-    throw std::runtime_error("unknown dtype");
+    throw std::invalid_argument("unknown dtype");
   }
 }
 

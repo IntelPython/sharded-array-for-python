@@ -52,10 +52,13 @@ py::handle wrap(NDArray::ptr_type tnsr, const py::handle &handle) {
   auto tmp_shp = tnsr->local_shape();
   auto tmp_str = tnsr->local_strides();
   auto nd = tnsr->ndims();
-  auto eSz = sizeof_dtype(tnsr->dtype());
+  int64_t eSz = sizeof_dtype(tnsr->dtype());
   std::vector<ssize_t> strides(nd);
   for (auto i = 0; i < nd; ++i) {
     strides[i] = eSz * tmp_str[i];
+    if (strides[i] / tmp_str[i] != eSz) {
+      throw std::overflow_error("Fatal: Integer overflow.");
+    }
   }
 
   return dispatch<wrap_array>(tnsr->dtype(),
@@ -85,7 +88,7 @@ struct DeferredGetLocals
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
-      throw std::runtime_error("Expected NDArray in getlocals.");
+      throw std::invalid_argument("Expected NDArray in getlocals.");
     }
     auto res = wrap(a_ptr, _handle);
     auto tpl = py::make_tuple(py::reinterpret_steal<py::object>(res));
@@ -122,7 +125,7 @@ struct DeferredGather
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
-      throw std::runtime_error("Expected NDArray in gather.");
+      throw std::invalid_argument("Expected NDArray in gather.");
     }
     auto trscvr = a_ptr->transceiver();
     auto myrank = trscvr ? trscvr->rank() : 0;
@@ -209,7 +212,7 @@ struct DeferredMap : public Deferred {
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
-      throw std::runtime_error("Expected NDArray in map.");
+      throw std::invalid_argument("Expected NDArray in map.");
     }
     auto nd = a_ptr->ndims();
     auto lOffs = a_ptr->local_offsets();
@@ -222,6 +225,9 @@ struct DeferredMap : public Deferred {
           [&](const std::vector<int64_t> &idx, auto *elPtr) {
             for (auto i = 0; i < nd; ++i) {
               gIdx[i] = lOffs.empty() ? idx[i] : idx[i] + lOffs[i];
+              if (gIdx[i] < idx[i]) {
+                throw std::overflow_error("Fatal: Integer overflow in map.");
+              }
             }
             auto pyIdx = _make_tuple(gIdx);
             *elPtr =

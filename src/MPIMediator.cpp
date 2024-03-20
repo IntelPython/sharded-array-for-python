@@ -114,7 +114,7 @@ void send_to_workers(const Runable *dfrd, bool self, MPI_Comm comm) {
   }
   ser.adapter().flush();
   if (ser.adapter().writtenBytesCount() > INT_MAX) {
-    throw std::runtime_error("Message too large for MPI (int count).");
+    throw std::out_of_range("Message too large for MPI (int count).");
   }
   int cnt = static_cast<int>(ser.adapter().writtenBytesCount());
 

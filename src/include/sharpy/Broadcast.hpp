@@ -26,7 +26,7 @@ shape_type broadcast(const V1 &shape1, const V2 &shape2) {
     } else if (d1 == d2) {
       shape[i] = d1;
     } else {
-      throw(std::runtime_error("Trying to broadcast incomaptible shapes"));
+      throw(std::runtime_error("Trying to broadcast incompatible shapes"));
     }
   }
   return shape;

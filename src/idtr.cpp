@@ -34,7 +34,7 @@ static bool no_async = get_bool_env("SHARPY_NO_ASYNC");
 
 template <typename T> T *mr_to_ptr(void *ptr, intptr_t offset) {
   if (!ptr) {
-    throw std::runtime_error("Fatal: cannot handle offset on nullptr");
+    throw std::invalid_argument("Fatal: cannot handle offset on nullptr");
   }
   return reinterpret_cast<T *>(ptr) + offset;
 }
@@ -183,7 +183,7 @@ static SHARPY::ReduceOpId mlir2sharpy(const ::imex::ndarray::ReduceOpId rop) {
   case ::imex::ndarray::MIN:
     return SHARPY::MIN;
   default:
-    throw std::runtime_error("Unknown reduction operation");
+    throw std::invalid_argument("Unknown reduction operation");
   }
 }
 
@@ -225,7 +225,7 @@ mlir2sharpy(const ::imex::ndarray::DType dt) {
     return SHARPY::BOOL;
     break;
   default:
-    throw std::runtime_error("unknown dtype");
+    throw std::invalid_argument("unknown dtype");
   };
 }
 
@@ -401,7 +401,7 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
 #endif
   if (!gShapePtr || !lDataPtr || !lShapePtr || !lStridesPtr || !lOffsPtr ||
       !oGShapePtr || !oDataPtr || !oShapePtr || !oOffsPtr || !tc) {
-    throw std::runtime_error("Fatal: received nullptr in reshape");
+    throw std::invalid_argument("Fatal: received nullptr in reshape");
   }
 
   assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
@@ -414,36 +414,36 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
   auto N = tc->nranks();
   auto me = tc->rank();
   if (N <= me) {
-    throw std::runtime_error("Fatal: rank must be < number of ranks");
+    throw std::out_of_range("Fatal: rank must be < number of ranks");
   }
 
   int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[lRank], 1,
                                 std::multiplies<int64_t>());
   int64_t mySz = cSz * lShapePtr[0];
   if (mySz / cSz != lShapePtr[0]) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myOff = lOffsPtr[0] * cSz;
   if (myOff / cSz != lOffsPtr[0]) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myEnd = myOff + mySz;
   if (myEnd < myOff) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t tCSz = std::accumulate(&oShapePtr[1], &oShapePtr[oRank], 1,
                                  std::multiplies<int64_t>());
   int64_t myTSz = tCSz * oShapePtr[0];
   if (myTSz / tCSz != oShapePtr[0]) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myTOff = oOffsPtr[0] * tCSz;
   if (myTOff / tCSz != oOffsPtr[0]) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myTEnd = myTOff + myTSz;
   if (myTEnd < myTOff) {
-    throw std::runtime_error("Fatal: integer overflow in reshape");
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
 
   // First we allgather the current and target partitioning
@@ -613,7 +613,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
   UHCache cE; // holds data if non-cached
   auto myWorkerIndex = tc->rank();
   if (myWorkerIndex >= nworkers) {
-    throw std::runtime_error("Fatal: rank must be < number of workers");
+    throw std::out_of_range("Fatal: rank must be < number of workers");
   }
   cE._lTotalRecvSize = 0;
   cE._rTotalRecvSize = 0;
@@ -626,7 +626,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
   //   (w1 offsets) ... ]
   auto nn = 2 * ndims * nworkers;
   if (nn / 2 != ndims * nworkers) {
-    throw std::runtime_error("Fatal: integer overflow in getMetaData");
+    throw std::overflow_error("Fatal: Integer overflow in getMetaData");
   }
   ::std::vector<int64_t> bbTable(nn);
   auto ptableStart = 2 * ndims * myWorkerIndex;
@@ -692,7 +692,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         if (cE._bufferizeSend) {
           cE._rSendOff[i] = i ? cE._rSendOff[i - 1] + cE._rSendSize[i - 1] : 0;
           if (cE._rSendOff[i] < cE._rSendOff[i - 1]) {
-            throw std::runtime_error("Fatal: integer overflow in getMetaData");
+            throw std::overflow_error("Fatal: Integer overflow in getMetaData");
           }
           cE._rBufferStart[i * ndims] = localRowStart;
           cE._rBufferSize[i * ndims] = nRows;
@@ -710,7 +710,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         if (cE._bufferizeSend) {
           cE._lSendOff[i] = i ? cE._lSendOff[i - 1] + cE._lSendSize[i - 1] : 0;
           if (cE._lSendOff[i] < cE._lSendOff[i - 1]) {
-            throw std::runtime_error("Fatal: integer overflow in getMetaData");
+            throw std::overflow_error("Fatal: Integer overflow in getMetaData");
           }
           cE._lBufferStart[i * ndims] = localRowStart;
           cE._lBufferSize[i * ndims] = nRows;
@@ -757,7 +757,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
     if (cE._bufferizeLRecv && cE._lRecvSize[i] != 0) {
       auto x = cE._lTotalRecvSize + cE._lRecvSize[i];
       if (x < cE._lTotalRecvSize) {
-        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+        throw std::overflow_error("Fatal: Integer overflow in getMetaData");
       }
       cE._lTotalRecvSize = x;
       cE._lRecvBufferSize[i * ndims] = cE._lRecvSize[i] / bbTotCols; // nrows
@@ -768,11 +768,11 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
     if (cE._bufferizeRRecv && cE._rRecvSize[i] != 0) {
       auto x = cE._rTotalRecvSize + cE._rRecvSize[i];
       if (x < cE._rTotalRecvSize) {
-        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+        throw std::overflow_error("Fatal: Integer overflow in getMetaData");
       }
       cE._rTotalRecvSize = x;
       if (cE._rTotalRecvSize < 0) {
-        throw std::runtime_error("Fatal: integer overflow in getMetaData");
+        throw std::overflow_error("Fatal: Integer overflow in getMetaData");
       }
       cE._rRecvBufferSize[i * ndims] = cE._rRecvSize[i] / bbTotCols; // nrows
       for (auto j = 1; j < ndims; ++j) {
@@ -805,7 +805,8 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   if (!ownedOff || !ownedShape || !ownedStride || !bbOff || !bbShape ||
       !ownedData || !leftHaloShape || !leftHaloStride || !leftHaloData ||
       !rightHaloShape || !rightHaloStride || !rightHaloData || !tc) {
-    throw std::runtime_error("Fatal error: received nullptr in update_halo.");
+    throw std::invalid_argument(
+        "Fatal error: received nullptr in update_halo.");
   }
 
   auto nworkers = tc->nranks();
@@ -833,26 +834,26 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   if (cache->_bufferizeLRecv) {
     int64_t x = cache->_lTotalRecvSize * nbytes;
     if (x / nbytes != cache->_lTotalRecvSize) {
-      throw std::runtime_error("Fatal: integer overflow in update_halo");
+      throw std::overflow_error("Fatal: Integer overflow in update_halo");
     }
     cache->_recvLBuff.resize(x);
   }
   if (cache->_bufferizeRRecv) {
     int64_t x = cache->_rTotalRecvSize * nbytes;
     if (x / nbytes != cache->_rTotalRecvSize) {
-      throw std::runtime_error("Fatal: integer overflow in update_halo");
+      throw std::overflow_error("Fatal: Integer overflow in update_halo");
     }
     cache->_recvRBuff.resize(x);
   }
   if (cache->_bufferizeSend) {
     int64_t x = cache->_lTotalSendSize * nbytes;
     if (x / nbytes != cache->_lTotalSendSize) {
-      throw std::runtime_error("Fatal: integer overflow in update_halo");
+      throw std::overflow_error("Fatal: Integer overflow in update_halo");
     }
     cache->_sendLBuff.resize(x);
     x = cache->_rTotalSendSize * nbytes;
     if (x / nbytes != cache->_rTotalSendSize) {
-      throw std::runtime_error("Fatal: integer overflow in update_halo");
+      throw std::overflow_error("Fatal: Integer overflow in update_halo");
     }
     cache->_sendRBuff.resize(x);
   }
@@ -919,7 +920,8 @@ void *_idtr_update_halo(SHARPY::Transceiver *tc, int64_t gShapeRank,
 
   if (!gShapeDescr || !oOffDescr || !oDataDescr || !bbOffDescr ||
       !bbShapeDescr || !lHaloDescr || !rHaloDescr) {
-    throw std::runtime_error("Fatal error: received nullptr in update_halo.");
+    throw std::invalid_argument(
+        "Fatal error: received nullptr in update_halo.");
   }
 
   auto sharpytype = SHARPY::DTYPE<T>::value;
