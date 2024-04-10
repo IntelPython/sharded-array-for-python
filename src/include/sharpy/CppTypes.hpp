@@ -63,39 +63,17 @@ enum _RANKS : rank_type {
 };
 
 template <typename T> struct DTYPE {};
-template <> struct DTYPE<double> {
-  constexpr static DTypeId value = FLOAT64;
-};
-template <> struct DTYPE<float> {
-  constexpr static DTypeId value = FLOAT32;
-};
-template <> struct DTYPE<int64_t> {
-  constexpr static DTypeId value = INT64;
-};
-template <> struct DTYPE<int32_t> {
-  constexpr static DTypeId value = INT32;
-};
-template <> struct DTYPE<int16_t> {
-  constexpr static DTypeId value = INT16;
-};
-template <> struct DTYPE<int8_t> {
-  constexpr static DTypeId value = INT8;
-};
-template <> struct DTYPE<uint64_t> {
-  constexpr static DTypeId value = UINT64;
-};
-template <> struct DTYPE<uint32_t> {
-  constexpr static DTypeId value = UINT32;
-};
-template <> struct DTYPE<uint16_t> {
-  constexpr static DTypeId value = UINT16;
-};
-template <> struct DTYPE<uint8_t> {
-  constexpr static DTypeId value = UINT8;
-};
-template <> struct DTYPE<bool> {
-  constexpr static DTypeId value = BOOL;
-};
+template <> struct DTYPE<double> { constexpr static DTypeId value = FLOAT64; };
+template <> struct DTYPE<float> { constexpr static DTypeId value = FLOAT32; };
+template <> struct DTYPE<int64_t> { constexpr static DTypeId value = INT64; };
+template <> struct DTYPE<int32_t> { constexpr static DTypeId value = INT32; };
+template <> struct DTYPE<int16_t> { constexpr static DTypeId value = INT16; };
+template <> struct DTYPE<int8_t> { constexpr static DTypeId value = INT8; };
+template <> struct DTYPE<uint64_t> { constexpr static DTypeId value = UINT64; };
+template <> struct DTYPE<uint32_t> { constexpr static DTypeId value = UINT32; };
+template <> struct DTYPE<uint16_t> { constexpr static DTypeId value = UINT16; };
+template <> struct DTYPE<uint8_t> { constexpr static DTypeId value = UINT8; };
+template <> struct DTYPE<bool> { constexpr static DTypeId value = BOOL; };
 
 template <DTypeId DT> struct TYPE {};
 template <> struct TYPE<FLOAT64> {
