@@ -25,6 +25,7 @@ requirements:
     - mpi4py
     - wheel
     - libzlib
+    - xz <=5.4.6  # CVE-2024-3094
 
   build:
     - {{compiler('gxx')}}
