@@ -11,8 +11,8 @@ defaults:
 env:
   IMEX_CACHE_NUMBER: 4  # Increase to reset cache
 jobs:
-  runs-on: ubuntu-22.04
   build_and_test:
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
     steps:
