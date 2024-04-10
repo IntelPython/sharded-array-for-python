@@ -5,7 +5,7 @@
 */
 
 #include <mpi.h>
-//#include <mkl.h>
+// #include <mkl.h>
 #include "sharpy/Factory.hpp"
 #include "sharpy/LinAlgOp.hpp"
 #include "sharpy/NDArray.hpp"

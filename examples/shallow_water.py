@@ -23,6 +23,7 @@ Run with numpy backend
     python shallow_water.py -b numpy ...
 
 """
+
 import argparse
 import math
 import os

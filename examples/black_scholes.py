@@ -22,6 +22,7 @@ Examples:
     python black_scholes.py -p M16Gb -b numpy
 
 """
+
 import argparse
 import os
 import time as time_mod
