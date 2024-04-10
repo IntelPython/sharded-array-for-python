@@ -12,7 +12,6 @@ env:
   IMEX_CACHE_NUMBER: 4  # Increase to reset cache
 jobs:
   build_and_test:
-    runs-on: tpi-ubuntu-latest
     strategy:
       fail-fast: false
     steps:
