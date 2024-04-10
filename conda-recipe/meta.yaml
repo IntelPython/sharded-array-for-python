@@ -37,6 +37,7 @@ requirements:
     - tbb
     - impi_rt
     - mpi4py
+    - sysroot_linux-64 >=2.28  # [linux]
 
 build:
   number: 0

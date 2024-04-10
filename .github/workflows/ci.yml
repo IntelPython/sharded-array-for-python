@@ -46,7 +46,7 @@ jobs:
           bash $CPKG -u -b -f -p $CONDA_ROOT
           export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
           eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
-          conda install -c conda-forge --override-channels python git-lfs conda-build
+          conda install -c conda-forge --override-channels python git-lfs 'conda-build<=24.1.2'
           # aahhhh bug in conda somewhere
           sed -i "s,\#\!/usr/bin/env python,#\!$CONDA_ROOT/bin/python," $CONDA_ROOT/*bin/conda
           conda clean --all -y

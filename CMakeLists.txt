@@ -43,6 +43,7 @@ message(STATUS "Expected IMEX sha: \"${EXPECTED_IMEX_SHA}\"")
 # find_package(ZLIB REQUIRED)
 find_library(LIBZ z NAMES libz.so libz.so.1 REQUIRED PATHS ${ZLIB_ROOT}/lib)
 message("FOUND zlib ${LIBZ}")
+set(ZLIB_LIBRARY ${LIBZ})
 find_package(TBB REQUIRED)
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
@@ -64,9 +65,11 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 #include(AddMLIR)
 #include(AddIMEX)
 
+# LLVM defs, most impoprtatntly __STDC_FORMAT_MACROS for PRIxPTR et al
+message(STATUS "LLVM_DEFINITIONS: ${LLVM_DEFINITIONS}")
+add_definitions(${LLVM_DEFINITIONS})
 # macro for mlir/imex root directories
-# __STDC_FORMAT_MACROS for PRIxPTR et al
-add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}" FORTIFY_SOURCE=2 __STDC_FORMAT_MACROS=1)
+add_compile_definitions(CMAKE_MLIR_ROOT="${MLIR_ROOT}" CMAKE_IMEX_ROOT="${IMEX_ROOT}" FORTIFY_SOURCE=2)
 add_compile_options(
     "-ftemplate-backtrace-limit=0"
     "$<$<STREQUAL:${CMAKE_CXX_COMPILER_ID},GNU>:-flarge-source-files>"

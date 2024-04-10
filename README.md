@@ -1,19 +1,19 @@
-[![.github/workflows/ci.yml](https://github.com/intel-sandbox/sharpy/actions/workflows/ci.yml/badge.svg)](https://github.com/intel-sandbox/sharpy/actions/workflows/ci.yml)
+[![.github/workflows/ci.yml](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml/badge.svg)](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml)
 
 ***This software package is not ready for production use and and merely a proof of concept implementation.***
 
-# Distributed Python Array
+# Sharded Array For Python
 
 A array implementation following the [array API as defined by the data-API consortium](https://data-apis.org/array-api/latest/index.html).
 Parallel and distributed execution currently is MPI/CSP-like. In a later version support for a controller-worker execution model will be added.
 
 ## Setting up build environment
 
-Install MLIR/LLVM and IMEX (see https://github.com/intel-innersource/frameworks.ai.mlir.mlir-extensions).
+Install MLIR/LLVM and Intel® Extension for MLIR (IMEX, see https://github.com/intel/mlir-extensions).
 
 ```bash
-git clone --recurse-submodules https://github.com/intel-sandbox/sharpy
-cd sharpy
+git clone --recurse-submodules https://github.com/IntelPython/sharded-array-for-python
+cd sharded-array-for-python
 git checkout jit
 conda create --file conda-env.txt --name sharpy
 conda activate sharpy
@@ -22,7 +22,7 @@ export MLIRROOT=<your-MLIR-install-dir>
 export IMEXROOT=<your-IMEX-install-dir>
 ```
 
-## Building sharpy
+## Building Sharded Array For Python
 
 ```bash
 python -m pip install .
@@ -98,7 +98,7 @@ pre-commit autoupdate
 
 ### Deferred Execution
 
-Typically, sharpy operations do not get executed immediately. Instead, the function returns a transparent object (a future) only.
+Typically, operations do not get executed immediately. Instead, the function returns a transparent object (a future) only.
 The actual computation gets deferred by creating a promise/deferred object and queuing it for later. This is not visible to users, they can use it as any other numpy-like library.
 
 Only when actual data is needed, computation will happen; that is when
@@ -112,17 +112,17 @@ In the background a worker thread handles deferred objects. Until computation is
 
 Arrays and operations on them get transparently distributed across multiple processes. Respective functionality is partly handled by this library and partly IMEX dist dialect.
 IMEX relies on a runtime library for complex communication tasks and for inspecting runtime configuration, such as number of processes and process id (MPI rank).
-sharpy provides this library functionality in a separate dynamic library "idtr".
+Sharded Array For Python provides this library functionality in a separate dynamic library "idtr".
 
 Right now, data is split in the first dimension (only). Each process knows the partition it owns. For optimization partitions can actually overlap.
 
-sharpy currently supports one execution mode: CSP/SPMD/explicitly-distributed execution, meaning all processes execute the same program, execution is replicated on all processes. Data is typically not replicated but distributed among processes. The distribution is handled automatically by sharpy, all operations on sharpy arrays can be viewed as collective operations.
+Sharded Array For Python currently supports one execution mode: CSP/SPMD/explicitly-distributed execution, meaning all processes execute the same program, execution is replicated on all processes. Data is typically not replicated but distributed among processes. The distribution is handled automatically, all operations on Sharded Arrays For Python can be viewed as collective operations.
 
 Later, we'll add a Controller-Worker/implicitly-distributed execution mode, meaning only a single process executes the program and it distributes data and work to worker processes.
 
 ### Array API Coverage
 
-Currently only a subset of the Array API is covered by sharpy
+Currently only a subset of the Array API is covered by Sharded Array For Python
 
 - elementwise binary operations
 - elementwise unary operations
@@ -135,18 +135,18 @@ Currently only a subset of the Array API is covered by sharpy
 
 ### Other Functionality
 
-- `sharpy.to_numpy` converts a sharpy array into a numpy array.
-- `sharpy.numpy.from_function` allows creating a sharpy array from a function (similar to numpy)
-- In addition to the Array API sharpy also provides functionality facilitating interacting with sharpy arrays in a distributed environment.
+- `sharpy.to_numpy` converts a sharded array into a numpy array.
+- `sharpy.numpy.from_function` allows creating a sharded array from a function (similar to numpy)
+- In addition to the Array API Sharded Array For Python also provides functionality facilitating interacting with sharded arrays in a distributed environment.
   - `sharpy.spmd.gather` gathers the distributed array and forms a single, local and contiguous copy of the data as a numpy array
   - `sharpy.spmd.get_locals` return the local part of the distributed array as a numpy array
-- sharpy allows providing a fallback array implementation. By setting SHARPY_FALLBACK to a python package it will call that package if a given function is not provided by sharpy. It will pass sharpy arrays as (gathered) numpy-arrays.
+- sharpy allows providing a fallback array implementation. By setting SHARPY_FALLBACK to a python package it will call that package if a given function is not provided. It will pass sharded arrays as (gathered) numpy-arrays.
 
 ## Environment variables
 
 ### Compile time variables
 
-Required to compile `sharpy`:
+Required to compile Sharded Array For Python:
 
 - `MLIRROOT`: Set path to MLIR install root.
 - `IMEXROOT`: Set path to Intel MLIR Extensions install root.

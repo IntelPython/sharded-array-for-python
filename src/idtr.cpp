@@ -691,7 +691,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         // target is rightHalo
         if (cE._bufferizeSend) {
           cE._rSendOff[i] = i ? cE._rSendOff[i - 1] + cE._rSendSize[i - 1] : 0;
-          if (cE._rSendOff[i] < cE._rSendOff[i - 1]) {
+          if (i && cE._rSendOff[i] < cE._rSendOff[i - 1]) {
             throw std::overflow_error("Fatal: Integer overflow in getMetaData");
           }
           cE._rBufferStart[i * ndims] = localRowStart;
@@ -709,7 +709,7 @@ UHCache getMetaData(SHARPY::rank_type nworkers, int64_t ndims,
         // target is leftHalo
         if (cE._bufferizeSend) {
           cE._lSendOff[i] = i ? cE._lSendOff[i - 1] + cE._lSendSize[i - 1] : 0;
-          if (cE._lSendOff[i] < cE._lSendOff[i - 1]) {
+          if (i && cE._lSendOff[i] < cE._lSendOff[i - 1]) {
             throw std::overflow_error("Fatal: Integer overflow in getMetaData");
           }
           cE._lBufferStart[i * ndims] = localRowStart;

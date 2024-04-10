@@ -42,8 +42,8 @@ void gather_array(NDArray::ptr_type a_ptr, rank_type root, void *outPtr) {
   auto myoff = a_ptr->local_offsets()[0];
   auto nd = a_ptr->ndims();
   auto gshape = a_ptr->shape();
-  auto myTileSz =
-      std::accumulate(&gshape[1], &gshape[nd], 1, std::multiplies<int64_t>());
+  auto myTileSz = std::accumulate(&gshape.data()[1], &gshape.data()[nd], 1,
+                                  std::multiplies<int64_t>());
 
   // allgather process local offset and sizes
   std::vector<int> displacements(nranks);
