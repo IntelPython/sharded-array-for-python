@@ -36,14 +36,14 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     for root in "${CONDA_PREFIX}" "${BUILD_PREFIX}"; do
         spirvdir=$(find "${root}" -type d -name __spirv | head -n 1)
         if [ -d "${spirvdir}" ]; then
-            SPIRV_INC_DIR=$(dirname $(dirname "${spirvdir}"))
+            SPIRV_INC_DIR=$(dirname "${spirvdir}")
             break
         fi
     done
     if [ -d "${SPIRV_INC_DIR}" ]; then
         echo "Using SPIRV_INC_DIR=${SPIRV_INC_DIR}"
-        mkdir "${SRC_DIR}/grrrr"
-        ln -s "${SPIRV_INC_DIR}" "${SRC_DIR}/grrrr/include"
+        mkdir "${SRC_DIR}/grrrr/include"
+        ln -s "${SPIRV_INC_DIR}" "${SRC_DIR}/grrrr/include/CL"
         SPIRV_INC_DIR="${SRC_DIR}/grrrr/include"
     else
         echo "Fatal error: SPIRV_INC_DIR not found"
