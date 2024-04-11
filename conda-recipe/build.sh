@@ -34,16 +34,19 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     # as long as the conda packages differ from system oneAPI installs we need to explicitly provide the include dir for SYCL
     # see also below in cmake call
     for root in "${CONDA_PREFIX}" "${BUILD_PREFIX}"; do
-        spirvdir=$(find "${root}" -d -name __spirv | head -n 1)
+        spirvdir=$(find "${root}" -type d -name __spirv | head -n 1)
         if [ -d "${spirvdir}" ]; then
-            SYCL_INC_DIR=$(dirname $(dirname "${spirvdir}"))
+            SPIRV_INC_DIR=$(dirname $(dirname "${spirvdir}"))
             break
         fi
     done
-    if [ -d "${SYCL_INC_DIR}" ]; then
-        echo "Using SYCL_INC_DIR=${SYCL_INC_DIR}"
+    if [ -d "${SPIRV_INC_DIR}" ]; then
+        echo "Using SPIRV_INC_DIR=${SPIRV_INC_DIR}"
+        mkdir "${SRC_DIR}/grrrr"
+        ln -s "${SPIRV_INC_DIR}" "${SRC_DIR}/grrrr/include"
+        SPIRV_INC_DIR="${SRC_DIR}/grrrr/include"
     else
-        echo "Fatal error: SYCL_INC_DIR not found"
+        echo "Fatal error: SPIRV_INC_DIR not found"
         exit 1
     fi
 
@@ -95,7 +98,7 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
         -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
         -DIMEX_ENABLE_SYCL_RUNTIME=1 \
         -DIMEX_ENABLE_L0_RUNTIME=1 \
-        -DCMAKE_CXX_FLAGS="-I${SYCL_INC_DIR}"  # grrrr
+        -DCMAKE_CXX_FLAGS="-I${SPIRV_INC_DIR}"  # grrrr
     cmake --build build
     cmake --install build --prefix=${INSTALLED_DIR}/imex
     popd
