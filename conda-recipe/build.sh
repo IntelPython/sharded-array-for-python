@@ -27,17 +27,18 @@ popd
 
 # skip checkout/build of IMEX/LLVM if there is an install
 if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
-    # FIXME work-around as long dpcpp conda packages are incomplete
-    export SYCL_DIR="/opt/intel/oneapi/compiler/latest/linux"
-    if [ ! -d "${SYCL_DIR}" ]; then
-        export SYCL_DIR="/opt/intel/oneapi/compiler/latest"
-        if [ ! -d "${SYCL_DIR}" ]; then
-            echo "Fatal error: SYCL_DIR not found"
-            exit 1
-        fi
+    export SYCL_DIR=${CONDA_PREFIX}
+    echo "Using SYCL_DIR=${SYCL_DIR}"
+
+    # grrrr
+    # as long as the conda packages differ from system oneAPI installs we need to explicitly provide the include dir for SYCL
+    # see also below in cmake call
+    SYCL_INC_DIR=$(dirname $(dirname $(find ${CONDA_PREFIX} -d -name __spriv | head -n 1)))
+    if [ ! -d "${SYCL_INC_DIR}" ]; then
+        echo "Fatal error: SYCL_INC_DIR not found"
+        exit 1
     fi
-    # export SYCL_DIR=${CONDA_PREFIX}
-    echo "Using SYCLDIR=${SYCL_DIR}"
+    echo "Using SYCL_INC_DIR=${SYCL_INC_DIR}"
 
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
@@ -86,7 +87,8 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
         -DLLVM_EXTERNAL_IMEX_SOURCE_DIR=. \
         -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
         -DIMEX_ENABLE_SYCL_RUNTIME=1 \
-        -DIMEX_ENABLE_L0_RUNTIME=1
+        -DIMEX_ENABLE_L0_RUNTIME=1 \
+        -DCMAKE_CXX_FLAGS="-I${SYCL_INC_DIR}  # grrrr
     cmake --build build
     cmake --install build --prefix=${INSTALLED_DIR}/imex
     popd
