@@ -42,7 +42,7 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     done
     if [ -d "${SPIRV_INC_DIR}" ]; then
         echo "Using SPIRV_INC_DIR=${SPIRV_INC_DIR}"
-        mkdir "${SRC_DIR}/grrrr/include"
+        mkdir -p "${SRC_DIR}/grrrr/include"
         ln -s "${SPIRV_INC_DIR}" "${SRC_DIR}/grrrr/include/CL"
         SPIRV_INC_DIR="${SRC_DIR}/grrrr/include"
     else
