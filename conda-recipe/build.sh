@@ -88,7 +88,7 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
         -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
         -DIMEX_ENABLE_SYCL_RUNTIME=1 \
         -DIMEX_ENABLE_L0_RUNTIME=1 \
-        -DCMAKE_CXX_FLAGS="-I${SYCL_INC_DIR}  # grrrr
+        -DCMAKE_CXX_FLAGS="-I${SYCL_INC_DIR}"  # grrrr
     cmake --build build
     cmake --install build --prefix=${INSTALLED_DIR}/imex
     popd
