@@ -33,12 +33,19 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     # grrrr
     # as long as the conda packages differ from system oneAPI installs we need to explicitly provide the include dir for SYCL
     # see also below in cmake call
-    SYCL_INC_DIR=$(dirname $(dirname $(find ${CONDA_PREFIX} -d -name __spriv | head -n 1)))
-    if [ ! -d "${SYCL_INC_DIR}" ]; then
+    for root in "${CONDA_PREFIX}" "${BUILD_PREFIX}"; do
+        spirvdir=$(find "${root}" -d -name __spriv | head -n 1)
+        if [ -d "${spirvdir}" ]; then
+            SYCL_INC_DIR=$(dirname $(dirname "${spirvdir}"))
+            break
+        fi
+    done
+    if [ -d "${SYCL_INC_DIR}" ]; then
+        echo "Using SYCL_INC_DIR=${SYCL_INC_DIR}"
+    else
         echo "Fatal error: SYCL_INC_DIR not found"
         exit 1
     fi
-    echo "Using SYCL_INC_DIR=${SYCL_INC_DIR}"
 
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
