@@ -3,6 +3,7 @@ The list of data API operations for sharpy, a
 distributed implementation of the array API as defined here:
 https://data-apis.org/array-api/latest
 """
+
 from collections import OrderedDict
 
 api_categories = OrderedDict(

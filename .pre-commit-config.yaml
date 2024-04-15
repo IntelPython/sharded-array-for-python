@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
         -   id: check-ast
         -   id: check-builtin-literals
@@ -19,13 +19,13 @@ repos:
         -   id: trailing-whitespace
             exclude: '.*\.patch'
 -   repo: https://github.com/psf/black
-    rev: 23.12.0
+    rev: 24.3.0
     hooks:
     - id: black
       args: ["--line-length", "80"]
       language_version: python3
 -   repo: https://github.com/PyCQA/bandit
-    rev: '1.7.7'
+    rev: '1.7.8'
     hooks:
     -   id: bandit
         args: ["-c", ".bandit.yml"]
@@ -35,7 +35,7 @@ repos:
     -   id: isort
         name: isort (python)
 -   repo: https://github.com/pycqa/flake8
-    rev: 5.0.4
+    rev: 7.0.0
     hooks:
     -   id: flake8
 -   repo: https://github.com/pocc/pre-commit-hooks

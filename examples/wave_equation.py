@@ -23,6 +23,7 @@ Run with numpy backend
     python wave_equation.py -b numpy ...
 
 """
+
 import argparse
 import math
 import os

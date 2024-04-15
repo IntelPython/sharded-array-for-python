@@ -27,17 +27,28 @@ popd
 
 # skip checkout/build of IMEX/LLVM if there is an install
 if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
-    # FIXME work-around as long dpcpp conda packages are incomplete
-    export SYCL_DIR="/opt/intel/oneapi/compiler/latest/linux"
-    if [ ! -d "${SYCL_DIR}" ]; then
-        export SYCL_DIR="/opt/intel/oneapi/compiler/latest"
-        if [ ! -d "${SYCL_DIR}" ]; then
-            echo "Fatal error: SYCL_DIR not found"
-            exit 1
-        fi
-    fi
-    # export SYCL_DIR=${CONDA_PREFIX}
-    echo "Using SYCLDIR=${SYCL_DIR}"
+    export SYCL_DIR=${CONDA_PREFIX}
+    echo "Using SYCL_DIR=${SYCL_DIR}"
+
+    # grrrr
+    # as long as the conda packages differ from system oneAPI installs we need to explicitly provide the include dir for SYCL
+    # see also below in cmake call
+    # for root in "${CONDA_PREFIX}" "${BUILD_PREFIX}"; do
+    #     spirvdir=$(find "${root}" -type d -name __spirv | head -n 1)
+    #     if [ -d "${spirvdir}" ]; then
+    #         SPIRV_INC_DIR=$(dirname "${spirvdir}")
+    #         break
+    #     fi
+    # done
+    # if [ -d "${SPIRV_INC_DIR}" ]; then
+    #     echo "Using SPIRV_INC_DIR=${SPIRV_INC_DIR}"
+    #     mkdir -p "${SRC_DIR}/grrrr/include"
+    #     ln -s "${SPIRV_INC_DIR}" "${SRC_DIR}/grrrr/include/CL"
+    #     SPIRV_INC_DIR="${SRC_DIR}/grrrr/include"
+    # else
+    #     echo "Fatal error: SPIRV_INC_DIR not found"
+    #     exit 1
+    # fi
 
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
@@ -83,10 +94,11 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
         -DLLVM_ENABLE_ZSTD=OFF \
         -DLLVM_ENABLE_ZLIB=OFF \
         -DLLVM_EXTERNAL_PROJECTS="Imex"  \
-        -DLLVM_EXTERNAL_IMEX_SOURCE_DIR=. \
-        -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
-        -DIMEX_ENABLE_SYCL_RUNTIME=1 \
-        -DIMEX_ENABLE_L0_RUNTIME=1
+        -DLLVM_EXTERNAL_IMEX_SOURCE_DIR=.
+        # -DLEVEL_ZERO_DIR=${INSTALLED_DIR}/level-zero \
+        # -DIMEX_ENABLE_SYCL_RUNTIME=1 \
+        # -DIMEX_ENABLE_L0_RUNTIME=1 \
+        # -DCMAKE_CXX_FLAGS="-I${SPIRV_INC_DIR}"  # grrrr
     cmake --build build
     cmake --install build --prefix=${INSTALLED_DIR}/imex
     popd

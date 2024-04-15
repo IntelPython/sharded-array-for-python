@@ -149,7 +149,7 @@ void init(bool cw, const std::string &libidtr) {
   VT(VT_begin, vtWaitSym);                                                     \
   py::gil_scoped_release release;                                              \
   Service::run();                                                              \
-  auto r = (_f).get().get() -> _a();                                           \
+  auto r = (_f).get().get()->_a();                                             \
   VT(VT_end, vtWaitSym);                                                       \
   return r
 

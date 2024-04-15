@@ -2,6 +2,7 @@
 The array class for sharpy, a distributed implementation of the
 array API as defined here: https://data-apis.org/array-api/latest
 """
+
 #
 # See __init__.py for an implementation overview
 #
