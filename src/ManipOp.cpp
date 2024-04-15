@@ -12,6 +12,7 @@
 #include "sharpy/jit/mlir.hpp"
 
 #include <imex/Dialect/Dist/IR/DistOps.h>
+#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/IR/Builders.h>
 
@@ -41,7 +42,7 @@ struct DeferredReshape : public Deferred {
             : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
 
     auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
-    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
+    auto outTyp = imex::dist::cloneWithShape(aTyp, shape());
 
     auto op =
         builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);

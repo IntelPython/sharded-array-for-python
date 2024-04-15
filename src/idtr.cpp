@@ -59,30 +59,13 @@ template <typename T> WaitHandle<T> *mkWaitHandle(T fini) {
   return new WaitHandle<T>(fini);
 };
 
-void _idtr_wait(WaitHandleBase *handle, int64_t lHaloRank, void *lHaloDescr,
-                int64_t rHaloRank, void *rHaloDescr) {
+extern "C" {
+void _idtr_wait(WaitHandleBase *handle) {
   if (handle) {
     handle->wait();
     delete handle;
   }
 }
-
-extern "C" {
-#define TYPED_WAIT(_sfx)                                                       \
-  void _idtr_wait_##_sfx(WaitHandleBase *handle, int64_t lHaloRank,            \
-                         void *lHaloDescr, int64_t rHaloRank,                  \
-                         void *rHaloDescr) {                                   \
-    return _idtr_wait(handle, lHaloRank, lHaloDescr, rHaloRank, rHaloDescr);   \
-  }                                                                            \
-  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_wait_##_sfx = _idtr_wait_##_sfx))
-
-TYPED_WAIT(f64);
-TYPED_WAIT(f32);
-TYPED_WAIT(i64);
-TYPED_WAIT(i32);
-TYPED_WAIT(i16);
-TYPED_WAIT(i8);
-TYPED_WAIT(i1);
 
 #define NO_TRANSCEIVER
 #ifdef NO_TRANSCEIVER
@@ -324,9 +307,9 @@ void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
 }
 
 /// copy a number of array elements into a contiguous block of data
-void bufferizeN(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
-                const int64_t *strides, const int64_t *tStarts,
-                const int64_t *tEnds, uint64_t nd, uint64_t N, void *out) {
+void bufferizeN(uint64_t nd, void *cptr, const int64_t *sizes,
+                const int64_t *strides, SHARPY::DTypeId dtype, uint64_t N,
+                const int64_t *tStarts, const int64_t *tEnds, void *out) {
   if (!cptr || !sizes || !strides || !tStarts || !tEnds || !out) {
     return;
   }
@@ -390,25 +373,29 @@ TYPED_REDUCEALL(i1, bool);
 /// @brief reshape array
 /// We assume array is partitioned along the first dimension (only) and
 /// partitions are ordered by ranks
-void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
-                   int64_t *gShapePtr, void *lDataPtr, int64_t *lShapePtr,
-                   int64_t *lStridesPtr, int64_t *lOffsPtr, int64_t oRank,
-                   int64_t *oGShapePtr, void *oDataPtr, int64_t *oShapePtr,
-                   int64_t *oOffsPtr, SHARPY::Transceiver *tc) {
+WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
+                                   SHARPY::Transceiver *tc, int64_t iNDims,
+                                   int64_t *iGShapePtr, int64_t *iOffsPtr,
+                                   void *iDataPtr, int64_t *iDataShapePtr,
+                                   int64_t *iDataStridesPtr, int64_t oNDims,
+                                   int64_t *oGShapePtr, int64_t *oOffsPtr,
+                                   void *oDataPtr, int64_t *oDataShapePtr,
+                                   int64_t *oDataStridesPtr) {
 #ifdef NO_TRANSCEIVER
   initMPIRuntime();
   tc = SHARPY::getTransceiver();
 #endif
-  if (!gShapePtr || !lDataPtr || !lShapePtr || !lStridesPtr || !lOffsPtr ||
-      !oGShapePtr || !oDataPtr || !oShapePtr || !oOffsPtr || !tc) {
+  if (!iGShapePtr || !iOffsPtr || !iDataPtr || !iDataShapePtr ||
+      !iDataStridesPtr || !oGShapePtr || !oOffsPtr || !oDataPtr ||
+      !oDataShapePtr || !oDataStridesPtr || !tc) {
     throw std::invalid_argument("Fatal: received nullptr in reshape");
   }
 
-  assert(std::accumulate(&gShapePtr[0], &gShapePtr[lRank], 1,
+  assert(std::accumulate(&iGShapePtr[0], &iGShapePtr[iNDims], 1,
                          std::multiplies<int64_t>()) ==
-         std::accumulate(&oGShapePtr[0], &oGShapePtr[oRank], 1,
+         std::accumulate(&oGShapePtr[0], &oGShapePtr[oNDims], 1,
                          std::multiplies<int64_t>()));
-  assert(std::accumulate(&oOffsPtr[1], &oOffsPtr[oRank], 0,
+  assert(std::accumulate(&oOffsPtr[1], &oOffsPtr[oNDims], 0,
                          std::plus<int64_t>()) == 0);
 
   auto N = tc->nranks();
@@ -417,32 +404,37 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
     throw std::out_of_range("Fatal: rank must be < number of ranks");
   }
 
-  int64_t cSz = std::accumulate(&lShapePtr[1], &lShapePtr[lRank], 1,
-                                std::multiplies<int64_t>());
-  int64_t mySz = cSz * lShapePtr[0];
-  if (mySz / cSz != lShapePtr[0]) {
+  int64_t icSz = std::accumulate(&iGShapePtr[1], &iGShapePtr[iNDims], 1,
+                                 std::multiplies<int64_t>());
+  assert(icSz == std::accumulate(&iDataShapePtr[1], &iDataShapePtr[iNDims], 1,
+                                 std::multiplies<int64_t>()));
+  int64_t mySz = icSz * iGShapePtr[0];
+  if (mySz / icSz != iGShapePtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
-  int64_t myOff = lOffsPtr[0] * cSz;
-  if (myOff / cSz != lOffsPtr[0]) {
+  int64_t myOff = iOffsPtr[0] * icSz;
+  if (myOff / icSz != iOffsPtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myEnd = myOff + mySz;
   if (myEnd < myOff) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
-  int64_t tCSz = std::accumulate(&oShapePtr[1], &oShapePtr[oRank], 1,
+
+  int64_t oCSz = std::accumulate(&oGShapePtr[1], &oGShapePtr[oNDims], 1,
                                  std::multiplies<int64_t>());
-  int64_t myTSz = tCSz * oShapePtr[0];
-  if (myTSz / tCSz != oShapePtr[0]) {
+  assert(oCSz == std::accumulate(&oDataShapePtr[1], &oDataShapePtr[oNDims], 1,
+                                 std::multiplies<int64_t>()));
+  int64_t myOSz = oCSz * oGShapePtr[0];
+  if (myOSz / oCSz != oGShapePtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
-  int64_t myTOff = oOffsPtr[0] * tCSz;
-  if (myTOff / tCSz != oOffsPtr[0]) {
+  int64_t myOOff = oOffsPtr[0] * oCSz;
+  if (myOOff / oCSz != oOffsPtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
-  int64_t myTEnd = myTOff + myTSz;
-  if (myTEnd < myTOff) {
+  int64_t myOEnd = myOOff + myOSz;
+  if (myOEnd < myOOff) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
 
@@ -451,8 +443,8 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
   ::std::vector<int64_t> buff(4 * N);
   buff[me * 4 + 0] = myOff;
   buff[me * 4 + 1] = mySz;
-  buff[me * 4 + 2] = myTOff;
-  buff[me * 4 + 3] = myTSz;
+  buff[me * 4 + 2] = myOOff;
+  buff[me * 4 + 3] = myOSz;
   ::std::vector<int> counts(N, 4);
   ::std::vector<int> dspl(N);
   for (auto i = 0ul; i < N; ++i) {
@@ -490,64 +482,80 @@ void _idtr_reshape(SHARPY::DTypeId sharpytype, int64_t lRank,
     }
 
     // then check if my target part overlaps with the remote local part
-    if (myTEnd > xOff && myTOff < xEnd) {
-      auto rOff = std::max(xOff, myTOff);
-      rszs[i] = std::min(xEnd, myTEnd) - rOff;
+    if (myOEnd > xOff && myOOff < xEnd) {
+      auto rOff = std::max(xOff, myOOff);
+      rszs[i] = std::min(xEnd, myOEnd) - rOff;
       roffs[i] = i ? roffs[i - 1] + rszs[i - 1] : 0;
     }
   }
 
-  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype),
-                         2); // FIXME debug value
-  bufferizeN(lDataPtr, sharpytype, lShapePtr, lStridesPtr, lsOffs.data(),
-             lsEnds.data(), lRank, N, outbuff.data());
+  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype), 2);
+  bufferizeN(iNDims, iDataPtr, iDataShapePtr, iDataStridesPtr, sharpytype, N,
+             lsOffs.data(), lsEnds.data(), outbuff.data());
   auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
                           oDataPtr, rszs.data(), roffs.data());
-  tc->wait(hdl);
+
+  auto wait = [tc = tc, hdl = hdl, outbuff = std::move(outbuff),
+               sszs = std::move(sszs), soffs = std::move(soffs),
+               rszs = std::move(rszs),
+               roffs = std::move(roffs)]() { tc->wait(hdl); };
+  assert(outbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
+         roffs.empty());
+  return mkWaitHandle(wait);
 }
 
 /// @brief reshape array
 template <typename T>
-void _idtr_reshape(int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,
-                   void *lOffsDescr, int64_t lRank, void *lDescr,
-                   int64_t oGShapeRank, void *oGShapeDescr, int64_t oOffsRank,
-                   void *oOffsDescr, int64_t oRank, void *oDescr,
-                   SHARPY::Transceiver *tc) {
+WaitHandleBase *
+_idtr_copy_reshape(SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,
+                   int64_t iNOffs, void *iLOffsDescr, int64_t iNDims,
+                   void *iDataDescr, int64_t oNSzs, void *oGShapeDescr,
+                   int64_t oNOffs, void *oLOffsDescr, int64_t oNDims,
+                   void *oDataDescr) {
+
+  if (!iGShapeDescr || !iLOffsDescr || !iDataDescr || !oGShapeDescr ||
+      !oLOffsDescr || !oDataDescr) {
+    throw std::invalid_argument(
+        "Fatal error: received nullptr in update_halo.");
+  }
 
   auto sharpytype = SHARPY::DTYPE<T>::value;
 
-  SHARPY::UnrankedMemRefType<T> lData(lRank, lDescr);
-  SHARPY::UnrankedMemRefType<T> oData(oRank, oDescr);
+  // Construct unranked memrefs for metadata and data
+  MRIdx1d iGShape(iNSzs, iGShapeDescr);
+  MRIdx1d iOffs(iNOffs, iLOffsDescr);
+  SHARPY::UnrankedMemRefType<T> iData(iNDims, iDataDescr);
+  MRIdx1d oGShape(oNSzs, oGShapeDescr);
+  MRIdx1d oOffs(oNOffs, oLOffsDescr);
+  SHARPY::UnrankedMemRefType<T> oData(oNDims, oDataDescr);
 
-  _idtr_reshape(sharpytype, lRank, MRIdx1d(gShapeRank, gShapeDescr).data(),
-                lData.data(), lData.sizes(), lData.strides(),
-                MRIdx1d(lOffsRank, lOffsDescr).data(), oRank,
-                MRIdx1d(oGShapeRank, oGShapeDescr).data(), oData.data(),
-                oData.sizes(), MRIdx1d(oOffsRank, oOffsDescr).data(), tc);
+  return _idtr_copy_reshape(
+      sharpytype, tc, iNDims, iGShape.data(), iOffs.data(), iData.data(),
+      iData.sizes(), iData.strides(), oNDims, oGShape.data(), oOffs.data(),
+      oData.data(), oData.sizes(), oData.strides());
 }
 
 extern "C" {
-
-#define TYPED_RESHAPE(_sfx, _typ)                                              \
-  void _idtr_reshape_##_sfx(                                                   \
-      int64_t gShapeRank, void *gShapeDescr, int64_t lOffsRank,                \
-      void *lOffsDescr, int64_t rank, void *lDescr, int64_t oGShapeRank,       \
-      void *oGShapeDescr, int64_t oOffsRank, void *oOffsDescr, int64_t oRank,  \
-      void *oDescr, SHARPY::Transceiver *tc) {                                 \
-    _idtr_reshape<_typ>(gShapeRank, gShapeDescr, lOffsRank, lOffsDescr, rank,  \
-                        lDescr, oGShapeRank, oGShapeDescr, oOffsRank,          \
-                        oOffsDescr, oRank, oDescr, tc);                        \
+#define TYPED_COPY_RESHAPE(_sfx, _typ)                                         \
+  void *_idtr_copy_reshape_##_sfx(                                             \
+      SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,              \
+      int64_t iNOffs, void *iLOffsDescr, int64_t iNDims, void *iLDescr,        \
+      int64_t oNSzs, void *oGShapeDescr, int64_t oNOffs, void *oLOffsDescr,    \
+      int64_t oNDims, void *oLDescr) {                                         \
+    return _idtr_copy_reshape<_typ>(                                           \
+        tc, iNSzs, iGShapeDescr, iNOffs, iLOffsDescr, iNDims, iLDescr, oNSzs,  \
+        oGShapeDescr, oNOffs, oLOffsDescr, oNDims, oLDescr);                   \
   }                                                                            \
-  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_reshape_##_sfx =                   \
-                        _idtr_reshape_##_sfx))
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_copy_reshape_##_sfx =              \
+                        _idtr_copy_reshape_##_sfx))
 
-TYPED_RESHAPE(f64, double);
-TYPED_RESHAPE(f32, float);
-TYPED_RESHAPE(i64, int64_t);
-TYPED_RESHAPE(i32, int32_t);
-TYPED_RESHAPE(i16, int16_t);
-TYPED_RESHAPE(i8, int8_t);
-TYPED_RESHAPE(i1, bool);
+TYPED_COPY_RESHAPE(f64, double);
+TYPED_COPY_RESHAPE(f32, float);
+TYPED_COPY_RESHAPE(i64, int64_t);
+TYPED_COPY_RESHAPE(i32, int32_t);
+TYPED_COPY_RESHAPE(i16, int16_t);
+TYPED_COPY_RESHAPE(i8, int8_t);
+TYPED_COPY_RESHAPE(i1, bool);
 
 } // extern "C"
 

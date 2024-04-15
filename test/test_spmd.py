@@ -52,18 +52,13 @@ class TestSPMD:
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_gather1(self):
         a = sp.reshape(
             sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]
         )
         b = sp.spmd.gather(a)
         c = np.sum(b)
-        v = np.sum(
-            np.reshape(
-                np.arange(0, 110, 1, dtype=np.float32, device=device), (11, 10)
-            )
-        )
+        v = np.sum(np.reshape(np.arange(0, 110, 1, dtype=np.float32), (11, 10)))
         assert float(c) == v
         MPI.COMM_WORLD.barrier()
 
@@ -81,7 +76,6 @@ class TestSPMD:
         assert float(b) == 5
         MPI.COMM_WORLD.barrier()
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_gather_strided1(self):
         a = sp.reshape(
             sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]

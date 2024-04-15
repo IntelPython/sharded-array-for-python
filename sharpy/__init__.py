@@ -107,6 +107,14 @@ for func in api.api_categories["Creator"]:
             f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=1: ndarray(_csp.Creator.linspace(start, end, step, endpoint, dtype, _validate_device(device), team))"
         )
 
+
+for func in api.api_categories["ManipOp"]:
+    FUNC = func.upper()
+    if func == "reshape":
+        exec(
+            f"{func} = lambda this, shape, cp=None: ndarray(_csp.ManipOp.reshape(this._t, shape, cp))"
+        )
+
 for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()
     exec(

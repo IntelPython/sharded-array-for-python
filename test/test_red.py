@@ -1,9 +1,7 @@
-import pytest
 from utils import runAndCompare
 
 
 class TestRed:
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_sum(self):
         def doit(aapi, **kwargs):
             a = aapi.arange(0, 64, 1, dtype=aapi.int64, **kwargs)
