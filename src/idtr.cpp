@@ -408,8 +408,8 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
                                  std::multiplies<int64_t>());
   assert(icSz == std::accumulate(&iDataShapePtr[1], &iDataShapePtr[iNDims], 1,
                                  std::multiplies<int64_t>()));
-  int64_t mySz = icSz * iGShapePtr[0];
-  if (mySz / icSz != iGShapePtr[0]) {
+  int64_t mySz = icSz * iDataShapePtr[0];
+  if (mySz / icSz != iDataShapePtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myOff = iOffsPtr[0] * icSz;
@@ -425,8 +425,8 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
                                  std::multiplies<int64_t>());
   assert(oCSz == std::accumulate(&oDataShapePtr[1], &oDataShapePtr[oNDims], 1,
                                  std::multiplies<int64_t>()));
-  int64_t myOSz = oCSz * oGShapePtr[0];
-  if (myOSz / oCSz != oGShapePtr[0]) {
+  int64_t myOSz = oCSz * oDataShapePtr[0];
+  if (myOSz / oCSz != oDataShapePtr[0]) {
     throw std::overflow_error("Fatal: Integer overflow in reshape");
   }
   int64_t myOOff = oOffsPtr[0] * oCSz;
@@ -494,6 +494,11 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
              lsOffs.data(), lsEnds.data(), outbuff.data());
   auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
                           oDataPtr, rszs.data(), roffs.data());
+
+  if (no_async) {
+    tc->wait(hdl);
+    return nullptr;
+  }
 
   auto wait = [tc = tc, hdl = hdl, outbuff = std::move(outbuff),
                sszs = std::move(sszs), soffs = std::move(soffs),
