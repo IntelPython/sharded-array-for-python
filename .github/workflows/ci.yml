@@ -41,7 +41,8 @@ jobs:
           rm -rf $CONDA_ROOT
           cd $GITHUB_WORKSPACE/..
           rm -f Miniconda3-*.sh
-          CPKG=Miniconda3-latest-Linux-x86_64.sh
+          # CPKG=Miniconda3-latest-Linux-x86_64.sh
+          CPKG=Miniconda3-py311_24.3.0-0-Linux-x86_64.sh
           wget -q https://repo.anaconda.com/miniconda/$CPKG
           bash $CPKG -u -b -f -p $CONDA_ROOT
           export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
