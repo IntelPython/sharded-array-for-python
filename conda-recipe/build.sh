@@ -53,7 +53,7 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
     if [ ! -d "mlir-extensions" ]; then
-        git clone --recurse-submodules --branch main --single-branch https://github.com/fschlimb/mlir-extensions
+        git clone --recurse-submodules https://github.com/fschlimb/mlir-extensions
     fi
     pushd mlir-extensions
     git reset --hard HEAD
