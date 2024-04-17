@@ -59,7 +59,6 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     git reset --hard HEAD
     git fetch --prune
     git checkout $IMEX_SHA
-    git apply ${RECIPE_DIR}/imex_*.patch
     LLVM_SHA=$(cat build_tools/llvm_version.txt)
     # if [ ! -d "llvm-project" ]; then ln -s ~/github/llvm-project .; fi
     if [ ! -d "llvm-project" ]; then
