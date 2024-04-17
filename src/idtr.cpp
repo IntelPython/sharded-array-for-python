@@ -51,12 +51,12 @@ template <typename T> class WaitHandle : public WaitHandleBase {
   T _fini;
 
 public:
-  WaitHandle(T fini) : _fini(fini) {}
+  WaitHandle(T &&fini) : _fini(std::move(fini)) {}
   virtual void wait() override { _fini(); }
 };
 
-template <typename T> WaitHandle<T> *mkWaitHandle(T fini) {
-  return new WaitHandle<T>(fini);
+template <typename T> WaitHandle<T> *mkWaitHandle(T &&fini) {
+  return new WaitHandle<T>(std::move(fini));
 };
 
 extern "C" {
@@ -489,24 +489,24 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
     }
   }
 
-  SHARPY::Buffer outbuff(totSSz * sizeof_dtype(sharpytype), 2);
+  SHARPY::Buffer sendbuff(totSSz * sizeof_dtype(sharpytype), 2);
   bufferizeN(iNDims, iDataPtr, iDataShapePtr, iDataStridesPtr, sharpytype, N,
-             lsOffs.data(), lsEnds.data(), outbuff.data());
-  auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
-                          oDataPtr, rszs.data(), roffs.data());
+             lsOffs.data(), lsEnds.data(), sendbuff.data());
+  auto hdl = tc->alltoall(sendbuff.data(), sszs.data(), soffs.data(),
+                          sharpytype, oDataPtr, rszs.data(), roffs.data());
 
-  if (true || no_async) { // FIXME remove true once IMEX is fixed
+  if (no_async) {
     tc->wait(hdl);
     return nullptr;
   }
 
-  auto wait = [tc = tc, hdl = hdl, outbuff = std::move(outbuff),
+  auto wait = [tc = tc, hdl = hdl, sendbuff = std::move(sendbuff),
                sszs = std::move(sszs), soffs = std::move(soffs),
                rszs = std::move(rszs),
                roffs = std::move(roffs)]() { tc->wait(hdl); };
-  assert(outbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
+  assert(sendbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
          roffs.empty());
-  return mkWaitHandle(wait);
+  return mkWaitHandle(std::move(wait));
 }
 
 /// @brief reshape array
@@ -918,7 +918,7 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
     wait();
     return nullptr;
   }
-  return mkWaitHandle(wait);
+  return mkWaitHandle(std::move(wait));
 }
 
 /// @brief templated wrapper for typed function versions calling
