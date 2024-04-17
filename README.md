@@ -1,4 +1,4 @@
-[![.github/workflows/ci.yml](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml/badge.svg)](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml)
+[![Sharpy CI](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml/badge.svg)](https://github.com/IntelPython/sharded-array-for-python/actions/workflows/ci.yml)
 
 ***This software package is not ready for production use and and merely a proof of concept implementation.***
 
