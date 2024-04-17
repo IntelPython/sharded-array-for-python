@@ -495,7 +495,7 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
   auto hdl = tc->alltoall(outbuff.data(), sszs.data(), soffs.data(), sharpytype,
                           oDataPtr, rszs.data(), roffs.data());
 
-  if (no_async) {
+  if (true || no_async) { // FIXME remove true once IMEX is fixed
     tc->wait(hdl);
     return nullptr;
   }
@@ -978,35 +978,4 @@ TYPED_UPDATE_HALO(i16, int16_t);
 TYPED_UPDATE_HALO(i8, int8_t);
 TYPED_UPDATE_HALO(i1, bool);
 
-} // extern "C"
-
-// debug helper
-void _idtr_extractslice(int64_t *slcOffs, int64_t *slcSizes,
-                        int64_t *slcStrides, int64_t *tOffs, int64_t *tSizes,
-                        int64_t *lSlcOffsets, int64_t *lSlcSizes,
-                        int64_t *gSlcOffsets) {
-  if (slcOffs)
-    std::cerr << "slcOffs: " << slcOffs[0] << " " << slcOffs[1] << std::endl;
-  if (slcSizes)
-    std::cerr << "slcSizes: " << slcSizes[0] << " " << slcSizes[1] << std::endl;
-  if (slcStrides)
-    std::cerr << "slcStrides: " << slcStrides[0] << " " << slcStrides[1]
-              << std::endl;
-  if (tOffs)
-    std::cerr << "tOffs: " << tOffs[0] << " " << tOffs[1] << std::endl;
-  if (tSizes)
-    std::cerr << "tSizes: " << tSizes[0] << " " << tSizes[1] << std::endl;
-  if (lSlcOffsets)
-    std::cerr << "lSlcOffsets: " << lSlcOffsets[0] << " " << lSlcOffsets[1]
-              << std::endl;
-  if (lSlcSizes)
-    std::cerr << "lSlcSizes: " << lSlcSizes[0] << " " << lSlcSizes[1]
-              << std::endl;
-  if (gSlcOffsets)
-    std::cerr << "gSlcOffsets: " << gSlcOffsets[0] << " " << gSlcOffsets[1]
-              << std::endl;
-}
-
-extern "C" {
-void _debugFunc() { std::cerr << "_debugfunc\n"; }
 } // extern "C"
