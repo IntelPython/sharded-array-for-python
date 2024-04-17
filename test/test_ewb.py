@@ -82,7 +82,6 @@ class TestEWB:
             v = 8 * 16 * 3
             assert float(r1) == v
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_add_shifted2(self):
         def doit(aapi, **kwargs):
             a = aapi.reshape(

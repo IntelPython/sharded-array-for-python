@@ -175,7 +175,7 @@ api_categories = OrderedDict(
             "concat",  # (arrays, /, *, axis=0)
             "expand_dims",  # (x, /, *, axis)
             "flip",  # (x, /, *, axis=None)
-            "reshape",  # (x, /, shape)
+            "reshape",  # (x, /, shape, *, copy: bool | None = None)
             "roll",  # (x, /, shift, *, axis=None)
             "squeeze",  # (x, /, axis)
             "stack",  # (arrays, /, *, axis=0)

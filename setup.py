@@ -43,7 +43,7 @@ class build_ext(build_ext_orig):
         os.chdir(str(build_temp))
         self.spawn(["cmake", str(cwd)] + cmake_args)
         if not self.dry_run:
-            self.spawn(["cmake", "--build", "."] + build_args)
+            self.spawn(["cmake", "--build", ".", "-j5"] + build_args)
         # Troubleshooting: if fail on line above then delete all possible
         # temporary CMake files including "CMakeCache.txt" in top level dir.
         os.chdir(str(cwd))

@@ -27,7 +27,6 @@ class TestIO:
         with pytest.raises(ValueError, match="Invalid device string: *"):
             sp.ones((4,), device=device)
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_to_numpy2d(self):
         a = sp.reshape(
             sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]
@@ -44,7 +43,6 @@ class TestIO:
         v = np.sum(np.arange(0, 110, 1, dtype=np.float32))
         assert float(c) == v
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_to_numpy_strided(self):
         a = sp.reshape(
             sp.arange(0, 110, 1, dtype=sp.float32, device=device), [11, 10]

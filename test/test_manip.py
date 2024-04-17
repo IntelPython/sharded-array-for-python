@@ -10,7 +10,6 @@ import sharpy as sp
 
 
 class TestManip:
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_reshape1(self):
         def doit(aapi, **kwargs):
             a = aapi.arange(0, 12 * 11, 1, aapi.int32, **kwargs)
@@ -18,7 +17,6 @@ class TestManip:
 
         assert runAndCompare(doit)
 
-    @pytest.mark.skip(reason="FIXME reshape")
     def test_reshape2(self):
         def doit(aapi, **kwargs):
             a = aapi.arange(0, 12 * 11, 1, aapi.int32, **kwargs)

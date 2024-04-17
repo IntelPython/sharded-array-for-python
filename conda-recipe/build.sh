@@ -53,13 +53,12 @@ if [ ! -d "${INSTALLED_DIR}/imex/lib" ]; then
     rm -rf ${INSTALLED_DIR}/imex
     IMEX_SHA=$(cat imex_version.txt)
     if [ ! -d "mlir-extensions" ]; then
-        git clone --recurse-submodules --branch main --single-branch https://github.com/intel/mlir-extensions
+        git clone --recurse-submodules https://github.com/intel/mlir-extensions
     fi
     pushd mlir-extensions
     git reset --hard HEAD
     git fetch --prune
     git checkout $IMEX_SHA
-    git apply ${RECIPE_DIR}/imex_*.patch
     LLVM_SHA=$(cat build_tools/llvm_version.txt)
     # if [ ! -d "llvm-project" ]; then ln -s ~/github/llvm-project .; fi
     if [ ! -d "llvm-project" ]; then
