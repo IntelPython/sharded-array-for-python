@@ -68,7 +68,7 @@ jobs:
         run: |
           export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
           eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
-          conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest
+          conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest pytest-timeout
           conda activate sharpy
       - name: Test SHARPY (pytest)
         run: |
@@ -76,11 +76,11 @@ jobs:
           eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
           conda activate sharpy
           cd test
-          pytest . -v -s
-          SHARPY_FORCE_DIST=1 pytest . -v -s
-          mpirun -n 2 pytest . -v -s
-          mpirun -n 3 pytest . -v -s
-          mpirun -n 4 pytest . -v -s
+          pytest . -v -s --timeout=30
+          SHARPY_FORCE_DIST=1 pytest . -v -s --timeout=30
+          mpirun -n 2 pytest . -v -s --timeout=30
+          mpirun -n 3 pytest . -v -s --timeout=30
+          mpirun -n 4 pytest . -v -s --timeout=30
           cd -
       - name: Run examples
         run: |
