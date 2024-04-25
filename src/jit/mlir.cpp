@@ -688,6 +688,8 @@ static const std::string cpu_pipeline =
     "arith-expand,"
     "memref-expand,"
     "func.func(empty-tensor-to-alloc-tensor),"
+    "cse,"
+    "canonicalize,"
     "one-shot-bufferize,"
     "canonicalize,"
     "imex-remove-temporaries,"
@@ -728,53 +730,46 @@ static const std::string gpu_pipeline =
     "linalg-fuse-elementwise-ops,"
     "arith-expand,"
     "memref-expand,"
-    "arith-bufferize,"
-    "func-bufferize,"
     "func.func(empty-tensor-to-alloc-tensor),"
-    "func.func(scf-bufferize),"
-    "func.func(tensor-bufferize),"
-    "func.func(bufferization-bufferize),"
-    "func.func(linalg-bufferize),"
-    "func.func(linalg-detensorize),"
-    "func.func(tensor-bufferize),"
+    "func.func(tile-loops{tile-sizes=128 in-regions}),"
+    "func.func(tile-loops{tile-sizes=1 in-regions}),"
     "region-bufferize,"
     "canonicalize,"
-    "func.func(finalizing-bufferize),"
-    "imex-remove-temporaries,"
-    "func.func(convert-linalg-to-parallel-loops),"
-    "func.func(scf-parallel-loop-fusion),"
-    // GPU
-    "func.func(imex-add-outer-parallel-loop),"
-    "func.func(gpu-map-parallel-loops),"
-    "func.func(convert-parallel-loops-to-gpu),"
-    // insert-gpu-allocs pass can have client-api = opencl or vulkan args
-    "func.func(insert-gpu-allocs{in-regions=1}),"
-    "drop-regions,"
+    "one-shot-bufferize,"
+    "cse,"
     "canonicalize,"
-    // "normalize-memrefs,"
-    // "gpu-decompose-memrefs,"
-    "func.func(lower-affine),"
-    "gpu-kernel-outlining,"
+    "scf-forall-to-parallel,"
+    "cse,"
+    "canonicalize,"
+    "imex-remove-temporaries,"
+    "buffer-deallocation-pipeline,"
+    "func.func(convert-linalg-to-loops),"
+    "func.func(gpu-map-parallel-loops),"
+    "convert-parallel-loops-to-gpu,"
     "canonicalize,"
     "cse,"
-    // The following set-spirv-* passes can have client-api = opencl or vulkan
-    // args
-    "set-spirv-capabilities{client-api=opencl},"
-    "gpu.module(set-spirv-abi-attrs{client-api=opencl}),"
+    "func.func(insert-gpu-allocs{in-regions=1 host-shared=0}),"
+    "func.func(insert-gpu-copy),"
+    "drop-regions,"
     "canonicalize,"
-    "fold-memref-alias-ops,"
-    "imex-convert-gpu-to-spirv{enable-vc-intrinsic=1},"
-    "spirv.module(spirv-lower-abi-attrs),"
-    "spirv.module(spirv-update-vce),"
-    // "func.func(llvm-request-c-wrappers),"
-    "serialize-spirv,"
+    "gpu-kernel-outlining,"
+    "convert-scf-to-cf,"
+    "convert-cf-to-llvm,"
+    "canonicalize,"
+    "cse,"
+    "gpu.module(strip-debuginfo,"
+    "convert-gpu-to-nvvm),"
+    "nvvm-attach-target{chip=sm_80 O=3},"
+    "func.func(gpu-async-region),"
     "expand-strided-metadata,"
     "lower-affine,"
-    "convert-gpu-to-gpux,"
+    "gpu-to-llvm,"
     "convert-func-to-llvm,"
     "convert-math-to-llvm,"
-    "convert-gpux-to-llvm,"
     "finalize-memref-to-llvm,"
+    "canonicalize,"
+    "cse,"
+    "gpu-module-to-binary{format=fatbin},"
     "reconcile-unrealized-casts";
 
 const std::string _passes(get_text_env("SHARPY_PASSES"));
@@ -831,10 +826,10 @@ JIT::JIT(const std::string &libidtr)
   _crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
   if (!std::ifstream(_crunnerlib)) {
-    throw std::runtime_error("Cannot find libmlir_c_runner_utils.so");
+    throw std::runtime_error("Cannot find lib: " + _crunnerlib);
   }
   if (!std::ifstream(_runnerlib)) {
-    throw std::runtime_error("Cannot find libmlir_runner_utils.so");
+    throw std::runtime_error("Cannot find lib: " + _runnerlib);
   }
 
   if (useGPU()) {
@@ -842,11 +837,9 @@ JIT::JIT(const std::string &libidtr)
     if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      auto imexRoot = get_text_env("IMEXROOT");
-      imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
-      _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      _gpulib = mlirRoot + "/lib/libmlir_cuda_runtime.so";
       if (!std::ifstream(_gpulib)) {
-        throw std::runtime_error("Cannot find liblevel-zero-runtime.so");
+        throw std::runtime_error("Cannot find lib: " + _gpulib);
       }
     }
     _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
