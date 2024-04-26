@@ -858,11 +858,14 @@ JIT::JIT(const std::string &libidtr)
     if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      auto imexRoot = get_text_env("IMEXROOT");
-      imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
-      _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      // auto imexRoot = get_text_env("IMEXROOT");
+      // imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
+      // _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      // _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      // for nv gpu
+      _gpulib = mlirRoot + "/lib/libmlir_cuda_runtime.so";
       if (!std::ifstream(_gpulib)) {
-        throw std::runtime_error("Cannot find liblevel-zero-runtime.so");
+        throw std::runtime_error("Cannot find lib: " + _gpulib);
       }
     }
     _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
