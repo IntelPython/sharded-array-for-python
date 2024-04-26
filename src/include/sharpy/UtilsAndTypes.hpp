@@ -70,3 +70,5 @@ inline bool useGPU() {
   auto device = get_text_env("SHARPY_DEVICE");
   return !(device.empty() || device == "host" || device == "cpu");
 }
+
+inline bool useCUDA() { return get_bool_env("SHARPY_USE_CUDA"); }
