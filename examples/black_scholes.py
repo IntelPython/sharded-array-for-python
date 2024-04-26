@@ -246,7 +246,8 @@ def run(nopt, backend, iterations, datatype):
     info(f"Median rate: {perf_rate:.5f} Mopts/s")
 
     # verify
-    call, put = args[-2], args[-1]
+    call = args[-2].to_device()
+    put = args[-1].to_device()
     expected_call = 16.976097804669887
     expected_put = 0.34645174725098116
     call_value = float(call[0])
