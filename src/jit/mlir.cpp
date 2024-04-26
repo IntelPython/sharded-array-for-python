@@ -743,75 +743,6 @@ static const std::string gpu_pipeline =
     "imex-remove-temporaries,"
     "func.func(convert-linalg-to-parallel-loops),"
     "func.func(scf-parallel-loop-fusion),"
-    // GPU
-    "func.func(imex-add-outer-parallel-loop),"
-    "func.func(gpu-map-parallel-loops),"
-    "func.func(convert-parallel-loops-to-gpu),"
-    // insert-gpu-allocs pass can have client-api = opencl or vulkan args
-    "func.func(insert-gpu-allocs{in-regions=1}),"
-    "drop-regions,"
-    "canonicalize,"
-    // "normalize-memrefs,"
-    // "gpu-decompose-memrefs,"
-    "func.func(lower-affine),"
-    "gpu-kernel-outlining,"
-    "canonicalize,"
-    "cse,"
-    // The following set-spirv-* passes can have client-api = opencl or vulkan
-    // args
-    "set-spirv-capabilities{client-api=opencl},"
-    "gpu.module(set-spirv-abi-attrs{client-api=opencl}),"
-    "canonicalize,"
-    "fold-memref-alias-ops,"
-    "imex-convert-gpu-to-spirv{enable-vc-intrinsic=1},"
-    "spirv.module(spirv-lower-abi-attrs),"
-    "spirv.module(spirv-update-vce),"
-    // "func.func(llvm-request-c-wrappers),"
-    "serialize-spirv,"
-    "expand-strided-metadata,"
-    "lower-affine,"
-    "convert-gpu-to-gpux,"
-    "convert-func-to-llvm,"
-    "convert-math-to-llvm,"
-    "convert-gpux-to-llvm,"
-    "finalize-memref-to-llvm,"
-    "reconcile-unrealized-casts";
-
-static const std::string cuda_pipeline =
-    "add-gpu-regions,"
-    "canonicalize,"
-    "ndarray-dist,"
-    "func.func(dist-coalesce),"
-    "func.func(dist-infer-elementwise-cores),"
-    "convert-dist-to-standard,"
-    "canonicalize,"
-    "overlap-comm-and-compute,"
-    "add-comm-cache-keys,"
-    "lower-distruntime-to-idtr,"
-    "convert-ndarray-to-linalg,"
-    "canonicalize,"
-    "func.func(tosa-make-broadcastable),"
-    "func.func(tosa-to-linalg),"
-    "func.func(tosa-to-tensor),"
-    "canonicalize,"
-    "linalg-fuse-elementwise-ops,"
-    "arith-expand,"
-    "memref-expand,"
-    "arith-bufferize,"
-    "func-bufferize,"
-    "func.func(empty-tensor-to-alloc-tensor),"
-    "func.func(scf-bufferize),"
-    "func.func(tensor-bufferize),"
-    "func.func(bufferization-bufferize),"
-    "func.func(linalg-bufferize),"
-    "func.func(linalg-detensorize),"
-    "func.func(tensor-bufferize),"
-    "region-bufferize,"
-    "canonicalize,"
-    "func.func(finalizing-bufferize),"
-    "imex-remove-temporaries,"
-    "func.func(convert-linalg-to-parallel-loops),"
-    "func.func(scf-parallel-loop-fusion),"
     // is add-outer-parallel-loop needed?
     "func.func(imex-add-outer-parallel-loop),"
     "func.func(gpu-map-parallel-loops),"
@@ -838,9 +769,7 @@ static const std::string cuda_pipeline =
 
 const std::string _passes(get_text_env("SHARPY_PASSES"));
 static const std::string &pass_pipeline =
-    _passes != "" ? _passes
-                  : (useGPU() ? (useCUDA() ? cuda_pipeline : gpu_pipeline)
-                              : cpu_pipeline);
+    _passes != "" ? _passes : (useGPU() ? gpu_pipeline : cpu_pipeline);
 
 JIT::JIT(const std::string &libidtr)
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
@@ -903,13 +832,7 @@ JIT::JIT(const std::string &libidtr)
     if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      if (useCUDA()) {
-        _gpulib = mlirRoot + "/lib/libmlir_cuda_runtime.so";
-      } else {
-        auto imexRoot = get_text_env("IMEXROOT");
-        imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
-        _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
-      }
+      _gpulib = mlirRoot + "/lib/libmlir_cuda_runtime.so";
       if (!std::ifstream(_gpulib)) {
         throw std::runtime_error("Cannot find lib: " + _gpulib);
       }
