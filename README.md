@@ -9,7 +9,7 @@ Parallel and distributed execution currently is MPI/CSP-like. In a later version
 
 ## Setting up build environment
 
-Install MLIR/LLVM and Intel® Extension for MLIR (IMEX, see https://github.com/intel/mlir-extensions).
+Install MLIR/LLVM and Intel® Extension for MLIR (IMEX, see https://github.com/intel/mlir-extensions). Besides, Add "-DLLVM_ENABLE_RTTI=ON" into cmake arguments, and build target is "all" (not "check-imex").
 
 ```bash
 git clone --recurse-submodules https://github.com/IntelPython/sharded-array-for-python
