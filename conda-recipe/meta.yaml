@@ -28,7 +28,7 @@ requirements:
     - xz <=5.4.6  # CVE-2024-3094
 
   build:
-    - {{compiler('gxx')}}
+    - {{compiler('gxx')}} <=12.3.0
     - sysroot_linux-64  # [linux]
 #    - sysroot_linux-64 >=2.28  # [linux]
     - dpcpp_linux-64 >=2024.1 # [linux]
