@@ -14,7 +14,6 @@ Install MLIR/LLVM and Intel® Extension for MLIR (IMEX, see https://github.com/i
 ```bash
 git clone --recurse-submodules https://github.com/IntelPython/sharded-array-for-python
 cd sharded-array-for-python
-git checkout jit
 conda create --file conda-env.txt --name sharpy
 conda activate sharpy
 export MPIROOT=$CONDA_PREFIX
