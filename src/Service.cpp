@@ -51,7 +51,10 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
       // drop from dep manager
       dm.drop(_a);
       // and from registry
-      Registry::del(_a);
+      dm.addReady(_a, [this](id_type guid) {
+        assert(this->_a == guid);
+        Registry::del(guid);
+      });
       break;
     }
     case RUN:

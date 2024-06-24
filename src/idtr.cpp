@@ -268,6 +268,21 @@ void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
   });
 }
 
+/// copy contiguous block of data into a possibly strided array
+void unpack1(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
+             const int64_t *strides, uint64_t ndim, void *out) {
+  if (!in || !sizes || !strides || !out) {
+    return;
+  }
+  dispatch(dtype, out, [sizes, strides, ndim, in](auto *out_) {
+    auto in_ = static_cast<decltype(out_)>(in);
+    SHARPY::forall(0, out_, sizes, strides, ndim, [&in_](auto *out) {
+      *out = *in_;
+      ++in_;
+    });
+  });
+}
+
 template <typename T>
 void copy_(uint64_t d, uint64_t &pos, T *cptr, const int64_t *sizes,
            const int64_t *strides, const uint64_t *chunks, uint64_t nd,
@@ -489,21 +504,41 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
     }
   }
 
+  int64_t oStride = std::accumulate(oDataStridesPtr, oDataStridesPtr + oNDims,
+                                    1, std::multiplies<int64_t>());
+  void *rBuff = oDataPtr;
+  if (oStride != 1) {
+    rBuff = new char[sizeof_dtype(sharpytype) * myOSz];
+  }
+
   SHARPY::Buffer sendbuff(totSSz * sizeof_dtype(sharpytype), 2);
   bufferizeN(iNDims, iDataPtr, iDataShapePtr, iDataStridesPtr, sharpytype, N,
              lsOffs.data(), lsEnds.data(), sendbuff.data());
   auto hdl = tc->alltoall(sendbuff.data(), sszs.data(), soffs.data(),
-                          sharpytype, oDataPtr, rszs.data(), roffs.data());
+                          sharpytype, rBuff, rszs.data(), roffs.data());
 
   if (no_async) {
     tc->wait(hdl);
+    if (oStride != 1) {
+      unpack1(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
+              oDataPtr);
+      delete[](char *) rBuff;
+    }
     return nullptr;
   }
 
-  auto wait = [tc = tc, hdl = hdl, sendbuff = std::move(sendbuff),
-               sszs = std::move(sszs), soffs = std::move(soffs),
-               rszs = std::move(rszs),
-               roffs = std::move(roffs)]() { tc->wait(hdl); };
+  auto wait = [tc, hdl, oStride, rBuff, sharpytype, oDataShapePtr,
+               oDataStridesPtr, oNDims, oDataPtr,
+               sendbuff = std::move(sendbuff), sszs = std::move(sszs),
+               soffs = std::move(soffs), rszs = std::move(rszs),
+               roffs = std::move(roffs)]() {
+    tc->wait(hdl);
+    if (oStride != 1) {
+      unpack1(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
+              oDataPtr);
+      delete[](char *) rBuff;
+    }
+  };
   assert(sendbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
          roffs.empty());
   return mkWaitHandle(std::move(wait));
