@@ -751,37 +751,27 @@ static const std::string gpu_pipeline =
     "imex-remove-temporaries,"
     "func.func(convert-linalg-to-parallel-loops),"
     "func.func(scf-parallel-loop-fusion),"
-    // GPU
+    // is add-outer-parallel-loop needed?
     "func.func(imex-add-outer-parallel-loop),"
     "func.func(gpu-map-parallel-loops),"
     "func.func(convert-parallel-loops-to-gpu),"
-    // insert-gpu-allocs pass can have client-api = opencl or vulkan args
     "func.func(insert-gpu-allocs{in-regions=1}),"
+    "func.func(insert-gpu-copy),"
     "drop-regions,"
     "canonicalize,"
-    // "normalize-memrefs,"
-    // "gpu-decompose-memrefs,"
     "func.func(lower-affine),"
     "gpu-kernel-outlining,"
     "canonicalize,"
     "cse,"
-    // The following set-spirv-* passes can have client-api = opencl or vulkan
-    // args
-    "set-spirv-capabilities{client-api=opencl},"
-    "gpu.module(set-spirv-abi-attrs{client-api=opencl}),"
-    "canonicalize,"
-    "fold-memref-alias-ops,"
-    "imex-convert-gpu-to-spirv{enable-vc-intrinsic=1},"
-    "spirv.module(spirv-lower-abi-attrs),"
-    "spirv.module(spirv-update-vce),"
-    // "func.func(llvm-request-c-wrappers),"
-    "serialize-spirv,"
+    "gpu.module(strip-debuginfo,convert-gpu-to-nvvm),"
+    "nvvm-attach-target,"
+    "func.func(gpu-async-region),"
     "expand-strided-metadata,"
     "lower-affine,"
-    "convert-gpu-to-gpux,"
+    "gpu-to-llvm,"
+    "gpu-module-to-binary{format=fatbin},"
     "convert-func-to-llvm,"
     "convert-math-to-llvm,"
-    "convert-gpux-to-llvm,"
     "finalize-memref-to-llvm,"
     "reconcile-unrealized-casts";
 
@@ -839,10 +829,10 @@ JIT::JIT(const std::string &libidtr)
   _crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
   _runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
   if (!std::ifstream(_crunnerlib)) {
-    throw std::runtime_error("Cannot find libmlir_c_runner_utils.so");
+    throw std::runtime_error("Cannot find lib: " + _crunnerlib);
   }
   if (!std::ifstream(_runnerlib)) {
-    throw std::runtime_error("Cannot find libmlir_runner_utils.so");
+    throw std::runtime_error("Cannot find lib: " + _runnerlib);
   }
 
   if (useGPU()) {
@@ -850,11 +840,9 @@ JIT::JIT(const std::string &libidtr)
     if (!gpuxlibstr.empty()) {
       _gpulib = std::string(gpuxlibstr);
     } else {
-      auto imexRoot = get_text_env("IMEXROOT");
-      imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
-      _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      _gpulib = mlirRoot + "/lib/libmlir_cuda_runtime.so";
       if (!std::ifstream(_gpulib)) {
-        throw std::runtime_error("Cannot find liblevel-zero-runtime.so");
+        throw std::runtime_error("Cannot find lib: " + _gpulib);
       }
     }
     _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
