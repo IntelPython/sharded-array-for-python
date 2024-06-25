@@ -504,12 +504,10 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
     }
   }
 
-  int64_t oStride = std::accumulate(oDataStridesPtr, oDataStridesPtr + oNDims,
-                                    1, std::multiplies<int64_t>());
-  void *rBuff = oDataPtr;
-  if (oStride != 1) {
-    rBuff = new char[sizeof_dtype(sharpytype) * myOSz];
-  }
+  bool isStrided =
+      !SHARPY::is_contiguous(oDataShapePtr, oDataStridesPtr, oNDims);
+  void *rBuff =
+      isStrided ? new char[sizeof_dtype(sharpytype) * myOSz] : oDataPtr;
 
   SHARPY::Buffer sendbuff(totSSz * sizeof_dtype(sharpytype), 2);
   bufferizeN(iNDims, iDataPtr, iDataShapePtr, iDataStridesPtr, sharpytype, N,
@@ -517,23 +515,13 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
   auto hdl = tc->alltoall(sendbuff.data(), sszs.data(), soffs.data(),
                           sharpytype, rBuff, rszs.data(), roffs.data());
 
-  if (no_async) {
-    tc->wait(hdl);
-    if (oStride != 1) {
-      unpack1(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
-              oDataPtr);
-      delete[](char *) rBuff;
-    }
-    return nullptr;
-  }
-
-  auto wait = [tc, hdl, oStride, rBuff, sharpytype, oDataShapePtr,
+  auto wait = [tc, hdl, isStrided, rBuff, sharpytype, oDataShapePtr,
                oDataStridesPtr, oNDims, oDataPtr,
                sendbuff = std::move(sendbuff), sszs = std::move(sszs),
                soffs = std::move(soffs), rszs = std::move(rszs),
                roffs = std::move(roffs)]() {
     tc->wait(hdl);
-    if (oStride != 1) {
+    if (isStrided) {
       unpack1(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
               oDataPtr);
       delete[](char *) rBuff;
@@ -541,6 +529,12 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
   };
   assert(sendbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
          roffs.empty());
+
+  if (no_async) {
+    wait();
+    return nullptr;
+  }
+
   return mkWaitHandle(std::move(wait));
 }
 

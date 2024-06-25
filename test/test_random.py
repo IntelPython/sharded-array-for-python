@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from utils import device
 
 import sharpy as sp
 
@@ -16,7 +17,7 @@ def seed(request):
 
 def test_random_rand(shape, seed):
     sp.random.seed(seed)
-    sp_data = sp.random.rand(*shape)
+    sp_data = sp.random.rand(*shape, device=device)
 
     np.random.seed(seed)
     np_data = np.random.rand(*shape)
@@ -30,7 +31,7 @@ def test_random_rand(shape, seed):
 @pytest.mark.parametrize("low,high", [(0, 1), (4, 10), (-100, 100)])
 def test_random_uniform(low, high, shape, seed):
     sp.random.seed(seed)
-    sp_data = sp.random.uniform(low, high, shape)
+    sp_data = sp.random.uniform(low, high, shape, device=device)
 
     np.random.seed(seed)
     np_data = np.random.uniform(low, high, shape)
