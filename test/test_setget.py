@@ -1,5 +1,4 @@
 import numpy
-import numpy as np
 import pytest
 from utils import device, runAndCompare
 
@@ -128,10 +127,10 @@ class TestSetGet:
         a[:, 0] = r11
 
         np_r1 = sp.to_numpy(r1)
-        b = np.zeros((N, 2))
+        b = numpy.zeros((N, 2))
         b[:, 0] = np_r1
 
-        assert np.allclose(sp.to_numpy(a), b)
+        assert numpy.allclose(sp.to_numpy(a), b)
 
     def test_colon(self):
         a = sp.ones((16, 16), sp.float32, device=device)
