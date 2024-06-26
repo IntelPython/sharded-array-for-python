@@ -1,8 +1,13 @@
 """
+Rambo benchmark
 
 Examples:
-    python rambo.py -nevts 10 -nout 10 -b sharpy -i 10000
-    mpiexec -n 3 python rambo.py -nevts 64 -nout 64 -b sharpy -i 100
+
+    # run 1000 iterations of 10 events and 100 outputs on sharpy backend
+    python rambo.py -nevts 10 -nout 100 -b sharpy -i 1000
+
+    # MPI parallel run
+    mpiexec -n 3 python rambo.py -nevts 64 -nout 64 -b sharpy -i 1000
 
 """
 
@@ -29,27 +34,6 @@ except ImportError:
 def info(s):
     if comm_rank == 0:
         print(s)
-
-
-def naive_erf(x):
-    """
-    Error function (erf) implementation
-
-    Adapted from formula 7.1.26 in
-    Abramowitz and Stegun, "Handbook of Mathematical Functions", 1965.
-    """
-    y = numpy.abs(x)
-
-    a1 = 0.254829592
-    a2 = -0.284496736
-    a3 = 1.421413741
-    a4 = -1.453152027
-    a5 = 1.061405429
-    p = 0.3275911
-
-    t = 1.0 / (1.0 + p * y)
-    f = (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t
-    return numpy.sign(x) * (1.0 - f * numpy.exp(-y * y))
 
 
 def sp_rambo(sp, sp_C1, sp_F1, sp_Q1, sp_output, nevts, nout):
@@ -159,14 +143,12 @@ def run(nevts, nout, backend, iterations, datatype):
     t_min = numpy.min(time_list)
     t_max = numpy.max(time_list)
     t_med = numpy.median(time_list)
-    # perf_rate = nopt / t_med / 1e6  # million options per second
     init_overhead = t_warm - t_med
     if backend == "sharpy":
         info(f"Estimated initialization overhead: {init_overhead:.5f} s")
     info(f"Min.   duration: {t_min:.5f} s")
     info(f"Max.   duration: {t_max:.5f} s")
     info(f"Median duration: {t_med:.5f} s")
-    # info(f"Median rate: {perf_rate:.5f} Mopts/s")
 
     fini()
 

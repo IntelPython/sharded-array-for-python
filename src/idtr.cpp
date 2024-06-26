@@ -241,10 +241,11 @@ void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
            });
 }
 
-/// copy contiguous block of data into a possibly strided array
-void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
-            const int64_t *strides, const int64_t *tStarts,
-            const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
+/// copy contiguous block of data into a possibly strided array distributed to N
+/// ranks
+void unpackN(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
+             const int64_t *strides, const int64_t *tStarts,
+             const int64_t *tSizes, uint64_t nd, uint64_t N, void *out) {
   if (!in || !sizes || !strides || !tStarts || !tSizes || !out) {
     return;
   }
@@ -269,8 +270,8 @@ void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
 }
 
 /// copy contiguous block of data into a possibly strided array
-void unpack1(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
-             const int64_t *strides, uint64_t ndim, void *out) {
+void unpack(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
+            const int64_t *strides, uint64_t ndim, void *out) {
   if (!in || !sizes || !strides || !out) {
     return;
   }
@@ -522,8 +523,8 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
                roffs = std::move(roffs)]() {
     tc->wait(hdl);
     if (isStrided) {
-      unpack1(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
-              oDataPtr);
+      unpack(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
+             oDataPtr);
       delete[](char *) rBuff;
     }
   };
@@ -931,15 +932,15 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
     tc->wait(lwh);
     std::vector<int64_t> recvBufferStart(nworkers * ndims, 0);
     if (cache->_bufferizeLRecv) {
-      unpack(lRecvData, sharpytype, leftHaloShape, leftHaloStride,
-             recvBufferStart.data(), cache->_lRecvBufferSize.data(), ndims,
-             nworkers, leftHaloData);
+      unpackN(lRecvData, sharpytype, leftHaloShape, leftHaloStride,
+              recvBufferStart.data(), cache->_lRecvBufferSize.data(), ndims,
+              nworkers, leftHaloData);
     }
     tc->wait(rwh);
     if (cache->_bufferizeRRecv) {
-      unpack(rRecvData, sharpytype, rightHaloShape, rightHaloStride,
-             recvBufferStart.data(), cache->_rRecvBufferSize.data(), ndims,
-             nworkers, rightHaloData);
+      unpackN(rRecvData, sharpytype, rightHaloShape, rightHaloStride,
+              recvBufferStart.data(), cache->_rRecvBufferSize.data(), ndims,
+              nworkers, rightHaloData);
     }
   };
 
