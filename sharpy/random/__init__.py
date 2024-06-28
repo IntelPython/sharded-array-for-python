@@ -8,8 +8,7 @@ from sharpy.numpy import fromfunction
 def uniform(low, high, size, device="", team=1):
     data = np.random.uniform(low, high, size)
     if len(data.shape) == 0:
-        sp_data = sp.empty(())
-        sp_data[()] = data[()]
+        sp_data = sp.full((), data[()], device=device, team=team)
         return sp_data
     return fromfunction(
         lambda *index: data[index],
