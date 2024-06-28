@@ -133,3 +133,6 @@ dmypy.json
 
 # emacs
 *~
+
+# clangd
+/compile_commands.json

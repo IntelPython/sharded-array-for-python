@@ -32,6 +32,7 @@ class build_ext(build_ext_orig):
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir.parent.absolute()}",
             f"-DCMAKE_BUILD_TYPE={config}",
             "-DCMAKE_VERBOSE_MAKEFILE=ON",
+            "-DCMAKE_EXPORT_COMPILE_COMMANDS=1",
             "-G=Ninja",
             "-DLLVM_ENABLE_LLD=ON",
             f"-DCMAKE_PREFIX_PATH={os.getenv('CONDA_PREFIX')}/lib/cmake",
