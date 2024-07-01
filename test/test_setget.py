@@ -116,6 +116,22 @@ class TestSetGet:
 
         assert runAndCompare(doit)
 
+    def test_setitem9(self):
+        N = 3
+        r1 = sp.random.rand(N)
+
+        a = sp.zeros((N, 2))
+        r11 = sp.reshape(r1, (N, 1))
+
+        # strided array
+        a[:, 0] = r11
+
+        np_r1 = sp.to_numpy(r1)
+        b = numpy.zeros((N, 2))
+        b[:, 0] = np_r1
+
+        assert numpy.allclose(sp.to_numpy(a), b)
+
     def test_colon(self):
         a = sp.ones((16, 16), sp.float32, device=device)
         b = sp.zeros((16, 16), sp.float32, device=device)

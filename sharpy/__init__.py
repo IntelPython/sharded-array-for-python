@@ -38,6 +38,22 @@ from ._sharpy import init as _init
 from ._sharpy import sync
 from .ndarray import ndarray
 
+
+# Lazy load submodules
+def __getattr__(name):
+    if name == "random":
+        import sharpy.random as random
+
+        return random
+    elif name == "numpy":
+        import sharpy.numpy as numpy
+
+        return numpy
+
+    if "_fallback" in globals():
+        return _fallback(name)
+
+
 _sharpy_cw = bool(int(getenv("SHARPY_CW", False)))
 
 pi = 3.1415926535897932384626433
@@ -185,7 +201,3 @@ if _fb_env is not None:
             dt.linalg.norm(...)
             """
             return _fallback(name, self._func)
-
-    def __getattr__(name):
-        "Attempt to find a fallback in fallback-lib"
-        return _fallback(name)

@@ -54,7 +54,7 @@ setup(
     name="sharpy",
     version="0.2",
     description="Distributed array and more",
-    packages=["sharpy", "sharpy.numpy"],  # "sharpy.torch"],
+    packages=["sharpy", "sharpy.numpy", "sharpy.random"],  # "sharpy.torch"],
     ext_modules=[CMakeExtension("sharpy/_sharpy")],
     cmdclass=dict(
         # Enable the CMakeExtension entries defined above
