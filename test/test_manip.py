@@ -3,10 +3,10 @@ import os
 
 import numpy
 import pytest
-from mpi4py import MPI
 from utils import device, runAndCompare
 
 import sharpy as sp
+from mpi4py import MPI
 
 
 class TestManip:
@@ -25,6 +25,13 @@ class TestManip:
             return aapi.reshape(c, [5, 6])
 
         assert runAndCompare(doit)
+
+    def test_reshape_copy(self):
+        a = sp.arange(0, 8, 1, sp.int32)
+        b = sp.reshape(a, [4, 2])
+        a[0] = 20
+        assert numpy.allclose(sp.to_numpy(a), [20, 1, 2, 3, 4, 5, 6, 7])
+        assert numpy.allclose(sp.to_numpy(b), [[0, 1], [2, 3], [4, 5], [6, 7]])
 
     @pytest.mark.skipif(len(device), reason="FIXME 64bit on GPU")
     def test_astype_f64i32(self):
