@@ -149,8 +149,10 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/third_party/bitsery/include
   ${MPI_INCLUDE_PATH}
   ${pybind11_INCLUDE_DIRS}
+  ${LLVM_INCLUDE_DIRS}
   ${MLIR_INCLUDE_DIRS}
-  ${IMEX_INCLUDE_DIRS})
+  ${IMEX_INCLUDE_DIRS}
+  "/export/users/yzhao/work/sharpy_ws/builds/debug/tools/Imex/include")
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   target_link_options(_sharpy PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/export.txt")

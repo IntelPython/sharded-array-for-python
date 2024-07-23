@@ -339,6 +339,7 @@ enum FactoryId : int {
   F_REDUCEOP,
   F_REPLICATE,
   F_RESHAPE,
+  F_PERMUTEDIMS,
   F_SERVICE,
   F_SETITEM,
   F_ASTYPE,

@@ -130,6 +130,10 @@ for func in api.api_categories["ManipOp"]:
         exec(
             f"{func} = lambda this, shape, cp=None: ndarray(_csp.ManipOp.reshape(this._t, shape, cp))"
         )
+    elif func == "permute_dims":
+        exec(
+            f"{func} = lambda this, axes: ndarray(_csp.ManipOp.permute_dims(this._t, axes))"
+        )
 
 for func in api.api_categories["ReduceOp"]:
     FUNC = func.upper()

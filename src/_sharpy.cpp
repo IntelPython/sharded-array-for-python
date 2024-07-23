@@ -196,7 +196,9 @@ PYBIND11_MODULE(_sharpy, m) {
   py::class_<IEWBinOp>(m, "IEWBinOp").def("op", &IEWBinOp::op);
   py::class_<EWBinOp>(m, "EWBinOp").def("op", &EWBinOp::op);
   py::class_<ReduceOp>(m, "ReduceOp").def("op", &ReduceOp::op);
-  py::class_<ManipOp>(m, "ManipOp").def("reshape", &ManipOp::reshape);
+  py::class_<ManipOp>(m, "ManipOp")
+      .def("reshape", &ManipOp::reshape)
+      .def("permute_dims", &ManipOp::permute_dims);
   py::class_<LinAlgOp>(m, "LinAlgOp").def("vecdot", &LinAlgOp::vecdot);
 
   py::class_<FutureArray>(m, "SHARPYFuture")
