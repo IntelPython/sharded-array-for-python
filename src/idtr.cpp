@@ -575,6 +575,8 @@ _idtr_copy_reshape(SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,
       oData.data(), oData.sizes(), oData.strides());
 }
 
+namespace {
+
 class id {
 public:
   id(size_t dims) : _values(dims) {}
@@ -609,23 +611,22 @@ public:
     return id(std::move(new_values));
   }
 
+  void next(const int64_t *shape) {
+    size_t i = _values.size();
+    while (i--) {
+      ++_values[i];
+      if (_values[i] < shape[i]) {
+        return;
+      }
+      _values[i] = 0;
+    }
+  }
+
   size_t size() { return _values.size(); }
 
 private:
   std::vector<int64_t> _values;
 };
-
-id &next_idx(id &idx, const int64_t *shape) {
-  size_t i = idx.size();
-  while (i--) {
-    ++idx[i];
-    if (idx[i] < shape[i]) {
-      return idx;
-    }
-    idx[i] = 0;
-  }
-  return idx;
-}
 
 template <typename T> class ndarray {
 public:
@@ -633,11 +634,6 @@ public:
           int64_t *lShape, int64_t *lStrides)
       : _nDims(nDims), _gShape(gShape), _gOffsets(gOffsets), _lData((T *)lData),
         _lShape(lShape), _lStrides(lStrides) {}
-  // ndarray(std::vector<T> input, std::vector<int64_t> dims,
-  //         std::vector<int64_t> strides);
-
-  // id ids();
-  // id local_ids();
 
   id firstLocalIndex() const { return id(_nDims, _gOffsets); }
 
@@ -645,9 +641,8 @@ public:
     size_t size = lSize();
     id idx = firstLocalIndex();
     while (size--) {
-      std::cout << "idx: " << idx[0] << "," << idx[1] << std::endl;
       callback(idx);
-      next_idx(idx, _gShape);
+      idx.next(_gShape);
     }
   }
 
@@ -658,7 +653,6 @@ public:
       offset = (offset + localIdx[i]) * _lShape[i + 1];
     }
     offset += localIdx[_nDims - 1];
-    std::cout << "offset: " << offset << std::endl;
     return offset;
   }
 
@@ -714,47 +708,7 @@ size_t getOutputRank(const std::vector<Parts> &parts, int64_t dim0) {
   return 0;
 }
 
-// template <typename T>
-// void permute(const ndarray<T> &input, const ndarray<T> &output, uint64_t
-// nRanks,
-//              const std::vector<Parts> &parts,
-//              const std::vector<int64_t> &axes, ) {
-//   std::vector<std::vector<T>> sendBuffer(nRanks); // alltoall
-
-//   input.permutedLocalIds(
-//       [&](const id &idx) {
-//         auto rank = getOutputRank(parts, idx[0]);
-//         sendBuffer[rank].push_back(input[idx]);
-//       },
-//       axes);
-
-//   std::vector<int> receiveSizes(nRanks);
-//   std::vector<int> receiveOffsets(nRanks);
-
-//   output.permutedLocalIds(
-//       [&](const id &idx) {
-//         auto rank = getInputRank(parts, idx[0]);
-//         ++receiveSizes[rank];
-//       },
-//       axes);
-//   for (size_t i = 1; i < nRanks; i++) {
-//     receiveOffsets[i] = receiveOffsets[i - 1] + receiveSizes[i - 1];
-//   }
-
-//   return sendBuffer;
-// }
-
-// template <typename T>
-// void detranspose(std::vector<std::vector<T>> sendBuffer, ndarray<T> output,
-//                  std::vector<int64_t> axes, uint64_t nRank) {
-//   std::vector<size_t> sendBufferIndex(sendBuffer.size());
-//   for (auto idx : output) {
-//     id in_idx = idx.permute(axes);
-//     auto i = sendBufferIndex[in_idx[0]];
-//     output[idx] = sendBuffer[in_idx[0]][i];
-//     sendBufferIndex[in_idx[0]] = i + 1;
-//   }
-// }
+} // namespace
 
 /// @brief permute array
 /// We assume array is partitioned along the first dimension (only) and
@@ -826,7 +780,6 @@ WaitHandleBase *_idtr_copy_permute(SHARPY::DTypeId sharpytype,
   }
 
   // First we allgather the current and target partitioning
-
   std::vector<Parts> parts(nRanks);
   parts[rank].iStart = iOffsPtr[0];
   parts[rank].iEnd = iOffsPtr[0] + iDataShapePtr[0];
@@ -840,7 +793,7 @@ WaitHandleBase *_idtr_copy_permute(SHARPY::DTypeId sharpytype,
   tc->gather(parts.data(), counts.data(), dspl.data(), SHARPY::INT64,
              SHARPY::REPLICATED);
 
-  // transpose
+  // Transpose
   ndarray<T> input(iNDims, iGShapePtr, iOffsPtr, iDataPtr, iDataShapePtr,
                    iDataStridesPtr);
   ndarray<T> output(oNDims, oGShapePtr, oOffsPtr, oDataPtr, oDataShapePtr,
@@ -882,27 +835,10 @@ WaitHandleBase *_idtr_copy_permute(SHARPY::DTypeId sharpytype,
     }
   }
 
-  std::cout << "sendSizes: " << sendSizes[0] << std::endl;
-  std::cout << "sendOffsets: " << sendOffsets[0] << std::endl;
-  std::cout << "sendBuffer: ";
-  for (int i = 0; i < sendBuffer.size(); ++i) {
-    std::cout << sendBuffer[i] << ",";
-  }
-  std::cout << std::endl;
-
-  std::cout << "receiveSizes: " << receiveSizes[0] << std::endl;
-  std::cout << "receiveOffsets: " << receiveOffsets[0] << std::endl;
-
   auto hdl = tc->alltoall(sendBuffer.data(), sendSizes.data(),
                           sendOffsets.data(), sharpytype, receiveBuffer.data(),
                           receiveSizes.data(), receiveOffsets.data());
   tc->wait(hdl);
-
-  std::cout << "receiveBuffer: ";
-  for (int i = 0; i < receiveBuffer.size(); ++i) {
-    std::cout << receiveBuffer[i] << ",";
-  }
-  std::cout << std::endl;
 
   {
     std::vector<std::vector<T>> receiveRankBuffer(nRanks);
