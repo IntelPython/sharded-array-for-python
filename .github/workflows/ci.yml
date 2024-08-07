@@ -1,5 +1,6 @@
 name: Sharpy CI
 run-name: ${{ github.actor }} CI for sharpy
+permissions: read-all
 on:
   push:
     branches:
