@@ -33,6 +33,13 @@ class TestManip:
         assert numpy.allclose(sp.to_numpy(a), [20, 1, 2, 3, 4, 5, 6, 7])
         assert numpy.allclose(sp.to_numpy(b), [[0, 1], [2, 3], [4, 5], [6, 7]])
 
+    def test_view_assign(self):
+        a = sp.arange(0, 8, 1, sp.int32)
+        b = a[1:7]
+        b[0:4] = 22
+        assert numpy.allclose(sp.to_numpy(a), [0, 22, 22, 22, 22, 5, 6, 7])
+        assert numpy.allclose(sp.to_numpy(b), [22, 22, 22, 22, 5, 6])
+
     @pytest.mark.skipif(len(device), reason="FIXME 64bit on GPU")
     def test_astype_f64i32(self):
         def doit(aapi, **kwargs):
