@@ -688,6 +688,8 @@ static const std::string cpu_pipeline =
     "arith-expand,"
     "memref-expand,"
     "func.func(empty-tensor-to-alloc-tensor),"
+    "cse,"
+    "canonicalize,"
     "one-shot-bufferize,"
     "canonicalize,"
     "imex-remove-temporaries,"
