@@ -134,7 +134,7 @@ def run(n, backend, datatype, benchmark_mode):
     info(f"Total     DOFs: {dofs_T + dofs_U + dofs_V}")
 
     # prognostic variables: elevation, (u, v) velocity
-    # e = create_full(T_shape, 0.0, dtype)
+    e = create_full(T_shape, 0.0, dtype)
     u = create_full(U_shape, 0.0, dtype)
     v = create_full(V_shape, 0.0, dtype)
 
@@ -167,9 +167,7 @@ def run(n, backend, datatype, benchmark_mode):
         return amp * sol_x * sol_y * sol_t
 
     # initial elevation
-    # e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
-    # NOTE assignment fails, do not pre-allocate e
-    e = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly).to_device(device)
+    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
     sync()
 
     # compute time step
@@ -235,8 +233,8 @@ def run(n, backend, datatype, benchmark_mode):
         t = i * dt
 
         if t >= next_t_export - 1e-8:
-            _elev_max = 0  # np.max(e, all_axes)
-            _u_max = 0  # np.max(u, all_axes)
+            _elev_max = e[0, 0].to_device()  # np.max(e, all_axes)
+            _u_max = u[0, 0].to_device()  # np.max(u, all_axes)
             _total_v = 0  # np.sum(e + h, all_axes)
 
             elev_max = float(_elev_max)
