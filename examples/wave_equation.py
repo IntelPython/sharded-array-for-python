@@ -146,6 +146,20 @@ def run(n, backend, datatype, benchmark_mode):
     u2 = create_full(U_shape, 0.0, dtype)
     v2 = create_full(V_shape, 0.0, dtype)
 
+    # compute time step
+    alpha = 0.5
+    c = (g * h) ** 0.5
+    dt = alpha * dx / c
+    dt = t_export / int(math.ceil(t_export / dt))
+    nt = int(math.ceil(t_end / dt))
+    if benchmark_mode:
+        dt = 1e-5
+        nt = 100
+        t_export = dt * 25
+
+    info(f"Time step: {dt} s")
+    info(f"Total run time: {t_end} s, {nt} time steps")
+
     sync()
 
     def exact_elev(t, x_t_2d, y_t_2d, lx, ly):
@@ -165,26 +179,6 @@ def run(n, backend, datatype, benchmark_mode):
         # NOTE sharpy fails with scalar computation
         sol_t = numpy.cos(2 * omega * t)
         return amp * sol_x * sol_y * sol_t
-
-    # initial elevation
-    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
-    sync()
-
-    # compute time step
-    alpha = 0.5
-    c = (g * h) ** 0.5
-    dt = alpha * dx / c
-    dt = t_export / int(math.ceil(t_export / dt))
-    nt = int(math.ceil(t_end / dt))
-    if benchmark_mode:
-        dt = 1e-5
-        nt = 100
-        t_export = dt * 25
-
-    info(f"Time step: {dt} s")
-    info(f"Total run time: {t_end} s, {nt} time steps")
-
-    sync()
 
     def rhs(u, v, e):
         """
@@ -220,6 +214,14 @@ def run(n, backend, datatype, benchmark_mode):
         v[:, 1:-1] = v[:, 1:-1] / 3.0 + 2.0 / 3.0 * (v2[:, 1:-1] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
 
+    # warm git cache
+    step(u, v, e, u1, v1, e1, u2, v2, e2)
+    sync()
+
+    # initial solution
+    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly).to_device(device)
+    u[:, :] = create_full(U_shape, 0.0, dtype)
+    v[:, :] = create_full(V_shape, 0.0, dtype)
     sync()
 
     t = 0
