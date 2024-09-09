@@ -4,10 +4,6 @@
     Intel Distributed Runtime for MLIR
 */
 
-#include "sharpy/CppTypes.hpp"
-#include "llvm/ADT/APInt.h"
-#include <cstddef>
-#include <cstdint>
 #include <sharpy/MPITransceiver.hpp>
 #include <sharpy/MemRefType.hpp>
 #include <sharpy/NDArray.hpp>
@@ -19,7 +15,6 @@
 #include <iostream>
 #include <memory>
 #include <unordered_map>
-#include <vector>
 
 #define STRINGIFY(a) #a
 
@@ -995,6 +990,7 @@ TYPED_COPY_PERMUTE(i64, int64_t);
 TYPED_COPY_PERMUTE(i32, int32_t);
 TYPED_COPY_PERMUTE(i16, int16_t);
 TYPED_COPY_PERMUTE(i8, int8_t);
+// FIXME: bool is not supported yet due to std::vector<bool>
 // TYPED_COPY_PERMUTE(i1, bool);
 
 } // extern "C"
