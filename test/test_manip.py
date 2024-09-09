@@ -93,3 +93,10 @@ class TestManip:
         a = sp.arange(0, 8, 1, sp.int32)
         b = a.to_device(device="GPU")
         assert numpy.allclose(sp.to_numpy(b), [0, 1, 2, 3, 4, 5, 6, 7])
+
+    def test_permute_dims(self):
+        a = sp.arange(0, 10, 1, sp.int64)
+        b = sp.reshape(a, (2, 5))
+        c1 = sp.to_numpy(sp.permute_dims(b, [1, 0]))
+        c2 = sp.to_numpy(b).transpose(1, 0)
+        assert numpy.allclose(c1, c2)

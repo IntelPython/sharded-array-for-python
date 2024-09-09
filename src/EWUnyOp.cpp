@@ -105,7 +105,7 @@ struct DeferredEWUnyOp : public Deferred {
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
 
-    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
+    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
     auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
 
     auto ndOpId = sharpy(_op);
