@@ -572,6 +572,9 @@ _idtr_copy_reshape(SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,
 
 namespace {
 
+///
+/// An util class of multi-dimensional index
+///
 class id {
 public:
   id(size_t dims) : _values(dims) {}
@@ -579,6 +582,7 @@ public:
   id(const std::vector<int64_t> &values) : _values(values) {}
   id(const std::vector<int64_t> &&values) : _values(std::move(values)) {}
 
+  /// Permute this id by axes and return a new id
   id permute(std::vector<int64_t> axes) const {
     std::vector<int64_t> new_values(_values.size());
     for (size_t i = 0; i < _values.size(); i++) {
@@ -590,6 +594,7 @@ public:
   int64_t operator[](size_t i) const { return _values[i]; }
   int64_t &operator[](size_t i) { return _values[i]; }
 
+  /// Subtract another id from this id and return a new id
   id operator-(const id &rhs) const {
     std::vector<int64_t> new_values(_values.size());
     for (size_t i = 0; i < _values.size(); i++) {
@@ -598,6 +603,7 @@ public:
     return id(std::move(new_values));
   }
 
+  /// Subtract another id from this id and return a new id
   id operator-(const int64_t *rhs) const {
     std::vector<int64_t> new_values(_values.size());
     for (size_t i = 0; i < _values.size(); i++) {
@@ -606,6 +612,10 @@ public:
     return id(std::move(new_values));
   }
 
+  /// Increase the last dimension value of this id which bounds by shape
+  ///
+  /// Example:
+  ///    In shape (2,2) : (0,0)->(0,1)->(1,0)->(1,1)->(0,0)
   void next(const int64_t *shape) {
     size_t i = _values.size();
     while (i--) {
@@ -623,6 +633,9 @@ private:
   std::vector<int64_t> _values;
 };
 
+///
+/// An wrapper template class for distribute multi-dimensional array
+///
 template <typename T> class ndarray {
 public:
   ndarray(int64_t nDims, int64_t *gShape, int64_t *gOffsets, void *lData,
@@ -630,8 +643,10 @@ public:
       : _nDims(nDims), _gShape(gShape), _gOffsets(gOffsets), _lData((T *)lData),
         _lShape(lShape), _lStrides(lStrides) {}
 
+  /// Return the first global index of local data
   id firstLocalIndex() const { return id(_nDims, _gOffsets); }
 
+  /// Interate all global indices in local data
   void localIndices(const std::function<void(const id &)> &callback) const {
     size_t size = lSize();
     id idx = firstLocalIndex();
@@ -641,6 +656,7 @@ public:
     }
   }
 
+  /// Interate all global indices of the array
   void globalIndices(const std::function<void(const id &)> &callback) const {
     size_t size = gSize();
     id idx(_nDims);
@@ -660,6 +676,7 @@ public:
     return offset;
   }
 
+  /// Using global index to access its data
   T &operator[](const id &idx) { return _lData[getLocalDataOffset(idx)]; }
   T operator[](const id &idx) const { return _lData[getLocalDataOffset(idx)]; }
 
