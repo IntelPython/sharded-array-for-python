@@ -61,6 +61,7 @@ jobs:
           # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
           env
+          conda install -y conda-build
           cd conda-recipe
           conda build --numpy 1.26 -c conda-forge --override-channels --no-anaconda-upload --no-test .
       - name: Save IMEX cache
