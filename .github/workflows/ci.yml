@@ -22,11 +22,11 @@ jobs:
         with:
           submodules: recursive
       - name: Setup env
+          # CONDA_ROOT="$(realpath $GITHUB_WORKSPACE/..)/install/miniconda3"
+          # echo "CONDA_ROOT=$CONDA_ROOT" >> "$GITHUB_ENV"
         run: |
           INSTALLED_DIR="$(realpath $GITHUB_WORKSPACE)/third_party/install"
           echo "INSTALLED_DIR=$INSTALLED_DIR" >> "$GITHUB_ENV"
-          CONDA_ROOT="$(realpath $GITHUB_WORKSPACE/..)/install/miniconda3"
-          echo "CONDA_ROOT=$CONDA_ROOT" >> "$GITHUB_ENV"
           echo 'IMEX_SHA<<EOF' >> $GITHUB_ENV
           cat imex_version.txt >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
@@ -36,27 +36,31 @@ jobs:
         with:
           path: third_party/install/**
           key: ${{ runner.os }}-build-imex-${{ env.IMEX_CACHE_NUMBER }}-${{ env.IMEX_SHA }}
-      - name: Miniconda
-        run: |
-          env
-          rm -rf $CONDA_ROOT
-          cd $GITHUB_WORKSPACE/..
-          rm -f Miniconda3-*.sh
-          # CPKG=Miniconda3-latest-Linux-x86_64.sh
-          CPKG=Miniconda3-py311_24.3.0-0-Linux-x86_64.sh
-          wget -q https://repo.anaconda.com/miniconda/$CPKG
-          bash $CPKG -u -b -f -p $CONDA_ROOT
-          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
-          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
-          conda install -c conda-forge --override-channels python git-lfs 'conda-build<=24.1.2'
-          # aahhhh bug in conda somewhere
-          sed -i "s,\#\!/usr/bin/env python,#\!$CONDA_ROOT/bin/python," $CONDA_ROOT/*bin/conda
-          conda clean --all -y
+      - name: Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          # environment-file: etc/example-environment.yml
+      # - name: Miniconda
+      #   run: |
+      #     env
+      #     rm -rf $CONDA_ROOT
+      #     cd $GITHUB_WORKSPACE/..
+      #     rm -f Miniconda3-*.sh
+      #     CPKG=Miniforge3-Linux-x86_64.sh
+      #     wget -q https://github.com/conda-forge/miniforge/releases/latest/download/$CPKG
+      #     bash $CPKG -u -b -f -p $CONDA_ROOT
+      #     export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+      #     eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
+      #     conda install -c conda-forge --override-channels python git-lfs 'conda-build<=24.1.2'
+      #     # aahhhh bug in conda somewhere
+      #     sed -i "s,\#\!/usr/bin/env python,#\!$CONDA_ROOT/bin/python," $CONDA_ROOT/*bin/conda
+      #     conda clean --all -y
       - name: Build SHARPY
+          # export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
           env
-          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
-          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
           cd conda-recipe
           conda build --numpy 1.26 -c conda-forge --override-channels --no-anaconda-upload --no-test .
       - name: Save IMEX cache
@@ -66,15 +70,15 @@ jobs:
           path: third_party/install/**
           key: ${{ runner.os }}-build-imex-${{ env.IMEX_CACHE_NUMBER }}-${{ env.IMEX_SHA }}
       - name: Install SHARPY
+          # export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
-          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
-          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
           conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest pytest-timeout
           conda activate sharpy
       - name: Test SHARPY (pytest)
+        #   export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+        #   eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
-          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
-          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
           conda activate sharpy
           cd test
           pytest . -v -s --timeout=30
@@ -84,9 +88,9 @@ jobs:
           mpirun -n 4 pytest . -v -s --timeout=30
           cd -
       - name: Run examples
+          # export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
+          # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
-          export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
-          eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
           conda activate sharpy
           cd examples
           SHARPY_FALLBACK=numpy python -u ./stencil-2d.py 5 1024 star 4
