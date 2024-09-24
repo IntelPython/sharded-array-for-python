@@ -57,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-build-imex-${{ env.IMEX_CACHE_NUMBER }}-${{ env.IMEX_SHA }}
       - name: Install SHARPY
         run: |
-          conda create --use-local -n sharpy -v sharpy pytest pytest-timeout
+          conda create --use-local -c file://${{ env.CONDA_PREFIX }}/conda-bld/ -n sharpy -v sharpy pytest pytest-timeout
           conda activate sharpy
       - name: Test SHARPY (pytest)
         run: |
