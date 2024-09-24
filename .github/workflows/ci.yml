@@ -46,7 +46,6 @@ jobs:
       - name: TestTest
         run: |
           echo CONDA_PREFIX=${CONDA_PREFIX}
-          echo CONDA_PREFIX=${{CONDA_PREFIX}}
           echo CONDA_PREFIX=${{env.CONDA_PREFIX}}
       - name: Build SHARPY
         run: |
