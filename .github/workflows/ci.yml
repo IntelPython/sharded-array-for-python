@@ -74,6 +74,7 @@ jobs:
           # export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
           # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
+          conda init bash
           conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest pytest-timeout
           conda activate sharpy
       - name: Test SHARPY (pytest)
