@@ -8,7 +8,7 @@ on:
   pull_request:
 defaults:
   run:
-    shell: bash
+    shell: bash -l {0}
 env:
   IMEX_CACHE_NUMBER: 4  # Increase to reset cache
 jobs:
@@ -41,6 +41,13 @@ jobs:
         with:
           miniforge-version: latest
           # environment-file: etc/example-environment.yml
+      - name: Test Conda
+        run: |
+          conda create -n testenv conda-build
+          conda activate testenv
+          which python
+          conda deactivate
+          conda env remove -n testenv
       # - name: Miniconda
       #   run: |
       #     env
@@ -74,7 +81,6 @@ jobs:
           # export PATH=$CONDA_ROOT/condabin:$CONDA_ROOT/bin:${PATH}
           # eval "$($CONDA_ROOT/bin/python -m conda shell.bash hook)"
         run: |
-          conda init bash
           conda create --use-local -c conda-forge --override-channels -n sharpy -v sharpy pytest pytest-timeout
           conda activate sharpy
       - name: Test SHARPY (pytest)
