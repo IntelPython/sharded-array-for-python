@@ -43,6 +43,11 @@ jobs:
         with:
           miniforge-version: latest
           # environment-file: etc/example-environment.yml
+      - name: TestTest
+        run: |
+          echo CONDA_PREFIX=${CONDA_PREFIX}
+          echo CONDA_PREFIX=${{CONDA_PREFIX}}
+          echo CONDA_PREFIX=${{env.CONDA_PREFIX}}
       - name: Build SHARPY
         run: |
           env
