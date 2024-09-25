@@ -277,7 +277,7 @@ struct DeferredGetItem : public Deferred {
     const auto &offs = _slc.offsets();
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
-    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
+    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
 
     // now we can create the NDArray op using the above Values

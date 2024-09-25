@@ -149,6 +149,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/third_party/bitsery/include
   ${MPI_INCLUDE_PATH}
   ${pybind11_INCLUDE_DIRS}
+  ${LLVM_INCLUDE_DIRS}
   ${MLIR_INCLUDE_DIRS}
   ${IMEX_INCLUDE_DIRS})
 
