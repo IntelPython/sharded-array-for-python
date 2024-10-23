@@ -45,7 +45,8 @@ def sp_transpose(arr):
 
 
 def np_transpose(arr):
-    return numpy.ravel(arr.transpose()).reshape(arr.shape)
+    brr = arr.transpose()
+    return numpy.ravel(brr).reshape(brr.shape)
 
 
 def initialize(np, row, col, dtype):
