@@ -1,13 +1,15 @@
 """
-Rambo benchmark
+Transpose benchmark
+
+    Matrix transpose benchmark for sharpy and numpy backends.
 
 Examples:
 
-    # run 1000 iterations of 10 events and 100 outputs on sharpy backend
-    python rambo.py -nevts 10 -nout 100 -b sharpy -i 1000
+    # Run 1000 iterations of 1000*1000 matrix on sharpy backend
+    python transpose.py -r 10 -c 1000 -b sharpy -i 1000
 
     # MPI parallel run
-    mpiexec -n 3 python rambo.py -nevts 64 -nout 64 -b sharpy -i 1000
+    mpiexec -n 3 python transpose.py -r 1000 -c 1000 -b sharpy -i 1000
 
 """
 
@@ -43,7 +45,7 @@ def sp_transpose(arr):
 
 
 def np_transpose(arr):
-    return arr.transpose()
+    return numpy.ravel(arr.transpose()).reshape(arr.shape)
 
 
 def initialize(np, row, col, dtype):
