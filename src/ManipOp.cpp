@@ -252,7 +252,6 @@ struct DeferredPermuteDims : public Deferred {
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_array)>(_array);
-    // ser.template value<sizeof(_axes)>(_axes);
   }
 };
 
