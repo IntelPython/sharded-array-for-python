@@ -46,11 +46,11 @@ def sp_transpose(arr):
 
 def np_transpose(arr):
     brr = arr.transpose()
-    return numpy.ravel(brr).reshape(brr.shape)
+    return brr.copy()
 
 
 def initialize(np, row, col, dtype):
-    arr = np.arange(0, row * col, dtype=dtype)
+    arr = np.arange(0, row * col, 1, dtype=dtype)
     return np.reshape(arr, (row, col))
 
 
