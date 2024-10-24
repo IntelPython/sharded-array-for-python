@@ -50,7 +50,7 @@ def np_transpose(arr):
 
 
 def initialize(np, row, col, dtype):
-    arr = np.arange(row * col, dtype=dtype)
+    arr = np.arange(0, row * col, dtype=dtype)
     return np.reshape(arr, (row, col))
 
 

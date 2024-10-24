@@ -96,17 +96,6 @@ def _validate_device(device):
         raise ValueError(f"Invalid device string: {device}")
 
 
-def arange(start, stop=None, step=1, dtype=int64, device="", team=1):
-    if stop is None:
-        stop = start
-        start = 0
-    return ndarray(
-        _csp.Creator.arange(
-            start, stop, step, dtype, _validate_device(device), team
-        )
-    )
-
-
 for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func == "full":
@@ -124,6 +113,10 @@ for func in api.api_categories["Creator"]:
     elif func == "zeros":
         exec(
             f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 0, dtype, _validate_device(device), team))"
+        )
+    elif func == "arange":
+        exec(
+            f"{func} = lambda start, end, step, dtype=int64, device='', team=1: ndarray(_csp.Creator.arange(start, end, step, dtype, _validate_device(device), team))"
         )
     elif func == "linspace":
         exec(
