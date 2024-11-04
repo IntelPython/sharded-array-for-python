@@ -40,7 +40,6 @@ def info(s):
 
 def sp_transpose(arr):
     brr = sharpy.permute_dims(arr, [1, 0])
-    sharpy.sync()
     return brr
 
 
@@ -97,6 +96,7 @@ def run(row, col, backend, iterations, datatype):
     def eval():
         tic = time_mod.perf_counter()
         transpose(arr)
+        sync()
         toc = time_mod.perf_counter()
         return toc - tic
 
