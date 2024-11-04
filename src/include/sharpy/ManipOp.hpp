@@ -20,5 +20,8 @@ struct ManipOp {
 
   static FutureArray *to_device(const FutureArray &a,
                                 const std::string &device);
+
+  static FutureArray *permute_dims(const FutureArray &array,
+                                   const shape_type &axes);
 };
 } // namespace SHARPY

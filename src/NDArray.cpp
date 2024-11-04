@@ -113,7 +113,9 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
             std::cerr << "sharpy fini: detected possible memory leak\n";
           } else {
             auto av = dm.addDependent(builder, a);
-            builder.create<::imex::ndarray::DeleteOp>(loc, av);
+            auto deleteOp = builder.create<::imex::ndarray::DeleteOp>(loc, av);
+            deleteOp->setAttr("bufferization.manual_deallocation",
+                              builder.getUnitAttr());
             dm.drop(a->guid());
           }
           return false;

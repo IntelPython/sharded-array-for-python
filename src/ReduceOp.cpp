@@ -61,7 +61,7 @@ struct DeferredReduceOp : public Deferred {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, Registry::get(_a));
     // return type 0d with same dtype as input
-    auto aTyp = av.getType().cast<::imex::ndarray::NDArrayType>();
+    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
     auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
     // reduction op
     auto mop = sharpy2mlir(_op);

@@ -179,6 +179,7 @@ api_categories = OrderedDict(
             "roll",  # (x, /, shift, *, axis=None)
             "squeeze",  # (x, /, axis)
             "stack",  # (arrays, /, *, axis=0)
+            "permute_dims",  # (x: array, /, axes: Tuple[int, ...]) → array
         ],
         "LinAlgOp": [
             "matmul",  # (x1, x2, /)

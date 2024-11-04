@@ -570,6 +570,402 @@ _idtr_copy_reshape(SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,
       oData.data(), oData.sizes(), oData.strides());
 }
 
+namespace {
+
+///
+/// An util class of multi-dimensional index
+///
+class id {
+public:
+  id(size_t dims) : _values(dims) {}
+  id(size_t dims, int64_t *value) : _values(value, value + dims) {}
+  id(const std::vector<int64_t> &values) : _values(values) {}
+  id(const std::vector<int64_t> &&values) : _values(std::move(values)) {}
+
+  /// Permute this id by axes and return a new id
+  id permute(std::vector<int64_t> axes) const {
+    std::vector<int64_t> new_values(_values.size());
+    for (size_t i = 0; i < _values.size(); i++) {
+      new_values[i] = _values[axes[i]];
+    }
+    return id(std::move(new_values));
+  }
+
+  int64_t operator[](size_t i) const { return _values[i]; }
+  int64_t &operator[](size_t i) { return _values[i]; }
+
+  /// Subtract another id from this id and return a new id
+  id operator-(const id &rhs) const {
+    std::vector<int64_t> new_values(_values.size());
+    for (size_t i = 0; i < _values.size(); i++) {
+      new_values[i] = _values[i] - rhs._values[i];
+    }
+    return id(std::move(new_values));
+  }
+
+  /// Subtract another id from this id and return a new id
+  id operator-(const int64_t *rhs) const {
+    std::vector<int64_t> new_values(_values.size());
+    for (size_t i = 0; i < _values.size(); i++) {
+      new_values[i] = _values[i] - rhs[i];
+    }
+    return id(std::move(new_values));
+  }
+
+  /// Increase the last dimension value of this id which bounds by shape
+  ///
+  /// Example:
+  ///    In shape (2,2) : (0,0)->(0,1)->(1,0)->(1,1)->(0,0)
+  void next(const int64_t *shape) {
+    size_t i = _values.size();
+    while (i--) {
+      ++_values[i];
+      if (_values[i] < shape[i]) {
+        return;
+      }
+      _values[i] = 0;
+    }
+  }
+
+  size_t size() { return _values.size(); }
+
+private:
+  std::vector<int64_t> _values;
+};
+
+///
+/// An wrapper template class for distribute multi-dimensional array
+///
+template <typename T> class ndarray {
+public:
+  ndarray(int64_t nDims, int64_t *gShape, int64_t *gOffsets, void *lData,
+          int64_t *lShape, int64_t *lStrides)
+      : _nDims(nDims), _gShape(gShape), _gOffsets(gOffsets), _lData((T *)lData),
+        _lShape(lShape), _lStrides(lStrides) {}
+
+  /// Return the first global index of local data
+  id firstLocalIndex() const { return id(_nDims, _gOffsets); }
+
+  /// Interate all global indices in local data
+  void localIndices(const std::function<void(const id &)> &callback) const {
+    size_t size = lSize();
+    id idx = firstLocalIndex();
+    while (size--) {
+      callback(idx);
+      idx.next(_gShape);
+    }
+  }
+
+  /// Interate all global indices of the array
+  void globalIndices(const std::function<void(const id &)> &callback) const {
+    size_t size = gSize();
+    id idx(_nDims);
+    while (size--) {
+      callback(idx);
+      idx.next(_gShape);
+    }
+  }
+
+  int64_t getLocalDataOffset(const id &idx) const {
+    auto localIdx = idx - _gOffsets;
+    int64_t offset = 0;
+    for (int64_t i = 0; i < _nDims - 1; ++i) {
+      offset = (offset + localIdx[i]) * _lShape[i + 1];
+    }
+    offset += localIdx[_nDims - 1];
+    return offset;
+  }
+
+  /// Using global index to access its data
+  T &operator[](const id &idx) { return _lData[getLocalDataOffset(idx)]; }
+  T operator[](const id &idx) const { return _lData[getLocalDataOffset(idx)]; }
+
+  id gShape() { return id(_nDims, _gShape); }
+  id lShape() { return id(_nDims, _lShape); }
+
+  size_t gSize() const {
+    return std::accumulate(_gShape, _gShape + _nDims, 1,
+                           std::multiplies<int64_t>());
+  }
+
+  size_t lSize() const {
+    return std::accumulate(_lShape, _lShape + _nDims, 1,
+                           std::multiplies<int64_t>());
+  }
+
+private:
+  int64_t _nDims;
+  int64_t *_gShape;
+  int64_t *_gOffsets;
+  T *_lData;
+  int64_t *_lShape;
+  int64_t *_lStrides;
+};
+
+struct Parts {
+  int64_t iStart;
+  int64_t iEnd;
+  int64_t oStart;
+  int64_t oEnd;
+};
+
+size_t getInputRank(const std::vector<Parts> &parts, int64_t dim0) {
+  for (size_t i = 0; i < parts.size(); i++) {
+    if (dim0 >= parts[i].iStart && dim0 < parts[i].iEnd) {
+      return i;
+    }
+  }
+  assert(false && "unreachable");
+  return 0;
+}
+
+size_t getOutputRank(const std::vector<Parts> &parts, int64_t dim0) {
+  for (size_t i = 0; i < parts.size(); i++) {
+    if (dim0 >= parts[i].oStart && dim0 < parts[i].oEnd) {
+      return i;
+    }
+  }
+  assert(false && "unreachable");
+  return 0;
+}
+
+template <typename T> class WaitPermute {
+public:
+  WaitPermute(SHARPY::Transceiver *tc, SHARPY::Transceiver::WaitHandle hdl,
+              SHARPY::rank_type cRank, SHARPY::rank_type nRanks,
+              std::vector<Parts> &&parts, std::vector<int64_t> &&axes,
+              std::vector<int64_t> oGShape, ndarray<T> &&input,
+              ndarray<T> &&output, std::vector<T> &&receiveBuffer,
+              std::vector<int> &&receiveOffsets,
+              std::vector<int> &&receiveSizes)
+      : tc(tc), hdl(hdl), cRank(cRank), nRanks(nRanks), parts(std::move(parts)),
+        axes(std::move(axes)), oGShape(std::move(oGShape)),
+        input(std::move(input)), output(std::move(output)),
+        receiveBuffer(std::move(receiveBuffer)),
+        receiveOffsets(std::move(receiveOffsets)),
+        receiveSizes(std::move(receiveSizes)) {}
+
+  void operator()() {
+    tc->wait(hdl);
+    std::vector<std::vector<T>> receiveRankBuffer(nRanks);
+    for (size_t rank = 0; rank < nRanks; ++rank) {
+      auto &rankBuffer = receiveRankBuffer[rank];
+      rankBuffer.insert(
+          rankBuffer.end(), receiveBuffer.begin() + receiveOffsets[rank],
+          receiveBuffer.begin() + receiveOffsets[rank] + receiveSizes[rank]);
+    }
+
+    std::vector<size_t> receiveRankBufferCount(nRanks, 0);
+    input.globalIndices([&](const id &inputIndex) {
+      id outputIndex = inputIndex.permute(axes);
+      auto rank = getOutputRank(parts, outputIndex[0]);
+      if (rank != cRank)
+        return;
+      rank = getInputRank(parts, inputIndex[0]);
+      auto &count = receiveRankBufferCount[rank];
+      output[outputIndex] = receiveRankBuffer[rank][count++];
+    });
+  }
+
+private:
+  SHARPY::Transceiver *tc;
+  SHARPY::Transceiver::WaitHandle hdl;
+  SHARPY::rank_type cRank;
+  SHARPY::rank_type nRanks;
+  std::vector<Parts> parts;
+  std::vector<int64_t> axes;
+  std::vector<int64_t> oGShape;
+  ndarray<T> input;
+  ndarray<T> output;
+  std::vector<T> receiveBuffer;
+  std::vector<int> receiveOffsets;
+  std::vector<int> receiveSizes;
+};
+
+} // namespace
+
+/// @brief permute array
+/// We assume array is partitioned along the first dimension (only) and
+/// partitions are ordered by ranks
+template <typename T>
+WaitHandleBase *_idtr_copy_permute(SHARPY::DTypeId sharpytype,
+                                   SHARPY::Transceiver *tc, int64_t iNDims,
+                                   int64_t *iGShapePtr, int64_t *iOffsPtr,
+                                   void *iDataPtr, int64_t *iDataShapePtr,
+                                   int64_t *iDataStridesPtr, int64_t *oOffsPtr,
+                                   void *oDataPtr, int64_t *oDataShapePtr,
+                                   int64_t *oDataStridesPtr, int64_t *axesPtr) {
+#ifdef NO_TRANSCEIVER
+  initMPIRuntime();
+  tc = SHARPY::getTransceiver();
+#endif
+  if (!iGShapePtr || !iOffsPtr || !iDataPtr || !iDataShapePtr ||
+      !iDataStridesPtr || !oOffsPtr || !oDataPtr || !oDataShapePtr ||
+      !oDataStridesPtr || !tc) {
+    throw std::invalid_argument("Fatal: received nullptr in reshape");
+  }
+
+  std::vector<int64_t> oGShape(iNDims);
+  for (int64_t i = 0; i < iNDims; ++i) {
+    oGShape[i] = iGShapePtr[axesPtr[i]];
+  }
+  auto *oGShapePtr = oGShape.data();
+  const auto oNDims = iNDims;
+
+  assert(std::accumulate(&iGShapePtr[0], &iGShapePtr[iNDims], 1,
+                         std::multiplies<int64_t>()) ==
+         std::accumulate(&oGShapePtr[0], &oGShapePtr[oNDims], 1,
+                         std::multiplies<int64_t>()));
+  assert(std::accumulate(&oOffsPtr[1], &oOffsPtr[oNDims], 0,
+                         std::plus<int64_t>()) == 0);
+
+  const auto nRanks = tc->nranks();
+  const auto cRank = tc->rank();
+  if (nRanks <= cRank) {
+    throw std::out_of_range("Fatal: rank must be < number of ranks");
+  }
+
+  int64_t icSz = std::accumulate(&iGShapePtr[1], &iGShapePtr[iNDims], 1,
+                                 std::multiplies<int64_t>());
+  assert(icSz == std::accumulate(&iDataShapePtr[1], &iDataShapePtr[iNDims], 1,
+                                 std::multiplies<int64_t>()));
+  int64_t mySz = icSz * iDataShapePtr[0];
+  if (mySz / icSz != iDataShapePtr[0]) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+  int64_t myOff = iOffsPtr[0] * icSz;
+  if (myOff / icSz != iOffsPtr[0]) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+  int64_t myEnd = myOff + mySz;
+  if (myEnd < myOff) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+
+  int64_t oCSz = std::accumulate(&oGShapePtr[1], &oGShapePtr[oNDims], 1,
+                                 std::multiplies<int64_t>());
+  assert(oCSz == std::accumulate(&oDataShapePtr[1], &oDataShapePtr[oNDims], 1,
+                                 std::multiplies<int64_t>()));
+  int64_t myOSz = oCSz * oDataShapePtr[0];
+  if (myOSz / oCSz != oDataShapePtr[0]) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+  int64_t myOOff = oOffsPtr[0] * oCSz;
+  if (myOOff / oCSz != oOffsPtr[0]) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+  int64_t myOEnd = myOOff + myOSz;
+  if (myOEnd < myOOff) {
+    throw std::overflow_error("Fatal: Integer overflow in reshape");
+  }
+
+  // First we allgather the current and target partitioning
+  std::vector<Parts> parts(nRanks);
+  parts[cRank].iStart = iOffsPtr[0];
+  parts[cRank].iEnd = iOffsPtr[0] + iDataShapePtr[0];
+  parts[cRank].oStart = oOffsPtr[0];
+  parts[cRank].oEnd = oOffsPtr[0] + oDataShapePtr[0];
+  std::vector<int> counts(nRanks, 4);
+  std::vector<int> dspl(nRanks);
+  for (auto i = 0ul; i < nRanks; ++i) {
+    dspl[i] = 4 * i;
+  }
+  tc->gather(parts.data(), counts.data(), dspl.data(), SHARPY::INT64,
+             SHARPY::REPLICATED);
+
+  // Transpose
+  ndarray<T> input(iNDims, iGShapePtr, iOffsPtr, iDataPtr, iDataShapePtr,
+                   iDataStridesPtr);
+  ndarray<T> output(oNDims, oGShapePtr, oOffsPtr, oDataPtr, oDataShapePtr,
+                    oDataStridesPtr);
+  std::vector<int64_t> axes(axesPtr, axesPtr + iNDims);
+
+  std::vector<T> sendBuffer;
+  std::vector<T> receiveBuffer(output.lSize());
+  std::vector<int> sendSizes(nRanks);
+  std::vector<int> sendOffsets(nRanks);
+  std::vector<int> receiveSizes(nRanks);
+  std::vector<int> receiveOffsets(nRanks);
+
+  {
+    std::vector<std::vector<T>> sendRankBuffer(nRanks);
+
+    input.localIndices([&](const id &inputIndex) {
+      id outputIndex = inputIndex.permute(axes);
+      auto rank = getOutputRank(parts, outputIndex[0]);
+      sendRankBuffer[rank].push_back(input[inputIndex]);
+    });
+
+    int lastOffset = 0;
+    for (size_t rank = 0; rank < nRanks; rank++) {
+      sendSizes[rank] = sendRankBuffer[rank].size();
+      sendOffsets[rank] = lastOffset;
+      sendBuffer.insert(sendBuffer.end(), sendRankBuffer[rank].begin(),
+                        sendRankBuffer[rank].end());
+      lastOffset += sendSizes[rank];
+    }
+
+    output.localIndices([&](const id &outputIndex) {
+      id inputIndex = outputIndex.permute(axes);
+      auto rank = getInputRank(parts, inputIndex[0]);
+      ++receiveSizes[rank];
+    });
+    for (size_t rank = 1; rank < nRanks; rank++) {
+      receiveOffsets[rank] = receiveOffsets[rank - 1] + receiveSizes[rank - 1];
+    }
+  }
+
+  auto hdl = tc->alltoall(sendBuffer.data(), sendSizes.data(),
+                          sendOffsets.data(), sharpytype, receiveBuffer.data(),
+                          receiveSizes.data(), receiveOffsets.data());
+
+  auto wait = WaitPermute(tc, hdl, cRank, nRanks, std::move(parts),
+                          std::move(axes), std::move(oGShape), std::move(input),
+                          std::move(output), std::move(receiveBuffer),
+                          std::move(receiveOffsets), std::move(receiveSizes));
+
+  assert(parts.empty() && axes.empty() && receiveBuffer.empty() &&
+         receiveOffsets.empty() && receiveSizes.empty());
+
+  if (no_async) {
+    wait();
+    return nullptr;
+  }
+
+  return mkWaitHandle(std::move(wait));
+}
+
+/// @brief permute array
+template <typename T>
+WaitHandleBase *
+_idtr_copy_permute(SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,
+                   int64_t iNOffs, void *iLOffsDescr, int64_t iNDims,
+                   void *iDataDescr, int64_t oNOffs, void *oLOffsDescr,
+                   int64_t oNDims, void *oDataDescr, int64_t axesSzs,
+                   void *axesDescr) {
+
+  if (!iGShapeDescr || !iLOffsDescr || !iDataDescr || !oLOffsDescr ||
+      !oDataDescr || !axesDescr) {
+    throw std::invalid_argument(
+        "Fatal error: received nullptr in update_halo.");
+  }
+
+  auto sharpyType = SHARPY::DTYPE<T>::value;
+
+  // Construct unranked memrefs for metadata and data
+  MRIdx1d iGShape(iNSzs, iGShapeDescr);
+  MRIdx1d iOffs(iNOffs, iLOffsDescr);
+  SHARPY::UnrankedMemRefType<T> iData(iNDims, iDataDescr);
+  MRIdx1d oOffs(oNOffs, oLOffsDescr);
+  SHARPY::UnrankedMemRefType<T> oData(oNDims, oDataDescr);
+  MRIdx1d axes(axesSzs, axesDescr);
+
+  return _idtr_copy_permute<T>(sharpyType, tc, iNDims, iGShape.data(),
+                               iOffs.data(), iData.data(), iData.sizes(),
+                               iData.strides(), oOffs.data(), oData.data(),
+                               oData.sizes(), oData.strides(), axes.data());
+}
+
 extern "C" {
 #define TYPED_COPY_RESHAPE(_sfx, _typ)                                         \
   void *_idtr_copy_reshape_##_sfx(                                             \
@@ -591,6 +987,28 @@ TYPED_COPY_RESHAPE(i32, int32_t);
 TYPED_COPY_RESHAPE(i16, int16_t);
 TYPED_COPY_RESHAPE(i8, int8_t);
 TYPED_COPY_RESHAPE(i1, bool);
+
+#define TYPED_COPY_PERMUTE(_sfx, _typ)                                         \
+  void *_idtr_copy_permute_##_sfx(                                             \
+      SHARPY::Transceiver *tc, int64_t iNSzs, void *iGShapeDescr,              \
+      int64_t iNOffs, void *iLOffsDescr, int64_t iNDims, void *iLDescr,        \
+      int64_t oNOffs, void *oLOffsDescr, int64_t oNDims, void *oLDescr,        \
+      int64_t axesSzs, void *axesDescr) {                                      \
+    return _idtr_copy_permute<_typ>(                                           \
+        tc, iNSzs, iGShapeDescr, iNOffs, iLOffsDescr, iNDims, iLDescr, oNOffs, \
+        oLOffsDescr, oNDims, oLDescr, axesSzs, axesDescr);                     \
+  }                                                                            \
+  _Pragma(STRINGIFY(weak _mlir_ciface__idtr_copy_permute_##_sfx =              \
+                        _idtr_copy_permute_##_sfx))
+
+TYPED_COPY_PERMUTE(f64, double);
+TYPED_COPY_PERMUTE(f32, float);
+TYPED_COPY_PERMUTE(i64, int64_t);
+TYPED_COPY_PERMUTE(i32, int32_t);
+TYPED_COPY_PERMUTE(i16, int16_t);
+TYPED_COPY_PERMUTE(i8, int8_t);
+// FIXME: bool is not supported yet due to std::vector<bool>
+// TYPED_COPY_PERMUTE(i1, bool);
 
 } // extern "C"
 

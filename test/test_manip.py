@@ -93,3 +93,46 @@ class TestManip:
         a = sp.arange(0, 8, 1, sp.int32)
         b = a.to_device(device="GPU")
         assert numpy.allclose(sp.to_numpy(b), [0, 1, 2, 3, 4, 5, 6, 7])
+
+    def test_permute_dims1(self):
+        a = sp.arange(0, 10, 1, sp.int64)
+        b = sp.reshape(a, (2, 5))
+        c1 = sp.to_numpy(sp.permute_dims(b, [1, 0]))
+        c2 = sp.to_numpy(b).transpose(1, 0)
+        assert numpy.allclose(c1, c2)
+
+    def test_permute_dims2(self):
+        # === sharpy
+        sp_a = sp.arange(0, 2 * 3 * 4, 1)
+        sp_a = sp.reshape(sp_a, [2, 3, 4])
+
+        # b = a.swapaxes(1,0).swapaxes(1,2)
+        sp_b = sp.permute_dims(sp_a, (1, 0, 2))  # 2x4x4 -> 4x2x4 || 4x4x4
+        sp_b = sp.permute_dims(sp_b, (0, 2, 1))  # 4x2x4 -> 4x4x2 || 4x4x4
+
+        # c = b.swapaxes(1,2).swapaxes(1,0)
+        sp_c = sp.permute_dims(sp_b, (0, 2, 1))
+        sp_c = sp.permute_dims(sp_c, (1, 0, 2))
+
+        assert numpy.allclose(sp.to_numpy(sp_a), sp.to_numpy(sp_c))
+
+        # d = a.swapaxes(2,1).swapaxes(2,0)
+        sp_d = sp.permute_dims(sp_a, (0, 2, 1))
+        sp_d = sp.permute_dims(sp_d, (2, 1, 0))
+
+        # c = d.swapaxes(2,1).swapaxes(0,1)
+        sp_e = sp.permute_dims(sp_d, (0, 2, 1))
+        sp_e = sp.permute_dims(sp_e, (1, 0, 2))
+
+        # === numpy
+        np_a = numpy.arange(0, 2 * 3 * 4, 1)
+        np_a = numpy.reshape(np_a, [2, 3, 4])
+
+        np_b = np_a.swapaxes(1, 0).swapaxes(1, 2)
+        assert numpy.allclose(sp.to_numpy(sp_b), np_b)
+
+        np_d = np_a.swapaxes(2, 1).swapaxes(2, 0)
+        assert numpy.allclose(sp.to_numpy(sp_d), np_d)
+
+        np_e = np_d.swapaxes(2, 1).swapaxes(0, 1)
+        assert numpy.allclose(sp.to_numpy(sp_e), np_e)
