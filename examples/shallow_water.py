@@ -54,18 +54,18 @@ def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
         import sharpy as np
         from sharpy import fini, init, sync
-        from sharpy.numpy import fromfunction as _fromfunction
 
         device = os.getenv("SHARPY_DEVICE", "")
         create_full = partial(np.full, device=device)
-        fromfunction = partial(_fromfunction, device=device)
+
+        def transpose(a):
+            return np.permute_dims(a, [1, 0])
 
         all_axes = [0, 1]
         init(False)
 
     elif backend == "numpy":
         import numpy as np
-        from numpy import fromfunction
 
         if comm is not None:
             assert (
@@ -73,6 +73,7 @@ def run(n, backend, datatype, benchmark_mode):
             ), "Numpy backend only supports serial execution."
 
         create_full = np.full
+        transpose = np.transpose
 
         fini = sync = lambda x=None: None
         all_axes = None
@@ -110,34 +111,32 @@ def run(n, backend, datatype, benchmark_mode):
     t_export = 0.02
     t_end = 1.0
 
-    # coordinate arrays
-    x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2,
-        (nx, ny),
-        dtype=dtype,
-    )
-    y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2,
-        (nx, ny),
-        dtype=dtype,
-    )
-    x_u_2d = fromfunction(lambda i, j: xmin + i * dx, (nx + 1, ny), dtype=dtype)
-    y_u_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2,
-        (nx + 1, ny),
-        dtype=dtype,
-    )
-    x_v_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2,
-        (nx, ny + 1),
-        dtype=dtype,
-    )
-    y_v_2d = fromfunction(lambda i, j: ymin + j * dy, (nx, ny + 1), dtype=dtype)
+    def ind_arr(shape, columns=False):
+        """Construct an (nx, ny) array where each row/col is an arange"""
+        nx, ny = shape
+        if columns:
+            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % nx
+            ind = transpose(np.reshape(ind, (ny, nx)))
+        else:
+            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % ny
+            ind = np.reshape(ind, (nx, ny))
+        return ind.astype(dtype)
 
+    # coordinate arrays
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
     V_shape = (nx, ny + 1)
     F_shape = (nx + 1, ny + 1)
+    sync()
+    x_t_2d = xmin + ind_arr(T_shape, True) * dx + dx / 2
+    y_t_2d = ymin + ind_arr(T_shape) * dy + dy / 2
+
+    x_u_2d = xmin + ind_arr(U_shape, True) * dx
+    y_u_2d = ymin + ind_arr(U_shape) * dy + dy / 2
+
+    x_v_2d = xmin + ind_arr(V_shape, True) * dx + dx / 2
+    y_v_2d = ymin + ind_arr(V_shape) * dy
+    sync()
 
     dofs_T = int(numpy.prod(numpy.asarray(T_shape)))
     dofs_U = int(numpy.prod(numpy.asarray(U_shape)))
