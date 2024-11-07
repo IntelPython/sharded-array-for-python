@@ -204,14 +204,6 @@ def run(n, backend, datatype, benchmark_mode):
         bath = 1.0
         return bath * create_full(T_shape, 1.0, dtype)
 
-    # inital elevation
-    u0, v0, e0 = exact_solution(
-        0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d
-    )
-    e[:, :] = e0
-    u[:, :] = u0
-    v[:, :] = v0
-
     # set bathymetry
     h[:, :] = bathymetry(x_t_2d, y_t_2d, lx, ly)
     # steady state potential energy
@@ -327,6 +319,18 @@ def run(n, backend, datatype, benchmark_mode):
         u[1:-1, :] = u[1:-1, :] / 3.0 + 2.0 / 3.0 * (u2[1:-1, :] + dt * dudt)
         v[:, 1:-1] = v[:, 1:-1] / 3.0 + 2.0 / 3.0 * (v2[:, 1:-1] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
+
+    # warm up jit cache
+    step(u, v, e, u1, v1, e1, u2, v2, e2)
+    sync()
+
+    # initial solution
+    u0, v0, e0 = exact_solution(
+        0, x_t_2d, y_t_2d, x_u_2d, y_u_2d, x_v_2d, y_v_2d
+    )
+    e[:, :] = e0
+    u[:, :] = u0
+    v[:, :] = v0
 
     t = 0
     i_export = 0
