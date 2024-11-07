@@ -169,9 +169,6 @@ def run(n, backend, datatype, benchmark_mode):
         sol_t = numpy.cos(2 * omega * t)
         return amp * sol_x * sol_y * sol_t
 
-    # inital elevation
-    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
-
     # compute time step
     alpha = 0.5
     c = (g * h) ** 0.5
@@ -221,6 +218,16 @@ def run(n, backend, datatype, benchmark_mode):
         u[1:-1, :] = u[1:-1, :] / 3.0 + 2.0 / 3.0 * (u2[1:-1, :] + dt * dudt)
         v[:, 1:-1] = v[:, 1:-1] / 3.0 + 2.0 / 3.0 * (v2[:, 1:-1] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
+
+    # warm up jit cache
+    step(u, v, e, u1, v1, e1, u2, v2, e2)
+    sync()
+
+    # initial solution
+    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
+    u[:, :] = create_full(U_shape, 0.0, dtype)
+    v[:, :] = create_full(V_shape, 0.0, dtype)
+    sync()
 
     t = 0
     i_export = 0
