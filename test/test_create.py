@@ -26,6 +26,41 @@ def creator(request):
     return request.param[0], request.param[1]
 
 
+def test_arange():
+    n = 10
+    a = sp.arange(0, n, 1, dtype=sp.int32, device=device)
+    assert tuple(a.shape) == (n,)
+    assert numpy.allclose(sp.to_numpy(a), list(range(n)))
+
+
+def test_arange2():
+    n = 10
+    a = sp.arange(0, n, dtype=sp.int32, device=device)
+    assert tuple(a.shape) == (n,)
+    assert numpy.allclose(sp.to_numpy(a), list(range(n)))
+
+
+def test_arange3():
+    n = 10
+    a = sp.arange(n, device=device)
+    assert tuple(a.shape) == (n,)
+    assert numpy.allclose(sp.to_numpy(a), list(range(n)))
+
+
+def test_arange_empty():
+    n = 10
+    a = sp.arange(n, 0, device=device)
+    assert tuple(a.shape) == (0,)
+    assert numpy.allclose(sp.to_numpy(a), list())
+
+
+def test_arange_empty2():
+    n = 10
+    a = sp.arange(0, n, -1, device=device)
+    assert tuple(a.shape) == (0,)
+    assert numpy.allclose(sp.to_numpy(a), list())
+
+
 def test_create_datatypes(creator, datatype):
     shape = (6, 4)
     func, expected_value = creator
@@ -67,9 +102,7 @@ def test_full_invalid_shape():
         sp.full(shape, value, dtype=datatype, device=device)
 
 
-@pytest.mark.parametrize(
-    "start,end,step", [(0, 10, -1), (0, -10, 1), (0, 99999999999999999999, 1)]
-)
+@pytest.mark.parametrize("start,end,step", [(0, 99999999999999999999, 1)])
 def tests_arange_invalid(start, end, step):
     with pytest.raises(TypeError):
         sp.arange(start, end, step, dtype=sp.int32, device=device)
