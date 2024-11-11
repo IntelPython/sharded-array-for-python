@@ -61,7 +61,6 @@ def run(n, backend, datatype, benchmark_mode):
         def transpose(a):
             return np.permute_dims(a, [1, 0])
 
-        all_axes = [0, 1]
         init(False)
 
     elif backend == "numpy":
@@ -76,7 +75,6 @@ def run(n, backend, datatype, benchmark_mode):
         transpose = np.transpose
 
         fini = sync = lambda x=None: None
-        all_axes = None
     else:
         raise ValueError(f'Unknown backend: "{backend}"')
 
@@ -240,9 +238,9 @@ def run(n, backend, datatype, benchmark_mode):
         t = i * dt
 
         if t >= next_t_export - 1e-8:
-            _elev_max = np.max(e, all_axes)
-            _u_max = np.max(u, all_axes)
-            _total_v = np.sum(e + h, all_axes)
+            _elev_max = np.max(e)
+            _u_max = np.max(u)
+            _total_v = np.sum(e + h)
 
             elev_max = float(_elev_max)
             u_max = float(_u_max)
@@ -279,7 +277,7 @@ def run(n, backend, datatype, benchmark_mode):
 
     e_exact = exact_elev(t, x_t_2d, y_t_2d, lx, ly)
     err2 = (e_exact - e) * (e_exact - e) * dx * dy / lx / ly
-    err_L2 = math.sqrt(float(np.sum(err2, all_axes)))
+    err_L2 = math.sqrt(float(np.sum(err2)))
     info(f"L2 error: {err_L2:7.5e}")
 
     if nx == 128 and ny == 128 and not benchmark_mode:
