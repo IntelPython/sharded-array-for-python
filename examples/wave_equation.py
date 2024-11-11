@@ -54,18 +54,18 @@ def run(n, backend, datatype, benchmark_mode):
     if backend == "sharpy":
         import sharpy as np
         from sharpy import fini, init, sync
-        from sharpy.numpy import fromfunction as _fromfunction
 
         device = os.getenv("SHARPY_DEVICE", "")
         create_full = partial(np.full, device=device)
-        fromfunction = partial(_fromfunction, device=device)
+
+        def transpose(a):
+            return np.permute_dims(a, [1, 0])
 
         all_axes = [0, 1]
         init(False)
 
     elif backend == "numpy":
         import numpy as np
-        from numpy import fromfunction
 
         if comm is not None:
             assert (
@@ -73,6 +73,7 @@ def run(n, backend, datatype, benchmark_mode):
             ), "Numpy backend only supports serial execution."
 
         create_full = np.full
+        transpose = np.transpose
 
         fini = sync = lambda x=None: None
         all_axes = None
@@ -110,17 +111,23 @@ def run(n, backend, datatype, benchmark_mode):
     t_export = 0.02
     t_end = 1.0
 
-    # coordinate arrays
-    x_t_2d = fromfunction(
-        lambda i, j: xmin + i * dx + dx / 2, (nx, ny), dtype=dtype
-    )
-    y_t_2d = fromfunction(
-        lambda i, j: ymin + j * dy + dy / 2, (nx, ny), dtype=dtype
-    )
+    def ind_arr(shape, columns=False):
+        """Construct an (nx, ny) array where each row/col is an arange"""
+        nx, ny = shape
+        if columns:
+            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % nx
+            ind = transpose(np.reshape(ind, (ny, nx)))
+        else:
+            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % ny
+            ind = np.reshape(ind, (nx, ny))
+        return ind.astype(dtype)
 
+    # coordinate arrays
     T_shape = (nx, ny)
     U_shape = (nx + 1, ny)
     V_shape = (nx, ny + 1)
+    x_t_2d = xmin + ind_arr(T_shape, True) * dx + dx / 2
+    y_t_2d = ymin + ind_arr(T_shape) * dy + dy / 2
 
     dofs_T = int(numpy.prod(numpy.asarray(T_shape)))
     dofs_U = int(numpy.prod(numpy.asarray(U_shape)))
@@ -161,9 +168,6 @@ def run(n, backend, datatype, benchmark_mode):
         # NOTE sharpy fails with scalar computation
         sol_t = numpy.cos(2 * omega * t)
         return amp * sol_x * sol_y * sol_t
-
-    # inital elevation
-    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
 
     # compute time step
     alpha = 0.5
@@ -214,6 +218,16 @@ def run(n, backend, datatype, benchmark_mode):
         u[1:-1, :] = u[1:-1, :] / 3.0 + 2.0 / 3.0 * (u2[1:-1, :] + dt * dudt)
         v[:, 1:-1] = v[:, 1:-1] / 3.0 + 2.0 / 3.0 * (v2[:, 1:-1] + dt * dvdt)
         e[:, :] = e[:, :] / 3.0 + 2.0 / 3.0 * (e2[:, :] + dt * dedt)
+
+    # warm up jit cache
+    step(u, v, e, u1, v1, e1, u2, v2, e2)
+    sync()
+
+    # initial solution
+    e[:, :] = exact_elev(0.0, x_t_2d, y_t_2d, lx, ly)
+    u[:, :] = create_full(U_shape, 0.0, dtype)
+    v[:, :] = create_full(V_shape, 0.0, dtype)
+    sync()
 
     t = 0
     i_export = 0
