@@ -525,7 +525,7 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
     if (isStrided) {
       unpack(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
              oDataPtr);
-      delete[] (char *)rBuff;
+      delete[](char *) rBuff;
     }
   };
   assert(sendbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
