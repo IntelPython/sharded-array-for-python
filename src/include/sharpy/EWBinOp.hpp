@@ -12,7 +12,6 @@
 
 namespace SHARPY {
 struct EWBinOp {
-  static FutureArray *op(EWBinOpId op, const py::object &a,
-                         const py::object &b);
+  static FutureArray *op(EWBinOpId op, py::object &a, const py::object &b);
 };
 } // namespace SHARPY

@@ -3,39 +3,54 @@
 // Implementation of reduction operations
 
 #include "sharpy/ReduceOp.hpp"
+#include "sharpy/BodyBuilder.hpp"
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/jit/mlir.hpp"
+#include <mlir/Dialect/Linalg/IR/Linalg.h>
 
-#include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/Dist/Utils/Utils.h>
-#include <imex/Dialect/NDArray/IR/NDArrayOps.h>
-#include <mlir/Dialect/Shape/IR/Shape.h>
-#include <mlir/IR/Builders.h>
+#include <algorithm>
 
 namespace SHARPY {
 
 // convert id of our reduction op to id of imex::ndarray reduction op
-static ::imex::ndarray::ReduceOpId sharpy2mlir(const ReduceOpId rop) {
+static mlir::Value createReduceOp(::mlir::OpBuilder &b,
+                                  const ::mlir::Location &loc,
+                                  const ReduceOpId rop,
+                                  mlir::ShapedType outType, mlir::Value a,
+                                  dim_vec_type axes) {
+  std::sort(axes.begin(), axes.end());
+
+  EWBinOpId bop = EWBINOP_LAST;
   switch (rop) {
-  case MEAN:
-    return ::imex::ndarray::MEAN;
   case PROD:
-    return ::imex::ndarray::PROD;
+    bop = MULTIPLY;
+    break;
   case SUM:
-    return ::imex::ndarray::SUM;
-  case STD:
-    return ::imex::ndarray::STD;
-  case VAR:
-    return ::imex::ndarray::VAR;
+    bop = ADD;
+    break;
   case MAX:
-    return ::imex::ndarray::MAX;
+    bop = MAXIMUM;
+    break;
   case MIN:
-    return ::imex::ndarray::MIN;
+    bop = MINIMUM;
+    break;
+  case MEAN:
+  case STD:
+  case VAR:
+    throw std::invalid_argument("Reduction operation not implemented.");
   default:
-    throw std::invalid_argument("Unknown reduction operation");
+    throw std::invalid_argument("Unknown reduction operation.");
   }
+
+  auto bodyBuilder = getBodyBuilder(bop, outType);
+  auto empty = b.create<mlir::tensor::EmptyOp>(loc, outType.getShape(),
+                                               outType.getElementType());
+  return b
+      .create<mlir::linalg::ReduceOp>(loc, a, empty->getResult(0), axes,
+                                      bodyBuilder)
+      ->getResult(0);
 }
 
 struct DeferredReduceOp : public Deferred {
@@ -49,27 +64,19 @@ struct DeferredReduceOp : public Deferred {
       : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
-  void run() override {
-#if 0
-        const auto a = std::move(Registry::get(_a).get());
-        set_value(std::move(TypeDispatch<x::ReduceOp>(a, _op, _dim)));
-#endif
-  }
-
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, Registry::get(_a));
     // return type 0d with same dtype as input
-    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
-    auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
+    auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
+    auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
+        aTyp.cloneWith(shape(), aTyp.getElementType()));
     // reduction op
-    auto mop = sharpy2mlir(_op);
-    auto op =
-        builder.getIntegerAttr(builder.getIntegerType(sizeof(mop) * 8), mop);
+    auto res = createReduceOp(builder, loc, _op, outTyp, av, _dim);
+
     dm.addVal(
-        this->guid(),
-        builder.create<::imex::ndarray::ReductionOp>(loc, outTyp, op, av),
+        this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,

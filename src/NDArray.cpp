@@ -19,14 +19,14 @@ namespace py = pybind11;
 namespace SHARPY {
 
 NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
-                 const std::string &device_, uint64_t team_, void *l_allocated,
-                 void *l_aligned, intptr_t l_offset, const intptr_t *l_sizes,
-                 const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-                 intptr_t o_offset, const intptr_t *o_sizes,
-                 const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-                 intptr_t r_offset, const intptr_t *r_sizes,
-                 const intptr_t *r_strides, std::vector<int64_t> &&loffs,
-                 rank_type owner)
+                 const std::string &device_, const std::string &team_,
+                 void *l_allocated, void *l_aligned, intptr_t l_offset,
+                 const intptr_t *l_sizes, const intptr_t *l_strides,
+                 void *o_allocated, void *o_aligned, intptr_t o_offset,
+                 const intptr_t *o_sizes, const intptr_t *o_strides,
+                 void *r_allocated, void *r_aligned, intptr_t r_offset,
+                 const intptr_t *r_sizes, const intptr_t *r_strides,
+                 std::vector<int64_t> &&loffs, rank_type owner)
     : ArrayMeta(guid_, dtype_, gShape, device_, team_), _owner(owner),
       _lhsHalo(l_allocated ? gShape.size() : 0, l_allocated, l_aligned,
                l_offset, l_sizes, l_strides),
@@ -41,7 +41,8 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
 }
 
 NDArray::NDArray(id_type guid_, DTypeId dtype_, const shape_type &shp,
-                 const std::string &device_, uint64_t team_, rank_type owner)
+                 const std::string &device_, const std::string &team_,
+                 rank_type owner)
     : ArrayMeta(guid_, dtype_, shp, device_, team_), _owner(owner) {
 
   auto esz = sizeof_dtype(dtype_);
@@ -65,7 +66,8 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, const shape_type &shp,
 
 // incomplete, useful for computing meta information
 NDArray::NDArray(id_type guid_, const int64_t *shape, uint64_t N,
-                 const std::string &device_, uint64_t team_, rank_type owner)
+                 const std::string &device_, const std::string &team_,
+                 rank_type owner)
     : ArrayMeta(guid_, DTYPE_LAST, {shape, shape + N}, device_, team_),
       _owner(owner) {
   assert(ndims() <= 1);
@@ -74,7 +76,7 @@ NDArray::NDArray(id_type guid_, const int64_t *shape, uint64_t N,
 // from numpy
 NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
                  const ssize_t *shape, const intptr_t *strides, void *data,
-                 const std::string &device_, uint64_t team_)
+                 const std::string &device_, const std::string &team_)
     : ArrayMeta(guid_, dtype_, {shape, shape + ndims}, device_, team_),
       _owner(NOOWNER),
       _lData(ndims, data, data, 0, reinterpret_cast<const intptr_t *>(shape),

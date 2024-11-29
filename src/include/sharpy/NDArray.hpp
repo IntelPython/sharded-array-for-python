@@ -7,6 +7,7 @@
 
 #include "MemRefType.hpp"
 #include "Registry.hpp"
+#include "Transceiver.hpp"
 #include "TypeDispatch.hpp"
 #include "array_i.hpp"
 #include "p2c_ids.hpp"
@@ -48,7 +49,7 @@ public:
 
   // construct from a and MLIR-jitted execution
   NDArray(id_type guid, DTypeId dtype, shape_type gShape,
-          const std::string &device, uint64_t team, void *l_allocated,
+          const std::string &device, const std::string &team, void *l_allocated,
           void *l_aligned, intptr_t l_offset, const intptr_t *l_sizes,
           const intptr_t *l_strides, void *o_allocated, void *o_aligned,
           intptr_t o_offset, const intptr_t *o_sizes, const intptr_t *o_strides,
@@ -57,11 +58,13 @@ public:
           std::vector<int64_t> &&loffs, rank_type owner = NOOWNER);
 
   NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
-          const std::string &device, uint64_t team, rank_type owner = NOOWNER);
+          const std::string &device, const std::string &team,
+          rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
   NDArray(id_type guid, const int64_t *shape, uint64_t N,
-          const std::string &device, uint64_t team, rank_type owner = NOOWNER);
+          const std::string &device, const std::string &team,
+          rank_type owner = NOOWNER);
 
   // incomplete, useful for computing meta information
   NDArray() : _owner(REPLICATED) {
@@ -73,7 +76,7 @@ public:
   // FIXME multi-proc
   NDArray(id_type guid, DTypeId dtype, ssize_t ndims, const ssize_t *shape,
           const intptr_t *strides, void *data, const std::string &device,
-          uint64_t team);
+          const std::string &team);
 
   // set the base array
   void set_base(const array_i::ptr_type &base);
@@ -108,7 +111,7 @@ public:
   /// @returnnumber of dimensions of array
   virtual int ndims() const override { return ArrayMeta::rank(); }
 
-  uint64_t team() const { return ArrayMeta::team(); }
+  const std::string &team() const { return ArrayMeta::team(); }
   const std::string &device() const { return ArrayMeta::device(); }
 
   /// @return global number of elements in array
@@ -162,9 +165,8 @@ public:
   rank_type owner() const { return _owner; }
 
   /// @return Transceiver linked to this array
-  Transceiver *transceiver() const {
-    return reinterpret_cast<Transceiver *>(team());
-  }
+  // FIXME
+  Transceiver *transceiver() const { return getTransceiver(); }
 
   /// @return true if array is replicated across all process ranks
   bool is_replicated() const { return _owner == REPLICATED; }

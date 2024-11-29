@@ -90,21 +90,6 @@ api_categories = OrderedDict(
             # non standard from here
             "erf",  # (x, /)
         ],
-        "IEWBinOp": [
-            # inplace operators
-            "__iadd__",
-            "__iand__",
-            "__ifloordiv__",
-            "__ilshift__",
-            "__imod__",
-            "__imul__",
-            "__ior__",
-            "__ipow__",
-            "__irshift__",
-            "__isub__",
-            "__itruediv__",
-            "__ixor__",
-        ],
         "EWBinOp": [
             "__add__",  # (self, other, /)
             "__and__",  # (self, other, /)
@@ -125,6 +110,19 @@ api_categories = OrderedDict(
             "__sub__",  # (self, other, /)
             "__truediv__",  # (self, other, /)
             "__xor__",  # (self, other, /)
+            # inplace operators
+            "__iadd__",
+            "__iand__",
+            "__ifloordiv__",
+            "__ilshift__",
+            "__imod__",
+            "__imul__",
+            "__ior__",
+            "__ipow__",
+            "__irshift__",
+            "__isub__",
+            "__itruediv__",
+            "__ixor__",
             # reflected operators
             "__radd__",
             "__rand__",
@@ -158,9 +156,13 @@ api_categories = OrderedDict(
             "multiply",  # (x1, x2, /)
             "less",  # (x1, x2, /)
             "not_equal",  # (x1, x2, /)
+            "power",  # (x1, x2, /)
             "pow",  # (x1, x2, /)
             "remainder",  # (x1, x2, /)
             "subtract",  # (x1, x2, /)
+            "maximum",  # (x1, x2, /)
+            "minimum",  # (x1, x2, /)
+            "modulo",  # (x1, x2, /)
         ],
         "ReduceOp": [
             "max",  # (x, /, *, axis=None, keepdims=False)

@@ -14,13 +14,15 @@ class Transceiver {
 public:
   using WaitHandle = uint32_t;
 
-  virtual ~Transceiver(){};
+  virtual ~Transceiver() {};
 
   virtual bool is_cw() = 0;
   virtual bool is_spmd() = 0;
 
   virtual rank_type nranks() const = 0;
   virtual rank_type rank() const = 0;
+
+  virtual std::string mesh() const = 0;
 
   // Barrier
   virtual void barrier() = 0;

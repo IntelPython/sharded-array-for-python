@@ -22,14 +22,15 @@ public:
   FutureArray(array_i::future_type &&f)
       : _ftx(std::forward<array_i::future_type>(f)) {}
   FutureArray(std::shared_future<array_i::ptr_type> &&f, id_type id, DTypeId dt,
-              const shape_type &shape, const std::string &device, uint64_t team)
+              const shape_type &shape, const std::string &device,
+              const std::string &team)
       : _ftx(std::forward<std::shared_future<array_i::ptr_type>>(f), id, dt,
              shape, device, team) {}
   FutureArray(std::shared_future<array_i::ptr_type> &&f, id_type id, DTypeId dt,
-              shape_type &&shape, std::string &&device, uint64_t team)
+              shape_type &&shape, std::string &&device, std::string &&team)
       : _ftx(std::forward<std::shared_future<array_i::ptr_type>>(f), id, dt,
              std::forward<shape_type>(shape), std::forward<std::string>(device),
-             team) {}
+             std::forward<std::string>(team)) {}
 
   ~FutureArray() {
     if (!finied)

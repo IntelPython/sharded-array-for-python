@@ -45,7 +45,7 @@ find_library(LIBZ z NAMES libz.so libz.so.1 REQUIRED PATHS ${ZLIB_ROOT}/lib)
 message("FOUND zlib ${LIBZ}")
 set(ZLIB_LIBRARY ${LIBZ})
 find_package(TBB REQUIRED)
-find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
+find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 # FindMPI does not work with iMPI conda packages
 set(MPI_INCLUDE_PATH $ENV{I_MPI_ROOT}/include)
@@ -113,10 +113,10 @@ set(Hpps ${Hpps} ${JitHpps} ${P2C_HPP})
 
 set(SHARPYSrcs
     ${PROJECT_SOURCE_DIR}/src/_sharpy.cpp
+    ${PROJECT_SOURCE_DIR}/src/BodyBuilder.cpp
     ${PROJECT_SOURCE_DIR}/src/Creator.cpp
     ${PROJECT_SOURCE_DIR}/src/EWBinOp.cpp
     ${PROJECT_SOURCE_DIR}/src/EWUnyOp.cpp
-    ${PROJECT_SOURCE_DIR}/src/IEWBinOp.cpp
     ${PROJECT_SOURCE_DIR}/src/IO.cpp
     ${PROJECT_SOURCE_DIR}/src/LinAlgOp.cpp
     ${PROJECT_SOURCE_DIR}/src/ManipOp.cpp
@@ -140,7 +140,7 @@ set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/Transceiver.cpp
 )
 
-pybind11_add_module(_sharpy MODULE ${SHARPYSrcs} ${Hpps})
+pybind11_add_module(_sharpy ${SHARPYSrcs} ${Hpps})
 add_library(idtr SHARED ${IDTRSrcs} ${Hpps})
 set(AllTargets _sharpy idtr)
 
@@ -164,6 +164,8 @@ get_property(mlir_extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 get_property(mlir_translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
 get_property(imex_dialect_libs GLOBAL PROPERTY IMEX_DIALECT_LIBS)
 get_property(imex_conversion_libs GLOBAL PROPERTY IMEX_CONVERSION_LIBS)
+get_property(imex_extension_libs GLOBAL PROPERTY IMEX_EXTENSION_LIBS)
+get_property(imex_translation_libs GLOBAL PROPERTY IMEX_TRANSLATION_LIBS)
 
 target_link_directories(_sharpy PRIVATE ${CONDA_PREFIX}/lib ${IMEX_ROOT}/lib )
 target_link_directories(idtr PRIVATE ${CONDA_PREFIX}/lib)
@@ -175,8 +177,11 @@ target_link_libraries(_sharpy PRIVATE
     ${mlir_translation_libs}
     MLIROptLib
     MLIRExecutionEngine
+    MLIRCopyOpInterface
     ${imex_dialect_libs}
     ${imex_conversion_libs}
+    ${imex_extension_libs}
+    ${imex_translation_libs}
     IMEXTransforms
     IMEXUtil
     LLVMX86CodeGen

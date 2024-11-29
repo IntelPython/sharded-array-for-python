@@ -10,13 +10,10 @@
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
 
-#include <imex/Dialect/Dist/IR/DistOps.h>
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <imex/Utils/PassUtils.h>
 
-#include <mlir/Dialect/Arith/IR/Arith.h>
-#include <mlir/Dialect/Linalg/IR/Linalg.h>
-#include <mlir/Dialect/Shape/IR/Shape.h>
+#include <mlir/Dialect/Mesh/IR/MeshOps.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 
@@ -24,11 +21,12 @@ namespace SHARPY {
 
 static bool FORCE_DIST = get_bool_env("SHARPY_FORCE_DIST");
 
-inline uint64_t mkTeam(uint64_t team) {
-  if (team && (FORCE_DIST || getTransceiver()->nranks() > 1)) {
-    return 1;
+inline const std::string &mkTeam(const std::string &team) {
+  if (!team.empty() && (FORCE_DIST || getTransceiver()->nranks() > 1)) {
+    return team;
   }
-  return 0;
+  static std::string none;
+  return none;
 }
 
 // check that shape elements are non-negative
@@ -41,12 +39,32 @@ void validateShape(const shape_type &shape) {
   }
 }
 
+imex::ndarray::EnvsAttr mkEnvs(::mlir::Builder &builder, int64_t rank,
+                               const std::string &device) {
+  return imex::ndarray::EnvsAttr::get(
+      builder.getContext(),
+      {::imex::region::GPUEnvAttr::get(builder.getStringAttr(device))});
+}
+
+static mlir::Value shardNow(::mlir::OpBuilder &builder,
+                            const ::mlir::Location &loc, mlir::Value val,
+                            const std::string &team) {
+  if (team.empty()) {
+    return val;
+  }
+  mlir::SmallVector<mlir::mesh::MeshAxesAttr> splitAxes{
+      mlir::mesh::MeshAxesAttr::get(builder.getContext(), {0})};
+  mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
+      loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
+  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
+}
+
 struct DeferredFull : public Deferred {
   PyScalar _val;
 
   DeferredFull() = default;
   DeferredFull(const shape_type &shape, PyScalar val, DTypeId dtype,
-               const std::string &device, uint64_t team)
+               const std::string &device, const std::string &team)
       : Deferred(dtype, shape, device, team), _val(val) {
     validateShape(shape);
   }
@@ -54,8 +72,8 @@ struct DeferredFull : public Deferred {
   template <typename T> struct ValAndDType {
     static ::mlir::Value op(::mlir::OpBuilder &builder,
                             const ::mlir::Location &loc, const PyScalar &val,
-                            ::imex::ndarray::DType &dtyp) {
-      dtyp = jit::PT_DTYPE<T>::value;
+                            ::mlir::Type &dtyp) {
+      dtyp = jit::getMLIRType(builder, DTYPE<T>::value);
 
       if (is_none(val)) {
         return {};
@@ -73,18 +91,25 @@ struct DeferredFull : public Deferred {
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    ::mlir::SmallVector<::mlir::Value> shp(rank());
-    for (auto i = 0ul; i < rank(); ++i) {
-      shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
-    }
 
-    ::imex::ndarray::DType dtyp;
+    mlir::Type dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
-    auto envs = jit::mkEnvs(builder, rank(), _device, team());
+    auto envs = mkEnvs(builder, rank(), _device);
+    mlir::Value res;
+    if (val) {
+      ::mlir::SmallVector<::mlir::Value> shp(rank());
+      for (auto i = 0ul; i < rank(); ++i) {
+        shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
+      }
+      auto resType = mlir::RankedTensorType::get(shape(), dtyp, envs);
+      res = builder.create<::mlir::tensor::SplatOp>(loc, resType, val, shp);
+    } else {
+      res = builder.create<::mlir::tensor::EmptyOp>(loc, shape(), dtyp, envs);
+    }
+    res = shardNow(builder, loc, res, team());
 
     dm.addVal(
-        this->guid(),
-        builder.create<::imex::ndarray::CreateOp>(loc, shp, dtyp, val, envs),
+        this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,
@@ -113,7 +138,7 @@ struct DeferredFull : public Deferred {
 
 FutureArray *Creator::full(const shape_type &shape, const py::object &val,
                            DTypeId dtype, const std::string &device,
-                           uint64_t team) {
+                           const std::string &team) {
   auto v = mk_scalar(val, dtype);
   return new FutureArray(
       defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
@@ -126,7 +151,7 @@ struct DeferredArange : public Deferred {
 
   DeferredArange() = default;
   DeferredArange(uint64_t start, uint64_t end, uint64_t step, DTypeId dtype,
-                 const std::string &device, uint64_t team)
+                 const std::string &device, const std::string &team)
       : Deferred(dtype,
                  {static_cast<shape_type::value_type>(
                      (end - start + step + (step < 0 ? 1 : -1)) / step)},
@@ -146,13 +171,15 @@ struct DeferredArange : public Deferred {
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _start + _num * _step);
     auto num = ::imex::createIndex(loc, builder, _num);
-    auto dtyp = jit::getPTDType(dtype());
-    auto envs = jit::mkEnvs(builder, rank(), _device, team());
+    auto dtyp = jit::getMLIRType(builder, dtype());
+    auto envs = mkEnvs(builder, rank(), _device);
+    auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
+    mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
+        loc, outType, start, stop, num, false);
+    res = shardNow(builder, loc, res, team());
 
     dm.addVal(
-        this->guid(),
-        builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
-                                                    false, dtyp, envs),
+        this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,
@@ -182,7 +209,7 @@ struct DeferredArange : public Deferred {
 
 FutureArray *Creator::arange(uint64_t start, uint64_t end, uint64_t step,
                              DTypeId dtype, const std::string &device,
-                             uint64_t team) {
+                             const std::string &team) {
   return new FutureArray(
       defer<DeferredArange>(start, end, step, dtype, device, mkTeam(team)));
 }
@@ -196,7 +223,8 @@ struct DeferredLinspace : public Deferred {
 
   DeferredLinspace() = default;
   DeferredLinspace(double start, double end, uint64_t num, bool endpoint,
-                   DTypeId dtype, const std::string &device, uint64_t team)
+                   DTypeId dtype, const std::string &device,
+                   const std::string &team)
       : Deferred(dtype, {static_cast<shape_type::value_type>(num)}, device,
                  team),
         _start(start), _end(end), _num(num), _endpoint(endpoint) {}
@@ -206,13 +234,15 @@ struct DeferredLinspace : public Deferred {
     auto start = ::imex::createFloat(loc, builder, _start);
     auto stop = ::imex::createFloat(loc, builder, _end);
     auto num = ::imex::createIndex(loc, builder, _num);
-    auto dtyp = jit::getPTDType(dtype());
-    auto envs = jit::mkEnvs(builder, rank(), _device, team());
+    auto dtyp = jit::getMLIRType(builder, dtype());
+    auto envs = mkEnvs(builder, rank(), _device);
+    auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
+    mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
+        loc, outType, start, stop, num, _endpoint);
+    res = shardNow(builder, loc, res, team());
 
     dm.addVal(
-        this->guid(),
-        builder.create<::imex::ndarray::LinSpaceOp>(loc, start, stop, num,
-                                                    _endpoint, dtyp, envs),
+        this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,
@@ -243,7 +273,8 @@ struct DeferredLinspace : public Deferred {
 
 FutureArray *Creator::linspace(double start, double end, uint64_t num,
                                bool endpoint, DTypeId dtype,
-                               const std::string &device, uint64_t team) {
+                               const std::string &device,
+                               const std::string &team) {
   return new FutureArray(defer<DeferredLinspace>(start, end, num, endpoint,
                                                  dtype, device, mkTeam(team)));
 }
@@ -255,7 +286,7 @@ extern DTypeId DEFAULT_INT;
 
 std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
                                                   const std::string &device,
-                                                  uint64_t team,
+                                                  const std::string &team,
                                                   DTypeId dtype) {
   if (py::isinstance<FutureArray>(b)) {
     return {b.cast<FutureArray *>(), false};

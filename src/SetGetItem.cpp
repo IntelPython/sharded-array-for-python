@@ -18,11 +18,7 @@
 #include "sharpy/UtilsAndTypes.hpp"
 #include "sharpy/jit/mlir.hpp"
 
-#include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
-#include <imex/Utils/PassUtils.h>
-#include <mlir/Dialect/Linalg/Utils/Utils.h>
 #include <mlir/IR/Builders.h>
 
 #include <pybind11/numpy.h>
@@ -277,8 +273,9 @@ struct DeferredGetItem : public Deferred {
     const auto &offs = _slc.offsets();
     const auto &sizes = shape();
     const auto &strides = _slc.strides();
-    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
-    auto outTyp = ::imex::dist::cloneWithShape(aTyp, shape());
+    auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
+    auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
+        aTyp.cloneWith(shape(), aTyp.getElementType()));
 
     // now we can create the NDArray op using the above Values
     auto res = builder.create<::imex::ndarray::SubviewOp>(loc, outTyp, av, offs,

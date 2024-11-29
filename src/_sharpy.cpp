@@ -30,7 +30,6 @@ using namespace pybind11::literals; // to bring _a
 #include "sharpy/EWBinOp.hpp"
 #include "sharpy/EWUnyOp.hpp"
 #include "sharpy/Factory.hpp"
-#include "sharpy/IEWBinOp.hpp"
 #include "sharpy/IO.hpp"
 #include "sharpy/LinAlgOp.hpp"
 #include "sharpy/MPIMediator.hpp"
@@ -193,7 +192,6 @@ PYBIND11_MODULE(_sharpy, m) {
       .def("linspace", &Creator::linspace);
 
   py::class_<EWUnyOp>(m, "EWUnyOp").def("op", &EWUnyOp::op);
-  py::class_<IEWBinOp>(m, "IEWBinOp").def("op", &IEWBinOp::op);
   py::class_<EWBinOp>(m, "EWBinOp").def("op", &EWBinOp::op);
   py::class_<ReduceOp>(m, "ReduceOp").def("op", &ReduceOp::op);
   py::class_<ManipOp>(m, "ManipOp")

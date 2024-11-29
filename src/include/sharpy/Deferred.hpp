@@ -31,7 +31,7 @@ extern void process_promises(const std::string &libidtr);
 // interface for promises/tasks to generate MLIR or execute immediately.
 struct Runable {
   using ptr_type = std::unique_ptr<Runable>;
-  virtual ~Runable(){};
+  virtual ~Runable() {};
   /// actually execute, a deferred will set value of future
   virtual void run() {
     throw(std::runtime_error(
@@ -63,22 +63,22 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
 
   DeferredT() = default;
   DeferredT(const DeferredT<P, F> &) = delete;
-  DeferredT(DTypeId dt, shape_type &&shape, std::string &&device, uint64_t team,
-            id_type guid = Registry::NOGUID)
+  DeferredT(DTypeId dt, shape_type &&shape, std::string &&device,
+            std::string &&team, id_type guid = Registry::NOGUID)
       : P(guid, dt, std::forward<shape_type>(shape),
           std::forward<std::string>(device),
-          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
+          team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
   DeferredT(DTypeId dt, shape_type &&shape, const std::string &device,
-            uint64_t team, id_type guid = Registry::NOGUID)
+            const std::string &team, id_type guid = Registry::NOGUID)
       : P(guid, dt, std::forward<shape_type>(shape), device,
-          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
+          team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
   DeferredT(DTypeId dt, const shape_type &shape = {},
-            const std::string &device = {}, uint64_t team = 0,
+            const std::string &device = {}, const std::string &team = {},
             id_type guid = Registry::NOGUID)
       : P(guid, dt, shape, device,
-          team ? reinterpret_cast<uint64_t>(getTransceiver()) : 0),
+          team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
 };
 

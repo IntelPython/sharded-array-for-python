@@ -20,7 +20,7 @@
 namespace SHARPY {
 
 using shape_type = std::vector<int64_t>;
-using dim_vec_type = std::vector<int>;
+using dim_vec_type = std::vector<int64_t>;
 using rank_type = uint64_t;
 using Buffer = std::vector<uint8_t>;
 using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
@@ -63,17 +63,39 @@ enum _RANKS : rank_type {
 };
 
 template <typename T> struct DTYPE {};
-template <> struct DTYPE<double> { constexpr static DTypeId value = FLOAT64; };
-template <> struct DTYPE<float> { constexpr static DTypeId value = FLOAT32; };
-template <> struct DTYPE<int64_t> { constexpr static DTypeId value = INT64; };
-template <> struct DTYPE<int32_t> { constexpr static DTypeId value = INT32; };
-template <> struct DTYPE<int16_t> { constexpr static DTypeId value = INT16; };
-template <> struct DTYPE<int8_t> { constexpr static DTypeId value = INT8; };
-template <> struct DTYPE<uint64_t> { constexpr static DTypeId value = UINT64; };
-template <> struct DTYPE<uint32_t> { constexpr static DTypeId value = UINT32; };
-template <> struct DTYPE<uint16_t> { constexpr static DTypeId value = UINT16; };
-template <> struct DTYPE<uint8_t> { constexpr static DTypeId value = UINT8; };
-template <> struct DTYPE<bool> { constexpr static DTypeId value = BOOL; };
+template <> struct DTYPE<double> {
+  constexpr static DTypeId value = FLOAT64;
+};
+template <> struct DTYPE<float> {
+  constexpr static DTypeId value = FLOAT32;
+};
+template <> struct DTYPE<int64_t> {
+  constexpr static DTypeId value = INT64;
+};
+template <> struct DTYPE<int32_t> {
+  constexpr static DTypeId value = INT32;
+};
+template <> struct DTYPE<int16_t> {
+  constexpr static DTypeId value = INT16;
+};
+template <> struct DTYPE<int8_t> {
+  constexpr static DTypeId value = INT8;
+};
+template <> struct DTYPE<uint64_t> {
+  constexpr static DTypeId value = UINT64;
+};
+template <> struct DTYPE<uint32_t> {
+  constexpr static DTypeId value = UINT32;
+};
+template <> struct DTYPE<uint16_t> {
+  constexpr static DTypeId value = UINT16;
+};
+template <> struct DTYPE<uint8_t> {
+  constexpr static DTypeId value = UINT8;
+};
+template <> struct DTYPE<bool> {
+  constexpr static DTypeId value = BOOL;
+};
 
 template <DTypeId DT> struct TYPE {};
 template <> struct TYPE<FLOAT64> {
@@ -331,7 +353,6 @@ enum FactoryId : int {
   F_GATHER,
   F_GETITEM,
   F_GETLOCALS,
-  F_IEWBINOP,
   F_LINALGOP,
   F_LINSPACE,
   F_MAP,
@@ -349,7 +370,8 @@ enum FactoryId : int {
 
 // size of memreftype in number of intptr_t's
 inline uint64_t memref_sz(int rank) { return 3 + 2 * rank; }
-inline uint64_t ndarray_sz(int rank, bool isDist) {
-  return memref_sz(rank) + (isDist ? 2 * memref_sz(rank) + memref_sz(1) : 0);
+inline uint64_t ndarray_sz(int rank, bool /* isDist */) {
+  return memref_sz(
+      rank); // + (isDist ? 2 * memref_sz(rank) + memref_sz(1) : 0);
 };
 } // namespace SHARPY

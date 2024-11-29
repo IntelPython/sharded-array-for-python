@@ -26,16 +26,17 @@ protected:
   DTypeId _dtype = DTYPE_LAST;
   shape_type _shape = {};
   std::string _device = {};
-  uint64_t _team = 0;
+  std::string _team = 0;
 
 public:
   ArrayMeta(id_type id, DTypeId dt, const shape_type &shape,
-            const std::string &device, uint64_t team)
+            const std::string &device, const std::string &team)
       : _guid(id), _dtype(dt), _shape(shape), _device(device), _team(team) {}
   ArrayMeta(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
-            uint64_t team)
+            std::string &&team)
       : _guid(id), _dtype(dt), _shape(std::forward<shape_type>(shape)),
-        _device(std::forward<std::string>(device)), _team(team) {}
+        _device(std::forward<std::string>(device)),
+        _team(std::forward<std::string>(team)) {}
   ArrayMeta() = default;
 
   /// @return globally unique id
@@ -54,7 +55,7 @@ public:
   const std::string &device() const { return _device; }
 
   // @ return team, 0 means non-distributed
-  uint64_t team() const { return _team; }
+  const std::string &team() const { return _team; }
 
   void set_guid(id_type guid) { _guid = guid; }
 };
@@ -80,19 +81,19 @@ public:
   public:
     Metaified() = default;
     Metaified(T &&f, id_type id, DTypeId dt, shape_type &&shape,
-              std::string &&device, uint64_t team)
-        : T(std::move(f)),
-          ArrayMeta(id, dt, std::move(shape), std::move(device), team) {}
+              std::string &&device, std::string &&team)
+        : T(std::move(f)), ArrayMeta(id, dt, std::move(shape),
+                                     std::move(device), std::move(team)) {}
     Metaified(T &&f, id_type id, DTypeId dt, const shape_type &shape,
-              const std::string &device, uint64_t team)
+              const std::string &device, const std::string &team)
         : T(std::move(f)), ArrayMeta(id, dt, shape, device, team) {}
     Metaified(id_type id, DTypeId dt, const shape_type &shape,
-              const std::string &device, uint64_t team)
+              const std::string &device, const std::string &team)
         : T(), ArrayMeta(id, dt, shape, device, team) {}
     Metaified(id_type id, DTypeId dt, shape_type &&shape, std::string &&device,
-              uint64_t team)
+              std::string &&team)
         : T(), ArrayMeta(id, dt, std::forward<shape_type>(shape),
-                         std::move(device), team) {}
+                         std::move(device), std::move(team)) {}
     ~Metaified() {}
   };
 
@@ -100,7 +101,7 @@ public:
   using promise_type = Metaified<std::promise<ptr_type>>;
   using future_type = Metaified<std::shared_future<array_i::ptr_type>>;
 
-  virtual ~array_i(){};
+  virtual ~array_i() {};
   /// python object's __repr__
   virtual std::string __repr__() const = 0;
   /// @return array's element type

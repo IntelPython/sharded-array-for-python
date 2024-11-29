@@ -10,86 +10,99 @@
 #include "sharpy/NDArray.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
-
-#include <imex/Dialect/Dist/IR/DistOps.h>
+#include <mlir/Dialect/Tosa/IR/TosaOps.h>
 
 namespace SHARPY {
 
 // convert id of our unary op to id of imex::ndarray unary op
-static ::imex::ndarray::EWUnyOpId sharpy(const EWUnyOpId uop) {
+static mlir::Value createEWUnyOp(::mlir::OpBuilder &b,
+                                 const ::mlir::Location &loc,
+                                 const EWUnyOpId uop, mlir::ShapedType outTyp,
+                                 mlir::Value a) {
+  // this works only for static shapes
   switch (uop) {
   case __ABS__:
   case ABS:
-    return ::imex::ndarray::ABS;
+    return b.create<mlir::tosa::AbsOp>(loc, outTyp, a);
   case ACOS:
-    return ::imex::ndarray::ACOS;
+    assert(false && "ACOS not implemented.");
   case ACOSH:
-    return ::imex::ndarray::ACOSH;
+    assert(false && "ACOSH not implemented.");
   case ASIN:
-    return ::imex::ndarray::ASIN;
+    assert(false && "ASIN not implemented.");
   case ASINH:
-    return ::imex::ndarray::ASINH;
+    assert(false && "ASINH not implemented.");
   case ATAN:
-    return ::imex::ndarray::ATAN;
+    assert(false && "ATAN not implemented.");
   case ATANH:
-    return ::imex::ndarray::ATANH;
+    assert(false && "ATANH not implemented.");
   case CEIL:
-    return ::imex::ndarray::CEIL;
+    return b.create<mlir::tosa::CeilOp>(loc, outTyp, a);
   case COS:
-    return ::imex::ndarray::COS;
+    return b.create<mlir::tosa::CosOp>(loc, outTyp, a);
   case COSH:
-    return ::imex::ndarray::COSH;
+    assert(false && "COSH not implemented.");
   case EXP:
-    return ::imex::ndarray::EXP;
+    return b.create<mlir::tosa::ExpOp>(loc, outTyp, a);
   case EXPM1:
-    return ::imex::ndarray::EXPM1;
+    assert(false && "EXPM1 not implemented.");
   case FLOOR:
-    return ::imex::ndarray::FLOOR;
+    return b.create<mlir::tosa::FloorOp>(loc, outTyp, a);
   case ISFINITE:
-    return ::imex::ndarray::ISFINITE;
+    assert(false && "ISFINITE not implemented.");
   case ISINF:
-    return ::imex::ndarray::ISINF;
+    assert(false && "ISINF not implemented.");
   case ISNAN:
-    return ::imex::ndarray::ISNAN;
+    assert(false && "ISNAN not implemented.");
   case LOG:
-    return ::imex::ndarray::LOG;
+    return b.create<mlir::tosa::LogOp>(loc, outTyp, a);
   case LOG1P:
-    return ::imex::ndarray::LOG1P;
+    assert(false && "LOG1P not implemented.");
   case LOG2:
-    return ::imex::ndarray::LOG2;
+    assert(false && "LOG2 not implemented.");
   case LOG10:
-    return ::imex::ndarray::LOG10;
-  case ROUND:
-    return ::imex::ndarray::ROUND;
+    assert(false && "LOG10 not implemented.");
+  case ROUND: {
+    mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
+        loc, outTyp.getShape(), outTyp.getElementType());
+    return b.create<mlir::linalg::RoundOp>(loc, outTyp, a, empty).getResult(0);
+  }
   case SIGN:
-    return ::imex::ndarray::SIGN;
+    assert(false && "SIGN not implemented.");
   case SIN:
-    return ::imex::ndarray::SIN;
+    return b.create<mlir::tosa::SinOp>(loc, outTyp, a);
   case SINH:
-    return ::imex::ndarray::SINH;
-  case SQUARE:
-    return ::imex::ndarray::SQUARE;
-  case SQRT:
-    return ::imex::ndarray::SQRT;
+    assert(false && "SINH not implemented.");
+  case SQUARE: {
+    mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
+        loc, outTyp.getShape(), outTyp.getElementType());
+    return b.create<mlir::linalg::SquareOp>(loc, outTyp, a, empty).getResult(0);
+  }
+  case SQRT: {
+    mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
+        loc, outTyp.getShape(), outTyp.getElementType());
+    b.create<mlir::linalg::SqrtOp>(loc, outTyp, a, empty).getResult(0);
+  }
   case TAN:
-    return ::imex::ndarray::TAN;
+    assert(false && "TAN not implemented.");
   case TANH:
-    return ::imex::ndarray::TANH;
+    return b.create<mlir::tosa::TanhOp>(loc, outTyp, a);
   case TRUNC:
-    return ::imex::ndarray::TRUNC;
+    assert(false && "TRUNC not implemented.");
   case ERF:
-    return ::imex::ndarray::ERF;
+    return b.create<mlir::tosa::ErfOp>(loc, outTyp, a);
   case LOGICAL_NOT:
-    return ::imex::ndarray::LOGICAL_NOT;
+    return b.create<mlir::tosa::LogicalNotOp>(loc, outTyp, a);
   case __NEG__:
   case NEGATIVE:
-    return ::imex::ndarray::NEGATIVE;
+    return b.create<mlir::tosa::NegateOp>(loc, outTyp, a);
   case __POS__:
   case POSITIVE:
-    return ::imex::ndarray::POSITIVE;
+    assert(false && "POSITIVE not implemented.");
   default:
     throw std::invalid_argument("Unknown/invalid elementwise unary operation");
   }
+  return {};
 }
 
 struct DeferredEWUnyOp : public Deferred {
@@ -105,16 +118,15 @@ struct DeferredEWUnyOp : public Deferred {
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
 
-    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
-    auto outTyp = aTyp.cloneWith(shape(), aTyp.getElementType());
+    auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
+    auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
+        aTyp.cloneWith(shape(), aTyp.getElementType()));
 
-    auto ndOpId = sharpy(_op);
-    auto uop = builder.create<::imex::ndarray::EWUnyOp>(
-        loc, outTyp, builder.getI32IntegerAttr(ndOpId), av);
+    auto res = createEWUnyOp(builder, loc, _op, outTyp, av);
     // positive op will be eliminated so it is equivalent to a view
-    auto view = ndOpId == ::imex::ndarray::POSITIVE;
+    auto view = (_op == POSITIVE || _op == __POS__);
 
-    dm.addVal(this->guid(), uop,
+    dm.addVal(this->guid(), res,
               [this, view](
                   uint64_t rank, void *l_allocated, void *l_aligned,
                   intptr_t l_offset, const intptr_t *l_sizes,

@@ -33,65 +33,26 @@ class NDArray;
 
 namespace jit {
 
-template <typename T> struct PT_DTYPE {};
-template <> struct PT_DTYPE<double> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::F64;
-};
-template <> struct PT_DTYPE<float> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::F32;
-};
-template <> struct PT_DTYPE<int64_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I64;
-};
-template <> struct PT_DTYPE<int32_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I32;
-};
-template <> struct PT_DTYPE<int16_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I16;
-};
-template <> struct PT_DTYPE<int8_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I8;
-};
-template <> struct PT_DTYPE<uint64_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U64;
-};
-template <> struct PT_DTYPE<uint32_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U32;
-};
-template <> struct PT_DTYPE<uint16_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U16;
-};
-template <> struct PT_DTYPE<uint8_t> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::U8;
-};
-template <> struct PT_DTYPE<bool> {
-  constexpr static ::imex::ndarray::DType value = ::imex::ndarray::I1;
-};
-
-inline ::imex::ndarray::DType getPTDType(DTypeId dt) {
+inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
   switch (dt) {
   case FLOAT64:
-    return PT_DTYPE<TYPE<FLOAT64>::dtype>::value;
+    return builder.getF64Type();
   case INT64:
-    return PT_DTYPE<TYPE<INT64>::dtype>::value;
-  case FLOAT32:
-    return PT_DTYPE<TYPE<FLOAT32>::dtype>::value;
-  case INT32:
-    return PT_DTYPE<TYPE<INT32>::dtype>::value;
-  case INT16:
-    return PT_DTYPE<TYPE<INT16>::dtype>::value;
-  case INT8:
-    return PT_DTYPE<TYPE<INT8>::dtype>::value;
   case UINT64:
-    return PT_DTYPE<TYPE<UINT64>::dtype>::value;
+    return builder.getI64Type();
+  case FLOAT32:
+    return builder.getF32Type();
+  case INT32:
   case UINT32:
-    return PT_DTYPE<TYPE<UINT32>::dtype>::value;
+    return builder.getI32Type();
+  case INT16:
   case UINT16:
-    return PT_DTYPE<TYPE<UINT16>::dtype>::value;
+    return builder.getI16Type();
+  case INT8:
   case UINT8:
-    return PT_DTYPE<TYPE<UINT8>::dtype>::value;
+    return builder.getI8Type();
   case BOOL:
-    return PT_DTYPE<TYPE<BOOL>::dtype>::value;
+    return builder.getI1Type();
   default:
     throw std::invalid_argument("unknown dtype");
   }
@@ -202,11 +163,6 @@ public:
   /// Resets internal input buffer
   std::vector<void *> finalize_inputs();
 };
-
-::mlir::SmallVector<::mlir::Attribute> mkEnvs(::mlir::Builder &builder,
-                                              int64_t rank,
-                                              const std::string &device,
-                                              uint64_t team);
 
 } // namespace jit
 } // namespace SHARPY

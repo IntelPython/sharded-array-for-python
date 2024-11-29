@@ -11,9 +11,8 @@
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/mlir.hpp"
 
-#include <imex/Dialect/Dist/IR/DistOps.h>
-#include <imex/Dialect/Dist/Utils/Utils.h>
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
+#include <mlir/Dialect/Tosa/IR/TosaOps.h>
 #include <mlir/IR/Builders.h>
 
 namespace SHARPY {
@@ -41,8 +40,9 @@ struct DeferredReshape : public Deferred {
             ? ::mlir::IntegerAttr()
             : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
 
-    auto aTyp = ::mlir::cast<::imex::ndarray::NDArrayType>(av.getType());
-    auto outTyp = imex::dist::cloneWithShape(aTyp, shape());
+    auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
+    auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
+        aTyp.cloneWith(shape(), aTyp.getElementType()));
 
     auto op =
         builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);
@@ -93,27 +93,20 @@ struct DeferredAsType : public Deferred {
       : Deferred(dtype, a.shape(), a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
 
-  template <typename T> struct convDType {
-    static ::imex::ndarray::DType op() { return jit::PT_DTYPE<T>::value; };
-  };
-
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
-    const auto dtype = this->dtype();
     auto av = dm.getDependent(builder, Registry::get(_a));
-
-    auto copyAttr = ::imex::getIntAttr(builder, _copy, 1);
-    // construct NDArrayType with same shape and given dtype
-    ::imex::ndarray::DType ndDType = dispatch<convDType>(dtype);
-    auto mlirElType = ::imex::ndarray::toMLIR(builder, ndDType);
-    auto arType = ::mlir::dyn_cast<::imex::ndarray::NDArrayType>(av.getType());
+    auto arType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
     if (!arType) {
-      throw std::invalid_argument(
-          "Encountered unexpected ndarray type in astype.");
+      throw std::invalid_argument("Encountered unexpected type in astype.");
     }
-    auto outType = arType.cloneWith(std::nullopt, mlirElType);
-    auto res = builder.create<::imex::ndarray::CastElemTypeOp>(loc, outType, av,
-                                                               copyAttr);
+
+    // construct NDArrayType with same shape and given dtype
+    auto mlirElType = jit::getMLIRType(builder, this->dtype());
+    auto outType = ::mlir::cast<::mlir::RankedTensorType>(
+        arType.cloneWith(std::nullopt, mlirElType));
+    auto res = builder.create<::imex::ndarray::CastElemTypeOp>(
+        loc, outType, av, ::imex::getIntAttr(builder, _copy, 1));
     dm.addVal(
         this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
@@ -156,18 +149,19 @@ struct DeferredToDevice : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
-
-    auto srcType = ::mlir::dyn_cast<::imex::ndarray::NDArrayType>(av.getType());
+    auto srcType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
     if (!srcType) {
-      throw std::invalid_argument(
-          "Encountered unexpected ndarray type in to_device.");
+      throw std::invalid_argument("Encountered unexpected type in to_device.");
     }
+
     // copy envs, drop gpu env (if any)
-    auto srcEnvs = srcType.getEnvironments();
     ::mlir::SmallVector<::mlir::Attribute> envs;
-    for (auto e : srcEnvs) {
-      if (!::mlir::isa<::imex::region::GPUEnvAttr>(e)) {
-        envs.emplace_back(e);
+    if (auto srcEnvs = srcType.getEncoding()) {
+      auto casted = mlir::cast<::imex::ndarray::EnvsAttr>(srcEnvs);
+      for (auto e : casted.getEnvs()) {
+        if (!::mlir::isa<::imex::region::GPUEnvAttr>(e)) {
+          envs.emplace_back(e);
+        }
       }
     }
     // append device attr
@@ -175,9 +169,9 @@ struct DeferredToDevice : public Deferred {
       envs.emplace_back(
           ::imex::region::GPUEnvAttr::get(builder.getStringAttr(_device)));
     }
-    auto outType = ::imex::ndarray::NDArrayType::get(srcType.getShape(),
-                                                     srcType.getElementType(),
-                                                     envs, srcType.getLayout());
+    auto envsAttr = ::imex::ndarray::EnvsAttr::get(builder.getContext(), envs);
+    auto outType = mlir::RankedTensorType::get(
+        srcType.getShape(), srcType.getElementType(), envsAttr);
     auto res = builder.create<::imex::ndarray::CopyOp>(loc, outType, av);
     dm.addVal(
         this->guid(), res,
@@ -218,18 +212,15 @@ struct DeferredPermuteDims : public Deferred {
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
     auto arrayValue = dm.getDependent(builder, Registry::get(_array));
-
-    auto axesAttr = builder.getDenseI64ArrayAttr(_axes);
-
-    auto aTyp =
-        ::mlir::cast<::imex::ndarray::NDArrayType>(arrayValue.getType());
-    auto outTyp = imex::dist::cloneWithShape(aTyp, shape());
-
-    auto op = builder.create<::imex::ndarray::PermuteDimsOp>(
-        loc, outTyp, arrayValue, axesAttr);
+    auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(arrayValue.getType());
+    mlir::Value out = builder.create<mlir::tensor::EmptyOp>(
+        loc, shape(), aTyp.getElementType());
+    auto res =
+        builder.create<mlir::linalg::TransposeOp>(loc, arrayValue, out, _axes)
+            ->getResult(0);
 
     dm.addVal(
-        this->guid(), op,
+        this->guid(), res,
         [this](uint64_t rank, void *l_allocated, void *l_aligned,
                intptr_t l_offset, const intptr_t *l_sizes,
                const intptr_t *l_strides, void *o_allocated, void *o_aligned,
