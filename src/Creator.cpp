@@ -41,6 +41,9 @@ void validateShape(const shape_type &shape) {
 
 imex::ndarray::EnvsAttr mkEnvs(::mlir::Builder &builder, int64_t rank,
                                const std::string &device) {
+  if (device.empty()) {
+    return nullptr;
+  }
   return imex::ndarray::EnvsAttr::get(
       builder.getContext(),
       {::imex::region::GPUEnvAttr::get(builder.getStringAttr(device))});
@@ -52,8 +55,12 @@ static mlir::Value shardNow(::mlir::OpBuilder &builder,
   if (team.empty()) {
     return val;
   }
-  mlir::SmallVector<mlir::mesh::MeshAxesAttr> splitAxes{
-      mlir::mesh::MeshAxesAttr::get(builder.getContext(), {0})};
+  auto rank = mlir::cast<mlir::ShapedType>(val.getType()).getRank();
+  mlir::SmallVector<mlir::mesh::MeshAxesAttr> splitAxes;
+  if (rank) {
+    splitAxes.emplace_back(mlir::mesh::MeshAxesAttr::get(
+        builder.getContext(), mlir::ArrayRef<int16_t>{0}));
+  }
   mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
       loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
   return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
@@ -97,12 +104,8 @@ struct DeferredFull : public Deferred {
     auto envs = mkEnvs(builder, rank(), _device);
     mlir::Value res;
     if (val) {
-      ::mlir::SmallVector<::mlir::Value> shp(rank());
-      for (auto i = 0ul; i < rank(); ++i) {
-        shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
-      }
-      auto resType = mlir::RankedTensorType::get(shape(), dtyp, envs);
-      res = builder.create<::mlir::tensor::SplatOp>(loc, resType, val, shp);
+      // auto resType = mlir::RankedTensorType::get(shape(), dtyp, envs);
+      res = builder.create<::mlir::tensor::SplatOp>(loc, val, shape());
     } else {
       res = builder.create<::mlir::tensor::EmptyOp>(loc, shape(), dtyp, envs);
     }

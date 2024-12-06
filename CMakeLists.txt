@@ -186,6 +186,7 @@ target_link_libraries(_sharpy PRIVATE
     IMEXUtil
     LLVMX86CodeGen
     LLVMX86AsmParser
+    LLVMSupport
     idtr
     TBB::tbb
     ${LIBZ}

@@ -44,6 +44,7 @@
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Mesh/IR/MeshOps.h"
 #include "llvm/Support/TargetSelect.h"
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 
@@ -57,8 +58,8 @@
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Parser/Parser.h"
-#include "llvm/Support/raw_ostream.h"
-#include <llvm/Support/raw_sha1_ostream.h>
+#include "llvm/Support/Format.h"
+#include "llvm/Support/raw_sha1_ostream.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -97,6 +98,16 @@ void DepManager::finalizeAndRun() {
                  _builder.getUnitAttr());
   if (_jit.verbose())
     _func.getFunctionType().dump();
+  // add our only mesh
+  if (getTransceiver()) {
+    int64_t nRanks = (int64_t)getTransceiver()->nranks();
+    auto mesh = getTransceiver()->mesh();
+    ::mlir::OpBuilder::InsertionGuard g(_builder);
+    _builder.setInsertionPointToStart(&_module.getRegion().front());
+    auto meshOp = _builder.create<::mlir::mesh::MeshOp>(
+        _builder.getUnknownLoc(), mesh, mlir::ArrayRef<int64_t>{nRanks});
+    meshOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+  }
   // add the function to the module
   _module.push_back(_func);
 
@@ -441,25 +452,23 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
 }
 
 static const std::string cpu_pipeline =
-    "ndarray-dist,"
-    "func.func(dist-coalesce),"
-    "func.func(dist-infer-elementwise-cores),"
-    "convert-dist-to-standard,"
+    "func.func(sharding-propagation),"
+    "coalesce-shard-ops,"
     "canonicalize,"
-    "overlap-comm-and-compute,"
-    "add-comm-cache-keys,"
-    "lower-distruntime-to-idtr,"
+    "func.func(mesh-spmdization),"
+    "canonicalize,"
+    "convert-mesh-to-mpi,"
+    "canonicalize,"
     "convert-ndarray-to-linalg,"
-    "canonicalize,"
     "func.func(tosa-to-linalg),"
     "func.func(tosa-to-tensor),"
-    "canonicalize,"
+    "linalg-generalize-named-ops,"
     "linalg-fuse-elementwise-ops,"
-    // "convert-shape-to-std,"
     "arith-expand,"
     "memref-expand,"
-    "func.func(empty-tensor-to-alloc-tensor),"
-    "one-shot-bufferize,"
+    "empty-tensor-to-alloc-tensor,"
+    "canonicalize,"
+    "one-shot-bufferize{bufferize-function-boundaries=1},"
     "canonicalize,"
     "imex-remove-temporaries,"
     "buffer-deallocation-pipeline,"
@@ -473,6 +482,7 @@ static const std::string cpu_pipeline =
     "convert-math-to-funcs,"
     "lower-affine,"
     "convert-scf-to-cf,"
+    "symbol-dce,"
     "finalize-memref-to-llvm,"
     "convert-math-to-llvm,"
     "convert-math-to-libm,"
@@ -482,20 +492,17 @@ static const std::string cpu_pipeline =
 static const std::string gpu_pipeline =
     "add-gpu-regions,"
     "canonicalize,"
-    "ndarray-dist,"
-    "func.func(dist-coalesce),"
-    "func.func(dist-infer-elementwise-cores),"
-    "convert-dist-to-standard,"
+    "func.func(sharding-propagation),"
+    "coalesce-shard-ops,"
     "canonicalize,"
-    "overlap-comm-and-compute,"
-    "add-comm-cache-keys,"
-    "lower-distruntime-to-idtr,"
+    "func.func(mesh-spmdization),"
+    "canonicalize,"
+    "convert-mesh-to-mpi,"
+    "canonicalize,"
     "convert-ndarray-to-linalg,"
-    "canonicalize,"
-    "func.func(tosa-make-broadcastable),"
     "func.func(tosa-to-linalg),"
     "func.func(tosa-to-tensor),"
-    "canonicalize,"
+    "linalg-generalize-named-ops,"
     "linalg-fuse-elementwise-ops,"
     "arith-expand,"
     "memref-expand,"

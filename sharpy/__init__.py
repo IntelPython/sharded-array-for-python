@@ -96,7 +96,10 @@ def _validate_device(device):
         raise ValueError(f"Invalid device string: {device}")
 
 
-def arange(start, /, end=None, step=1, dtype=int64, device="", team=1):
+_team = "sharpyMesh"
+
+
+def arange(start, /, end=None, step=1, dtype=int64, device="", team=_team):
     if end is None:
         end = start
         start = 0
@@ -116,23 +119,23 @@ for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func == "full":
         exec(
-            f"{func} = lambda shape, val, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, val, dtype, _validate_device(device), team))"
+            f"{func} = lambda shape, val, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, val, dtype, _validate_device(device), team))"
         )
     elif func == "empty":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, None, dtype, _validate_device(device), team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, None, dtype, _validate_device(device), team))"
         )
     elif func == "ones":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 1, dtype, _validate_device(device), team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, 1, dtype, _validate_device(device), team))"
         )
     elif func == "zeros":
         exec(
-            f"{func} = lambda shape, dtype=float64, device='', team=1: ndarray(_csp.Creator.full(shape, 0, dtype, _validate_device(device), team))"
+            f"{func} = lambda shape, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, 0, dtype, _validate_device(device), team))"
         )
     elif func == "linspace":
         exec(
-            f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=1: ndarray(_csp.Creator.linspace(start, end, step, endpoint, dtype, _validate_device(device), team))"
+            f"{func} = lambda start, end, step, endpoint, dtype=float64, device='', team=_team: ndarray(_csp.Creator.linspace(start, end, step, endpoint, dtype, _validate_device(device), team))"
         )
 
 
