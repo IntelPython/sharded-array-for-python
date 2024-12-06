@@ -310,11 +310,8 @@ void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
       pos += memref_sz(x._rank);
 
       if (x._setResFunc) {
-        x._setResFunc(x._rank, nullptr, nullptr, 0, nullptr,
-                      nullptr, // lhsHalo
-                      t_allocated, t_aligned, t_offset, t_sizes,
-                      t_strides,                             // lData
-                      nullptr, nullptr, 0, nullptr, nullptr, // lhsHalo
+        x._setResFunc(x._rank, t_allocated, t_aligned, t_offset, t_sizes,
+                      t_strides, // lData
                       {});
       }
 

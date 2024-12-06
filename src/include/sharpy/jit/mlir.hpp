@@ -60,13 +60,10 @@ inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
 
 // function type used for reporting back array results generated
 // by Deferred::generate_mlir
-using SetResFunc = std::function<void(
-    uint64_t rank, void *l_allocated, void *l_aligned, intptr_t l_offset,
-    const intptr_t *l_sizes, const intptr_t *l_strides, void *o_allocated,
-    void *o_aligned, intptr_t o_offset, const intptr_t *o_sizes,
-    const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-    intptr_t r_offset, const intptr_t *r_sizes, const intptr_t *r_strides,
-    std::vector<int64_t> &&l_offs)>;
+using SetResFunc =
+    std::function<void(uint64_t rank, void *allocated, void *aligned,
+                       intptr_t offset, const intptr_t *sizes,
+                       const intptr_t *strides, std::vector<int64_t> &&l_offs)>;
 using ReadyFunc = std::function<void(id_type guid)>;
 
 // initialize jit

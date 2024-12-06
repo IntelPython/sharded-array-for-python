@@ -20,20 +20,12 @@ namespace SHARPY {
 
 NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
                  const std::string &device_, const std::string &team_,
-                 void *l_allocated, void *l_aligned, intptr_t l_offset,
-                 const intptr_t *l_sizes, const intptr_t *l_strides,
-                 void *o_allocated, void *o_aligned, intptr_t o_offset,
-                 const intptr_t *o_sizes, const intptr_t *o_strides,
-                 void *r_allocated, void *r_aligned, intptr_t r_offset,
-                 const intptr_t *r_sizes, const intptr_t *r_strides,
+                 void *allocated, void *aligned, intptr_t offset,
+                 const intptr_t *sizes, const intptr_t *strides,
                  std::vector<int64_t> &&loffs, rank_type owner)
     : ArrayMeta(guid_, dtype_, gShape, device_, team_), _owner(owner),
-      _lhsHalo(l_allocated ? gShape.size() : 0, l_allocated, l_aligned,
-               l_offset, l_sizes, l_strides),
-      _lData(o_allocated ? gShape.size() : 0, o_allocated, o_aligned, o_offset,
-             o_sizes, o_strides),
-      _rhsHalo(r_allocated ? gShape.size() : 0, r_allocated, r_aligned,
-               r_offset, r_sizes, r_strides),
+      _lData(allocated ? gShape.size() : 0, allocated, aligned, offset, sizes,
+             strides),
       _lOffsets(std::move(loffs)) {
   if (ndims() == 0) {
     _owner = REPLICATED;
@@ -151,11 +143,7 @@ NDArray::~NDArray() {
 
 bool NDArray::isAllocated() { return !_base && _lData._allocated != nullptr; }
 
-void NDArray::markDeallocated() {
-  _lhsHalo.markDeallocated();
-  _lData.markDeallocated();
-  _rhsHalo.markDeallocated();
-}
+void NDArray::markDeallocated() { _lData.markDeallocated(); }
 
 void *NDArray::data() {
   void *ret;

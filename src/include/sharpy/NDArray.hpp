@@ -29,9 +29,7 @@ class Transceiver;
 /// MLIR.
 class NDArray : public array_i, protected ArrayMeta {
   mutable rank_type _owner = NOOWNER;
-  DynMemRef _lhsHalo;
   DynMemRef _lData;
-  DynMemRef _rhsHalo;
   std::vector<int64_t> _lOffsets;
   BaseObj *_base = nullptr;
 
@@ -49,13 +47,10 @@ public:
 
   // construct from a and MLIR-jitted execution
   NDArray(id_type guid, DTypeId dtype, shape_type gShape,
-          const std::string &device, const std::string &team, void *l_allocated,
-          void *l_aligned, intptr_t l_offset, const intptr_t *l_sizes,
-          const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-          intptr_t o_offset, const intptr_t *o_sizes, const intptr_t *o_strides,
-          void *r_allocated, void *r_aligned, intptr_t r_offset,
-          const intptr_t *r_sizes, const intptr_t *r_strides,
-          std::vector<int64_t> &&loffs, rank_type owner = NOOWNER);
+          const std::string &device, const std::string &team, void *allocated,
+          void *aligned, intptr_t offset, const intptr_t *sizes,
+          const intptr_t *strides, std::vector<int64_t> &&loffs,
+          rank_type owner = NOOWNER);
 
   NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
           const std::string &device, const std::string &team,
@@ -176,10 +171,6 @@ public:
 
   /// @return locally owned data as DynMemref
   const DynMemRef &owned_data() const { return _lData; }
-  /// @return left halo as DynMemref
-  const DynMemRef &left_halo() const { return _lhsHalo; }
-  /// @return right halo as DynMemref
-  const DynMemRef &right_halo() const { return _rhsHalo; }
 
   /// @return local offsets into global array
   const std::vector<int64_t> &local_offsets() const { return _lOffsets; }
@@ -187,10 +178,6 @@ public:
   const int64_t *local_shape() const { return _lData._sizes; }
   /// @return strides of local data
   const int64_t *local_strides() const { return _lData._strides; }
-  /// @return shape of left halo
-  const int64_t *lh_shape() const { return _lhsHalo._sizes; }
-  /// @return shape of right halo
-  const int64_t *rh_shape() const { return _rhsHalo._sizes; }
 
   // helper function for __repr__; simple recursive printing of
   // array content

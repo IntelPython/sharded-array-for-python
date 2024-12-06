@@ -75,21 +75,15 @@ struct DeferredReduceOp : public Deferred {
     // reduction op
     auto res = createReduceOp(builder, loc, _op, outTyp, av, _dim);
 
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          this->set_value(mk_tnsr(
-              this->guid(), _dtype, this->shape(), this->device(), this->team(),
-              l_allocated, l_aligned, l_offset, l_sizes, l_strides, o_allocated,
-              o_aligned, o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-              r_offset, r_sizes, r_strides, std::move(loffs)));
-        });
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
+                                        this->device(), this->team(), allocated,
+                                        aligned, offset, sizes, strides,
+                                        std::move(loffs)));
+              });
     return false;
   }
 

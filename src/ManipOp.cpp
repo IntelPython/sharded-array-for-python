@@ -47,28 +47,22 @@ struct DeferredReshape : public Deferred {
     auto op =
         builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);
 
-    dm.addVal(
-        this->guid(), op,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), l_allocated, l_aligned, l_offset,
-                           l_sizes, l_strides, o_allocated, o_aligned, o_offset,
-                           o_sizes, o_strides, r_allocated, r_aligned, r_offset,
-                           r_sizes, r_strides, std::move(loffs));
-          if (_copy != COPY_ALWAYS) {
-            throw std::runtime_error("copy-free reshape not supported");
-            if (Registry::has(_a)) {
-              t->set_base(Registry::get(_a).get());
-            } // else _a is a temporary and was dropped
-          }
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), op,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                auto t =
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), allocated, aligned, offset, sizes,
+                            strides, std::move(loffs));
+                if (_copy != COPY_ALWAYS) {
+                  throw std::runtime_error("copy-free reshape not supported");
+                  if (Registry::has(_a)) {
+                    t->set_base(Registry::get(_a).get());
+                  } // else _a is a temporary and was dropped
+                }
+                this->set_value(std::move(t));
+              });
 
     return false;
   }
@@ -107,25 +101,19 @@ struct DeferredAsType : public Deferred {
         arType.cloneWith(std::nullopt, mlirElType));
     auto res = builder.create<::imex::ndarray::CastElemTypeOp>(
         loc, outType, av, ::imex::getIntAttr(builder, _copy, 1));
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), this->dtype(), this->shape(),
-                           this->device(), this->team(), l_allocated, l_aligned,
-                           l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                           o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                           r_offset, r_sizes, r_strides, std::move(loffs));
-          if (!this->_copy && Registry::has(_a)) {
-            t->set_base(Registry::get(_a).get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                auto t =
+                    mk_tnsr(this->guid(), this->dtype(), this->shape(),
+                            this->device(), this->team(), allocated, aligned,
+                            offset, sizes, strides, std::move(loffs));
+                if (!this->_copy && Registry::has(_a)) {
+                  t->set_base(Registry::get(_a).get());
+                } // else _a is a temporary and was dropped
+                this->set_value(std::move(t));
+              });
     return false;
   }
 
@@ -173,22 +161,16 @@ struct DeferredToDevice : public Deferred {
     auto outType = mlir::RankedTensorType::get(
         srcType.getShape(), srcType.getElementType(), envsAttr);
     auto res = builder.create<::imex::ndarray::CopyOp>(loc, outType, av);
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), this->dtype(), this->shape(),
-                           this->device(), this->team(), l_allocated, l_aligned,
-                           l_offset, l_sizes, l_strides, o_allocated, o_aligned,
-                           o_offset, o_sizes, o_strides, r_allocated, r_aligned,
-                           r_offset, r_sizes, r_strides, std::move(loffs));
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                auto t =
+                    mk_tnsr(this->guid(), this->dtype(), this->shape(),
+                            this->device(), this->team(), allocated, aligned,
+                            offset, sizes, strides, std::move(loffs));
+                this->set_value(std::move(t));
+              });
     return false;
   }
 
@@ -219,22 +201,16 @@ struct DeferredPermuteDims : public Deferred {
         builder.create<mlir::linalg::TransposeOp>(loc, arrayValue, out, _axes)
             ->getResult(0);
 
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, void *l_allocated, void *l_aligned,
-               intptr_t l_offset, const intptr_t *l_sizes,
-               const intptr_t *l_strides, void *o_allocated, void *o_aligned,
-               intptr_t o_offset, const intptr_t *o_sizes,
-               const intptr_t *o_strides, void *r_allocated, void *r_aligned,
-               intptr_t r_offset, const intptr_t *r_sizes,
-               const intptr_t *r_strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), l_allocated, l_aligned, l_offset,
-                           l_sizes, l_strides, o_allocated, o_aligned, o_offset,
-                           o_sizes, o_strides, r_allocated, r_aligned, r_offset,
-                           r_sizes, r_strides, std::move(loffs));
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                auto t =
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), allocated, aligned, offset, sizes,
+                            strides, std::move(loffs));
+                this->set_value(std::move(t));
+              });
 
     return false;
   }
