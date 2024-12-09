@@ -130,6 +130,18 @@ static mlir::Value createEWBinOp(::mlir::OpBuilder &b,
   case __RSUB__:
   case __ISUB__:
     return b.create<mlir::tosa::SubOp>(loc, outTyp, lhs, rhs);
+  case __MUL__:
+  case MULTIPLY:
+  case __RMUL__:
+  case __IMUL__:
+    return b.create<mlir::tosa::MulOp>(loc, outTyp, lhs, rhs, 0);
+  case __TRUEDIV__:
+  case DIVIDE:
+  case __RTRUEDIV__:
+  case __ITRUEDIV__:
+    return b.create<mlir::tosa::MulOp>(
+        loc, outTyp, lhs,
+        b.create<mlir::tosa::ReciprocalOp>(loc, rhs.getType(), rhs), 0);
   case __POW__:
   case POWER:
   case POW:
@@ -162,28 +174,6 @@ static mlir::Value createEWBinOp(::mlir::OpBuilder &b,
   case __IXOR__:
     return b.create<mlir::tosa::BitwiseXorOp>(loc, outTyp, lhs, rhs);
   // cases handled by linalg
-  case __MUL__:
-  case MULTIPLY:
-  case __RMUL__:
-  case __IMUL__: {
-    mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
-        loc, outTyp.getShape(), outTyp.getElementType());
-    return b
-        .create<mlir::linalg::MulOp>(loc, outTyp, mlir::ValueRange{lhs, rhs},
-                                     empty)
-        .getResult(0);
-  }
-  case __TRUEDIV__:
-  case DIVIDE:
-  case __RTRUEDIV__:
-  case __ITRUEDIV__: {
-    mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
-        loc, outTyp.getShape(), outTyp.getElementType());
-    return b
-        .create<mlir::linalg::DivOp>(loc, outTyp, mlir::ValueRange{lhs, rhs},
-                                     empty)
-        .getResult(0);
-  }
   case ATAN2:
     createLinalgGeneric(b, loc, bop, outTyp, lhs, rhs);
   case __FLOORDIV__:
@@ -234,15 +224,10 @@ struct DeferredEWBinOp : public Deferred {
       res = createEWBinOp(builder, loc, _op, outTyp, av, bv);
       if (isInplace) {
         // insertsliceop has no return value, so we just create the op...
-        auto zero = ::imex::createIndex(loc, builder, 0);
-        auto one = ::imex::createIndex(loc, builder, 1);
-        auto dyn =
-            ::imex::createIndex(loc, builder, ::mlir::ShapedType::kDynamic);
-        ::mlir::SmallVector<::mlir::Value> offs(rank(), zero);
-        ::mlir::SmallVector<::mlir::Value> szs(rank(), dyn);
-        ::mlir::SmallVector<::mlir::Value> strds(rank(), one);
+        ::mlir::SmallVector<int64_t> offs(rank(), 0);
+        ::mlir::SmallVector<int64_t> strds(rank(), 1);
         (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, res, offs,
-                                                             szs, strds);
+                                                             shape(), strds);
         res = av;
       }
     } else {
@@ -277,7 +262,7 @@ struct DeferredEWBinOp : public Deferred {
 
 FutureArray *EWBinOp::op(EWBinOpId op, py::object &a, const py::object &b) {
   std::string deva, devb;
-  std::string teama = 0, teamb = 0;
+  std::string teama, teamb;
   DTypeId dtypea = DTYPE_LAST, dtypeb = DTYPE_LAST;
 
   if (py::isinstance<FutureArray>(a)) {

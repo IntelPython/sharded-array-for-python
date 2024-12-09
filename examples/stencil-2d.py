@@ -197,7 +197,7 @@ def main():
     # ******************************************************************************
     # * Analyze and output results.
     # ******************************************************************************
-
+    print(B)
     B = np.spmd.gather(np.reshape(B, (n * n,)))
     norm = np.linalg.norm(B, ord=1)
     active_points = (n - 2 * r) ** 2

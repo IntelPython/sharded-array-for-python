@@ -150,17 +150,16 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
   }
 };
 
-static ::mlir::MemRefType getMRType(size_t ndims, intptr_t offset,
-                                    intptr_t *sizes, intptr_t *strides,
-                                    ::mlir::Type elType) {
-  auto layout = ::mlir::StridedLayoutAttr::get(elType.getContext(), offset,
-                                               {strides, ndims});
-  return ::mlir::MemRefType::get({sizes, ndims}, elType, layout);
+static ::mlir::RankedTensorType getTensorType(size_t ndims, intptr_t /*offset*/,
+                                              intptr_t *sizes,
+                                              intptr_t * /*strides*/,
+                                              ::mlir::Type elType) {
+  return mlir::RankedTensorType::get(::mlir::ArrayRef(sizes, ndims), elType);
 }
 
-static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
-                                    ::mlir::Type elType) {
-  return getMRType(ndims, mr._offset, mr._sizes, mr._strides, elType);
+static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
+                                              ::mlir::Type elType) {
+  return getTensorType(ndims, mr._offset, mr._sizes, mr._strides, elType);
 }
 
 // Add a new array input argument to the jit function.
@@ -194,7 +193,7 @@ static ::mlir::MemRefType getMRType(size_t ndims, const DynMemRef &mr,
     return buff;
   }; // FIXME memory leak?
 
-  auto typ = getMRType(ndims, impl->owned_data(), elType);
+  auto typ = getTensorType(ndims, impl->owned_data(), elType);
   _func.insertArgument(idx, typ, {}, loc);
   _inputs.push_back(storeMR(impl->owned_data()));
   ::mlir::Value arg = _func.getArgument(idx);
@@ -576,6 +575,7 @@ JIT::JIT(const std::string &libidtr)
   _context.getOrLoadDialect<::mlir::func::FuncDialect>();
   _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
   _context.getOrLoadDialect<::mlir::mesh::MeshDialect>();
+  _context.getOrLoadDialect<::mlir::tosa::TosaDialect>();
   // create the pass pipeline from string
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");
