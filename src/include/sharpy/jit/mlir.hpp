@@ -58,14 +58,6 @@ inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
   }
 }
 
-// function type used for reporting back array results generated
-// by Deferred::generate_mlir
-using SetResFunc =
-    std::function<void(uint64_t rank, void *allocated, void *aligned,
-                       intptr_t offset, const intptr_t *sizes,
-                       const intptr_t *strides, std::vector<int64_t> &&l_offs)>;
-using ReadyFunc = std::function<void(id_type guid)>;
-
 // initialize jit
 void init();
 void fini();
@@ -94,71 +86,6 @@ private:
   int _jit_opt_level;
   ::mlir::SmallVector<::llvm::StringRef> _sharedLibPaths;
   std::string _crunnerlib, _runnerlib, _idtrlib, _gpulib;
-};
-
-/// Manages input/output (array) dependencies
-class DepManager {
-private:
-  struct InOut {
-    id_type _guid = 0;
-    ::mlir::Value _value = nullptr;
-    SetResFunc _setResFunc;
-    int _rank = 0;
-    bool _isDist = false;
-    std::vector<ReadyFunc> _readyFuncs;
-    InOut(id_type guid = 0, const ::mlir::Value &value = nullptr,
-          const SetResFunc &setResFunc = nullptr, int rank = 0,
-          bool isDist = false, const std::vector<ReadyFunc> &readyFuncs = {})
-        : _guid(guid), _value(value), _setResFunc(setResFunc), _rank(rank),
-          _isDist(isDist), _readyFuncs(readyFuncs) {}
-  };
-  using InOutList = std::vector<InOut>;
-
-  InOutList _inOut;
-  int _lastIn = 0;
-  JIT &_jit;
-  ::mlir::OpBuilder _builder;
-  ::mlir::ModuleOp _module;
-  ::mlir::func::FuncOp _func;  // MLIR function to which ops are added
-  std::vector<void *> _inputs; // collecting input args
-
-  InOut *findInOut(id_type guid);
-  static std::string _fname;
-
-public:
-  DepManager(JIT &jit);
-  void finalizeAndRun();
-  ::mlir::OpBuilder &getBuilder() { return _builder; }
-  ::mlir::ModuleOp &getmodule() { return _module; }
-  /// @return the ::mlir::Value representing the array
-  /// If the array was not created within the current function, it will
-  /// be added as a function argument.
-  ::mlir::Value getDependent(::mlir::OpBuilder &builder,
-                             const array_i::future_type &fut);
-  ::mlir::Value addDependent(::mlir::OpBuilder &builder, const NDArray *fut);
-
-  /// for the array guid register the ::mlir::value and a callback to deliver
-  /// the promise which generated the value if the array is alive when the
-  /// function returns it will be added to the list of results
-  void addVal(id_type guid, ::mlir::Value val, SetResFunc cb);
-  void addReady(id_type guid, ReadyFunc cb);
-
-  /// signals end of lifetime of given array: does not need to be returned
-  void drop(id_type guid);
-
-  /// create return statement and add results to function
-  /// this must be called after store_inputs
-  /// @return size of output in number of intptr_t's
-  uint64_t handleResult(::mlir::OpBuilder &builder);
-
-  /// devlier promise after execution
-  void deliver(std::vector<intptr_t> &, uint64_t);
-
-  /// finalize all inputs storage and
-  /// @return buffer with all inputs
-  /// This must be called before handleResults()
-  /// Resets internal input buffer
-  std::vector<void *> finalize_inputs();
 };
 
 } // namespace jit
