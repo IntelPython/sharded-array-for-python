@@ -39,7 +39,7 @@ void gather_array(NDArray::ptr_type a_ptr, rank_type root, void *outPtr) {
   auto dtype = a_ptr->dtype();
   auto mysizes = a_ptr->local_shape();
   auto mysz = mysizes[0];
-  auto myoff = a_ptr->local_offsets()[0];
+  auto myoff = 0; // a_ptr->local_offsets()[0];
   auto nd = a_ptr->ndims();
   auto gshape = a_ptr->shape();
   auto myTileSz = std::accumulate(&gshape.data()[1], &gshape.data()[nd], 1,

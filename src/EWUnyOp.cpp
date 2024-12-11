@@ -9,7 +9,7 @@
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/TypeDispatch.hpp"
-#include "sharpy/jit/mlir.hpp"
+#include "sharpy/jit/DepManager.hpp"
 #include <mlir/Dialect/Tosa/IR/TosaOps.h>
 
 namespace SHARPY {

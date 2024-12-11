@@ -8,7 +8,7 @@
 #include "sharpy/NDArray.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
-#include "sharpy/jit/mlir.hpp"
+#include "sharpy/jit/DepManager.hpp"
 
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <imex/Utils/PassUtils.h>

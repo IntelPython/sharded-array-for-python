@@ -16,7 +16,7 @@
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/UtilsAndTypes.hpp"
-#include "sharpy/jit/mlir.hpp"
+#include "sharpy/jit/DepManager.hpp"
 
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/IR/Builders.h>
@@ -161,8 +161,8 @@ struct DeferredSetItem : public Deferred {
   DeferredSetItem() = default;
   DeferredSetItem(const array_i::future_type &a, const array_i::future_type &b,
                   const std::vector<py::slice> &v)
-      : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
-        _a(a.guid()), _b(b.guid()), _slc(v, a.shape()) {}
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
+        _b(b.guid()), _slc(v, a.shape()) {}
 
   bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      jit::DepManager &dm) override {
@@ -174,13 +174,26 @@ struct DeferredSetItem : public Deferred {
     auto &strides = _slc.strides();
 
     // insertsliceop has no return value, so we just create the op...
-    (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
-                                                         sizes, strides);
-    // ... and use av as to later create the ndarray
-    dm.addReady(this->guid(), [this](id_type guid) {
-      assert(this->guid() == guid);
-      this->set_value(Registry::get(this->_a).get());
-    });
+    auto res = builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
+                                                              sizes, strides);
+    dm.addVal(this->guid(), res,
+              [this](uint64_t rank, void *allocated, void *aligned,
+                     intptr_t offset, const intptr_t *sizes,
+                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+                auto t =
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), allocated, aligned, offset, sizes,
+                            strides, std::move(loffs));
+                if (Registry::has(_a)) {
+                  t->set_base(Registry::get(_a).get());
+                } // else _a is a temporary and was dropped
+                this->set_value(std::move(t));
+              });
+    // // ... and use av as to later create the ndarray
+    // dm.addReady(this->guid(), [this](id_type guid) {
+    //   assert(this->guid() == guid);
+    //   this->set_value(Registry::get(this->_a).get());
+    // });
     return false;
   }
 
@@ -358,10 +371,11 @@ FutureArray *SetItem::__setitem__(FutureArray &a,
   auto afut = a.get();
   validateSlice(afut.shape(), v);
   auto bb = Creator::mk_future(b, afut.device(), afut.team(), afut.dtype());
-  a.put(defer<DeferredSetItem>(afut, bb.first->get(), v));
+  // a.put(defer<DeferredSetItem>(afut, bb.first->get(), v));
+  auto res = new FutureArray(defer<DeferredSetItem>(afut, bb.first->get(), v));
   if (bb.second)
     delete bb.first;
-  return &a;
+  return res;
 }
 
 FutureArray *SetItem::map(FutureArray &a, py::object &b) {

@@ -7,7 +7,7 @@
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
-#include "sharpy/jit/mlir.hpp"
+#include "sharpy/jit/DepManager.hpp"
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #include <algorithm>

@@ -13,7 +13,7 @@
 #include "include/sharpy/Service.hpp"
 #include "include/sharpy/Transceiver.hpp"
 #include "include/sharpy/itac.hpp"
-#include "include/sharpy/jit/mlir.hpp"
+#include "include/sharpy/jit/DepManager.hpp"
 
 #include <oneapi/tbb/concurrent_queue.h>
 

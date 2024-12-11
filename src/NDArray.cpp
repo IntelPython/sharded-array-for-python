@@ -7,7 +7,7 @@
 #include <sharpy/Deferred.hpp>
 #include <sharpy/NDArray.hpp>
 #include <sharpy/Transceiver.hpp>
-#include <sharpy/jit/mlir.hpp>
+#include <sharpy/jit/DepManager.hpp>
 
 #include <algorithm>
 #include <iostream>

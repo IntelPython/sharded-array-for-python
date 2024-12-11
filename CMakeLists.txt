@@ -112,27 +112,28 @@ FILE(GLOB JitHpps ${PROJECT_SOURCE_DIR}/src/include/sharpy/jit/*.hpp)
 set(Hpps ${Hpps} ${JitHpps} ${P2C_HPP})
 
 set(SHARPYSrcs
+    ${PROJECT_SOURCE_DIR}/src/_deferred.cpp
     ${PROJECT_SOURCE_DIR}/src/_sharpy.cpp
     ${PROJECT_SOURCE_DIR}/src/BodyBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
     ${PROJECT_SOURCE_DIR}/src/Creator.cpp
+    ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
     ${PROJECT_SOURCE_DIR}/src/EWBinOp.cpp
     ${PROJECT_SOURCE_DIR}/src/EWUnyOp.cpp
+    ${PROJECT_SOURCE_DIR}/src/Factory.cpp
     ${PROJECT_SOURCE_DIR}/src/IO.cpp
+    ${PROJECT_SOURCE_DIR}/src/jit/DepManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
     ${PROJECT_SOURCE_DIR}/src/LinAlgOp.cpp
     ${PROJECT_SOURCE_DIR}/src/ManipOp.cpp
-    ${PROJECT_SOURCE_DIR}/src/Random.cpp
-    ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
-    ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
-    ${PROJECT_SOURCE_DIR}/src/jit/mlir.cpp
-    ${PROJECT_SOURCE_DIR}/src/Deferred.cpp
-    ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/Mediator.cpp
     ${PROJECT_SOURCE_DIR}/src/MPIMediator.cpp
-    ${PROJECT_SOURCE_DIR}/src/CollComm.cpp
     ${PROJECT_SOURCE_DIR}/src/NDArray.cpp
-    ${PROJECT_SOURCE_DIR}/src/Factory.cpp
+    ${PROJECT_SOURCE_DIR}/src/Random.cpp
+    ${PROJECT_SOURCE_DIR}/src/ReduceOp.cpp
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
-    ${PROJECT_SOURCE_DIR}/src/_deferred.cpp
+    ${PROJECT_SOURCE_DIR}/src/Service.cpp
+    ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
 )
 set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/idtr.cpp
