@@ -178,6 +178,7 @@ target_link_libraries(_sharpy PRIVATE
     ${imex_dialect_libs}
     ${imex_conversion_libs}
     IMEXTransforms
+    MLIRCopyOpInterface
     IMEXUtil
     LLVMX86CodeGen
     LLVMX86AsmParser
