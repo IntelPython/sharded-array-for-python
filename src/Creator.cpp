@@ -102,12 +102,13 @@ struct DeferredFull : public Deferred {
     mlir::Type dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
     auto envs = mkEnvs(builder, rank(), _device);
-    mlir::Value res;
+    mlir::Value res =
+        builder.create<::mlir::tensor::EmptyOp>(loc, shape(), dtyp, envs);
     if (val) {
-      // auto resType = mlir::RankedTensorType::get(shape(), dtyp, envs);
-      res = builder.create<::mlir::tensor::SplatOp>(loc, val, shape());
-    } else {
-      res = builder.create<::mlir::tensor::EmptyOp>(loc, shape(), dtyp, envs);
+      res = builder
+                .create<mlir::linalg::FillOp>(loc, mlir::ValueRange{val},
+                                              mlir::ValueRange{res})
+                .getResult(0);
     }
     res = shardNow(builder, loc, res, team());
 

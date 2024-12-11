@@ -11,6 +11,7 @@
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #include <algorithm>
+#include <numeric>
 
 namespace SHARPY {
 
@@ -21,20 +22,46 @@ static mlir::Value createReduceOp(::mlir::OpBuilder &b,
                                   mlir::ShapedType outType, mlir::Value a,
                                   dim_vec_type axes) {
   std::sort(axes.begin(), axes.end());
-
+  if (axes.empty()) {
+    auto rank = mlir::cast<::mlir::RankedTensorType>(a.getType()).getRank();
+    axes.resize(rank);
+    std::iota(axes.begin(), axes.end(), 0);
+  }
+  auto elType = outType.getElementType();
   EWBinOpId bop = EWBINOP_LAST;
+  mlir::TypedAttr iAttr;
   switch (rop) {
   case PROD:
     bop = MULTIPLY;
+    iAttr = b.getOneAttr(elType);
     break;
   case SUM:
     bop = ADD;
+    iAttr = b.getZeroAttr(elType);
     break;
   case MAX:
     bop = MAXIMUM;
+    if (elType.isInteger()) {
+      iAttr = b.getIntegerAttr(elType, mlir::APInt::getSignedMinValue(
+                                           elType.getIntOrFloatBitWidth()));
+    } else {
+      iAttr = b.getFloatAttr(
+          elType,
+          mlir::APFloat::getLargest(
+              mlir::cast<mlir::FloatType>(elType).getFloatSemantics(), true));
+    }
     break;
   case MIN:
     bop = MINIMUM;
+    if (elType.isInteger()) {
+      iAttr = b.getIntegerAttr(elType, mlir::APInt::getSignedMaxValue(
+                                           elType.getIntOrFloatBitWidth()));
+    } else {
+      iAttr = b.getFloatAttr(
+          elType,
+          mlir::APFloat::getLargest(
+              mlir::cast<mlir::FloatType>(elType).getFloatSemantics(), false));
+    }
     break;
   case MEAN:
   case STD:
@@ -44,12 +71,14 @@ static mlir::Value createReduceOp(::mlir::OpBuilder &b,
     throw std::invalid_argument("Unknown reduction operation.");
   }
 
-  auto bodyBuilder = getBodyBuilder(bop, outType);
+  mlir::Value iVal = b.create<mlir::arith::ConstantOp>(loc, iAttr);
+  auto bodyBuilder = getBodyBuilder(bop, elType);
   auto empty = b.create<mlir::tensor::EmptyOp>(loc, outType.getShape(),
                                                outType.getElementType());
-  return b
-      .create<mlir::linalg::ReduceOp>(loc, a, empty->getResult(0), axes,
-                                      bodyBuilder)
+  auto filled = b.create<mlir::linalg::FillOp>(loc, mlir::ValueRange{iVal},
+                                               mlir::ValueRange{empty})
+                    .getResult(0);
+  return b.create<mlir::linalg::ReduceOp>(loc, a, filled, axes, bodyBuilder)
       ->getResult(0);
 }
 
