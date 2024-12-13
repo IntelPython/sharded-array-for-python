@@ -244,22 +244,15 @@ def run(n, backend, datatype, benchmark_mode):
         t = i * dt
 
         if t >= next_t_export - 1e-8:
-            if device:
-                # FIXME gpu.memcpy to host requires identity layout
-                # FIXME reduction on gpu
-                # e_host = e.to_device()
-                # u_host = u.to_device()
-                # h_host = h.to_device()
-                # _elev_max = np.max(e_host, all_axes)
-                # _u_max = np.max(u_host, all_axes)
-                # _total_v = np.sum(e_host + h, all_axes)
-                _elev_max = 0
-                _u_max = 0
-                _total_v = 0
-            else:
-                _elev_max = np.max(e, all_axes)
-                _u_max = np.max(u, all_axes)
-                _total_v = np.sum(e + h, all_axes)
+            sync()
+            H_tmp = e + h
+            sync()
+            _elev_max = np.max(e, all_axes).to_device()
+            # NOTE max(u) segfaults, shape (n+1, n) too large for tiling
+            _u_max = np.max(u[1:, :], all_axes).to_device()
+            _total_v = np.sum(H_tmp, all_axes).to_device()
+            # NOTE this segfaults
+            # _total_v = np.sum(e + h, all_axes).to_device()  # segfaults
 
             elev_max = float(_elev_max)
             u_max = float(_u_max)
@@ -294,16 +287,17 @@ def run(n, backend, datatype, benchmark_mode):
     duration = time_mod.perf_counter() - tic
     info(f"Duration: {duration:.2f} s")
 
-    if device:
-        # FIXME gpu.memcpy to host requires identity layout
-        # FIXME reduction on gpu
-        # err2_host = err2.to_device()
-        # err_L2 = math.sqrt(float(np.sum(err2_host, all_axes)))
-        err_L2 = 0
-    else:
-        e_exact = exact_elev(t, x_t_2d, y_t_2d, lx, ly)
-        err2 = (e_exact - e) * (e_exact - e) * dx * dy / lx / ly
-        err_L2 = math.sqrt(float(np.sum(err2, all_axes)))
+    e_exact = exact_elev(t, x_t_2d, y_t_2d, lx, ly).to_device(device)
+    err2 = (e_exact - e) * (e_exact - e) * dx * dy / lx / ly
+    err2sum = np.sum(err2, all_axes).to_device()
+    sync()
+    # e_host = e.to_device()
+    # sync()
+    # e_exact = exact_elev(t, x_t_2d, y_t_2d, lx, ly).to_device()
+    # err2 = (e_exact - e_host) * (e_exact - e_host) * dx * dy / lx / ly
+    # err2sum = np.sum(err2, all_axes)
+    sync()
+    err_L2 = math.sqrt(float(err2sum))
     info(f"L2 error: {err_L2:7.5e}")
 
     if nx == 128 and ny == 128 and not benchmark_mode and not device:
