@@ -68,6 +68,22 @@
 namespace SHARPY {
 namespace jit {
 
+mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     mlir::Value val, const std::string &team) {
+  if (team.empty()) {
+    return val;
+  }
+  auto rank = mlir::cast<mlir::ShapedType>(val.getType()).getRank();
+  mlir::SmallVector<mlir::mesh::MeshAxesAttr> splitAxes;
+  if (rank) {
+    splitAxes.emplace_back(mlir::mesh::MeshAxesAttr::get(
+        builder.getContext(), mlir::ArrayRef<int16_t>{0}));
+  }
+  mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
+      loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
+  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
+}
+
 static std::map<std::array<unsigned char, 20>,
                 std::unique_ptr<::mlir::ExecutionEngine>>
     engineCache;
@@ -196,15 +212,22 @@ static const std::string cpu_pipeline =
     "func.func(tosa-to-linalg),"
     "func.func(tosa-to-tensor),"
     "linalg-generalize-named-ops,"
+    "canonicalize,"
     "linalg-fuse-elementwise-ops,"
     "arith-expand,"
     "memref-expand,"
     "empty-tensor-to-alloc-tensor,"
     "canonicalize,"
     "one-shot-bufferize{bufferize-function-boundaries=1},"
+    "expand-realloc,"
+    "func.func(buffer-deallocation)," // "ownership-based-buffer-deallocation,"
+    "canonicalize,"
+    "buffer-deallocation-simplification,"
+    "bufferization-lower-deallocations,"
+    "cse,"
     "canonicalize,"
     "imex-remove-temporaries,"
-    "buffer-deallocation-pipeline,"
+    // "buffer-deallocation-pipeline,"
     "convert-bufferization-to-memref,"
     "func.func(convert-linalg-to-parallel-loops),"
     "func.func(scf-parallel-loop-fusion),"
@@ -236,6 +259,7 @@ static const std::string gpu_pipeline =
     "func.func(tosa-to-linalg),"
     "func.func(tosa-to-tensor),"
     "linalg-generalize-named-ops,"
+    "canonicalize,"
     "linalg-fuse-elementwise-ops,"
     "arith-expand,"
     "memref-expand,"

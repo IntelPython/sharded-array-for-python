@@ -94,7 +94,7 @@ extern bool finied;
 //     deletes remaining heap allocations.
 // - create a deferred which deletes the pointer itself (must go *after* the
 //   first).
-// - NDArray's destructor does not delete an memory except its base.
+// - NDArray's destructor does not delete any memory except its base.
 void NDArray::NDADeleter::operator()(NDArray *a) const {
   if (!a->_base && a->isAllocated()) {
     // create MLIR to deallocate as deferred

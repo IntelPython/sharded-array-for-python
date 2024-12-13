@@ -79,7 +79,7 @@ static mlir::Value createReduceOp(::mlir::OpBuilder &b,
                                                mlir::ValueRange{empty})
                     .getResult(0);
   return b.create<mlir::linalg::ReduceOp>(loc, a, filled, axes, bodyBuilder)
-      ->getResult(0);
+      .getResult(0);
 }
 
 struct DeferredReduceOp : public Deferred {

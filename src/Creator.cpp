@@ -49,23 +49,6 @@ imex::ndarray::EnvsAttr mkEnvs(::mlir::Builder &builder, int64_t rank,
       {::imex::region::GPUEnvAttr::get(builder.getStringAttr(device))});
 }
 
-static mlir::Value shardNow(::mlir::OpBuilder &builder,
-                            const ::mlir::Location &loc, mlir::Value val,
-                            const std::string &team) {
-  if (team.empty()) {
-    return val;
-  }
-  auto rank = mlir::cast<mlir::ShapedType>(val.getType()).getRank();
-  mlir::SmallVector<mlir::mesh::MeshAxesAttr> splitAxes;
-  if (rank) {
-    splitAxes.emplace_back(mlir::mesh::MeshAxesAttr::get(
-        builder.getContext(), mlir::ArrayRef<int16_t>{0}));
-  }
-  mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
-      loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
-  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
-}
-
 struct DeferredFull : public Deferred {
   PyScalar _val;
 
@@ -110,7 +93,7 @@ struct DeferredFull : public Deferred {
                                               mlir::ValueRange{res})
                 .getResult(0);
     }
-    res = shardNow(builder, loc, res, team());
+    res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, void *allocated, void *aligned,
@@ -174,7 +157,7 @@ struct DeferredArange : public Deferred {
     auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
     mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
         loc, outType, start, stop, num, false);
-    res = shardNow(builder, loc, res, team());
+    res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, void *allocated, void *aligned,
@@ -231,7 +214,7 @@ struct DeferredLinspace : public Deferred {
     auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
     mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
         loc, outType, start, stop, num, _endpoint);
-    res = shardNow(builder, loc, res, team());
+    res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, void *allocated, void *aligned,

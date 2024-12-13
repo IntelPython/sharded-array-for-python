@@ -134,6 +134,9 @@ static mlir::Value createEWBinOp(::mlir::OpBuilder &b,
   case MULTIPLY:
   case __RMUL__:
   case __IMUL__:
+    // return b.create<mlir::linalg::MulOp>(loc, mlir::ValueRange{lhs, rhs},
+    // b.create<mlir::tensor::EmptyOp>(loc, outTyp.getShape(),
+    // outTyp.getElementType()).getResult()).getResult(0);
     return b.create<mlir::tosa::MulOp>(loc, outTyp, lhs, rhs, 0);
   case __TRUEDIV__:
   case DIVIDE:

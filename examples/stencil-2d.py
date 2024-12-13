@@ -146,6 +146,8 @@ def main():
             W[r + j, r + j] = +1.0 / (4 * j * r)
             W[r - j, r - j] = -1.0 / (4 * j * r)
 
+    np.sync()
+    print("########################################################")
     print(W)
     A = np.numpy.fromfunction(
         lambda i, j: i + j, (n, n), dtype=np.float32, device=device
@@ -197,9 +199,13 @@ def main():
     # ******************************************************************************
     # * Analyze and output results.
     # ******************************************************************************
-    print(B)
-    B = np.spmd.gather(np.reshape(B, (n * n,)))
-    norm = np.linalg.norm(B, ord=1)
+    print("########################################################")
+    # print(B)
+    X = np.to_numpy(B)
+    import numpy
+
+    B = numpy.reshape(X, (n * n,))
+    norm = numpy.linalg.norm(B, ord=1)
     active_points = (n - 2 * r) ** 2
     norm /= active_points
 

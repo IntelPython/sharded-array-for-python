@@ -101,8 +101,10 @@ static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
   ::mlir::SmallVector<int64_t> zeros(ndims, 0);
   auto elType(getMLIRType(builder, impl->dtype()));
   auto loc = builder.getUnknownLoc();
+
   ::mlir::OpBuilder::InsertionGuard g(_builder);
   _builder.setInsertionPointToStart(&_func.front());
+
   auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
     intptr_t *buff = new intptr_t[memref_sz(ndims)];
     buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
@@ -112,14 +114,14 @@ static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
     memcpy(buff + 3 + ndims, mr._strides, ndims * sizeof(intptr_t));
     return buff;
   };
+
   auto typ = getTensorType(ndims, impl->owned_data(), elType);
   _func.insertArgument(idx, typ, {}, loc);
   _inputs.push_back(storeMR(impl->owned_data()));
-  ::mlir::Value arg = _func.getArgument(idx);
+  auto arg = shardNow(builder, loc, _func.getArgument(idx), impl->team());
   _inOut.emplace_back(InOut(guid, arg));
   _lastIn += 1;
-  if (!impl->team().empty() && ndims == 0) {
-  }
+
   return arg;
 }
 

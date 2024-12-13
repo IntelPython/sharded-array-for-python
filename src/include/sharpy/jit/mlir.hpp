@@ -58,6 +58,9 @@ inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
   }
 }
 
+mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     mlir::Value val, const std::string &team);
+
 // initialize jit
 void init();
 void fini();
