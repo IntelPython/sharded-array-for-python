@@ -266,6 +266,12 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
 static ::mlir::MemRefType getMRType(size_t ndims, intptr_t offset,
                                     intptr_t *sizes, intptr_t *strides,
                                     ::mlir::Type elType) {
+  // sanitize strides
+  for (size_t i = 0; i < ndims; i++) {
+    if (strides[i] == 0) {
+      strides[i] = 1;
+    }
+  }
   auto layout = ::mlir::StridedLayoutAttr::get(elType.getContext(), offset,
                                                {strides, ndims});
   return ::mlir::MemRefType::get({sizes, ndims}, elType, layout);
