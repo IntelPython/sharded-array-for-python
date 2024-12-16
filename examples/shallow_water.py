@@ -115,10 +115,10 @@ def run(n, backend, datatype, benchmark_mode):
         """Construct an (nx, ny) array where each row/col is an arange"""
         nx, ny = shape
         if columns:
-            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % nx
+            ind = np.arange(0, nx * ny, 1, dtype=np.int64) % nx
             ind = transpose(np.reshape(ind, (ny, nx)))
         else:
-            ind = np.arange(0, nx * ny, 1, dtype=np.int32) % ny
+            ind = np.arange(0, nx * ny, 1, dtype=np.int64) % ny
             ind = np.reshape(ind, (nx, ny))
         return ind.astype(dtype)
 
