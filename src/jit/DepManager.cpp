@@ -42,6 +42,17 @@ void DepManager::finalizeAndRun() {
     auto meshOp = _builder.create<::mlir::mesh::MeshOp>(
         _builder.getUnknownLoc(), mesh, mlir::ArrayRef<int64_t>{nRanks});
     meshOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+    (void)_builder.create<::mlir::memref::GlobalOp>(
+        _builder.getUnknownLoc(),
+        /*sym_name=*/"static_mpi_rank",
+        /*sym_visibility=*/_builder.getStringAttr("public"),
+        /*type=*/mlir::MemRefType::get({}, _builder.getIndexType()),
+        /*initial_value=*/
+        mlir::DenseIntElementsAttr::get(
+            mlir::RankedTensorType::get({}, _builder.getIndexType()),
+            {getTransceiver()->rank()}),
+        /*constant=*/true,
+        /*alignment=*/mlir::IntegerAttr());
   }
   _module.push_back(_func);
   if (osz > 0 || !input.empty()) {

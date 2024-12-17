@@ -243,6 +243,7 @@ static const std::string cpu_pipeline =
     "convert-math-to-llvm,"
     "convert-math-to-libm,"
     "convert-func-to-llvm,"
+    "convert-to-llvm,"
     "reconcile-unrealized-casts";
 
 static const std::string gpu_pipeline =
@@ -318,7 +319,7 @@ static const std::string &pass_pipeline =
 
 JIT::JIT(const std::string &libidtr)
     : _context(::mlir::MLIRContext::Threading::DISABLED), _pm(&_context),
-      _verbose(0), _jit_opt_level(3), _idtrlib(libidtr) {
+      _verbose(0), _jit_opt_level(3) {
   // Register the translation from ::mlir to LLVM IR, which must happen before
   // we can JIT-compile.
   ::mlir::DialectRegistry registry;
@@ -363,32 +364,38 @@ JIT::JIT(const std::string &libidtr)
 
   auto mlirRoot(get_text_env("MLIRROOT"));
   mlirRoot = !mlirRoot.empty() ? mlirRoot : std::string(CMAKE_MLIR_ROOT);
-  _crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
-  _runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
-  if (!std::ifstream(_crunnerlib)) {
+  static auto crunnerlib = mlirRoot + "/lib/libmlir_c_runner_utils.so";
+  static auto runnerlib = mlirRoot + "/lib/libmlir_runner_utils.so";
+  if (!std::ifstream(crunnerlib)) {
     throw std::runtime_error("Cannot find libmlir_c_runner_utils.so");
   }
-  if (!std::ifstream(_runnerlib)) {
+  if (!std::ifstream(runnerlib)) {
     throw std::runtime_error("Cannot find libmlir_runner_utils.so");
   }
 
+  auto mpiRoot(get_text_env("I_MPI_ROOT"));
+  static auto mpilib = mpiRoot + "/lib/libmpi.so";
+  if (!std::ifstream(mpilib)) {
+    throw std::runtime_error("Cannot find libmpi.so");
+  }
+
+  static std::string idtrlib(libidtr);
+
   if (useGPU()) {
-    auto gpuxlibstr = get_text_env("SHARPY_GPUX_SO");
-    if (!gpuxlibstr.empty()) {
-      _gpulib = std::string(gpuxlibstr);
-    } else {
+    static auto gpulib = get_text_env("SHARPY_GPUX_SO");
+    if (gpulib.empty()) {
       auto imexRoot = get_text_env("IMEXROOT");
       imexRoot = !imexRoot.empty() ? imexRoot : std::string(CMAKE_IMEX_ROOT);
-      _gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
-      if (!std::ifstream(_gpulib)) {
+      gpulib = imexRoot + "/lib/liblevel-zero-runtime.so";
+      if (!std::ifstream(gpulib)) {
         throw std::runtime_error("Cannot find liblevel-zero-runtime.so");
       }
     }
-    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
-                       _idtrlib.c_str(), _gpulib.c_str()};
+    _sharedLibPaths = {crunnerlib.c_str(), runnerlib.c_str(), idtrlib.c_str(),
+                       gpulib.c_str()};
   } else {
-    _sharedLibPaths = {_crunnerlib.c_str(), _runnerlib.c_str(),
-                       _idtrlib.c_str()};
+    _sharedLibPaths = {crunnerlib.c_str(), runnerlib.c_str(), idtrlib.c_str(),
+                       mpilib.c_str()};
   }
 
   // detect target architecture
