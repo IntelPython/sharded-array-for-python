@@ -7,6 +7,7 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <sharpy/CppTypes.hpp>
+#include <sharpy/MemRefType.hpp>
 #include <sharpy/array_i.hpp>
 #include <sharpy/jit/mlir.hpp>
 #include <vector>
@@ -17,9 +18,8 @@ namespace jit {
 // function type used for reporting back array results generated
 // by Deferred::generate_mlir
 using SetResFunc =
-    std::function<void(uint64_t rank, void *allocated, void *aligned,
-                       intptr_t offset, const intptr_t *sizes,
-                       const intptr_t *strides, std::vector<int64_t> &&l_offs)>;
+    std::function<void(uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                       DynMemRef &&halos, DynMemRef &&offs)>;
 using ReadyFunc = std::function<void(id_type guid)>;
 
 class DepManager {

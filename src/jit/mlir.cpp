@@ -33,6 +33,7 @@
   dialect.
 */
 
+#include <sharpy/MemRefType.hpp>
 #include <sharpy/UtilsAndTypes.hpp>
 #include <sharpy/jit/mlir.hpp>
 
@@ -81,6 +82,73 @@ mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
   }
   mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
       loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
+  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
+}
+
+mlir::SmallVector<mlir::mesh::MeshAxesAttr>
+fillFromPadded(::mlir::OpBuilder &builder, const DynMemRef &src) {
+  mlir::SmallVector<mlir::mesh::MeshAxesAttr> res;
+  auto ptr = reinterpret_cast<int16_t *>(src._aligned) + src._offset;
+  for (auto i = 0; i < src._sizes[0]; ++i) {
+    mlir::SmallVector<int16_t> axes;
+    for (auto j = 0; j < src._sizes[1]; ++j) {
+      auto val = ptr[i * src._strides[0] + j * src._strides[1]];
+      if (val < 0) {
+        break;
+      }
+      axes.emplace_back(val);
+    }
+    res.emplace_back(mlir::mesh::MeshAxesAttr::get(builder.getContext(), axes));
+  }
+  return res;
+}
+
+mlir::SmallVector<int64_t> fillFlatFromPadded(::mlir::OpBuilder &builder,
+                                              const DynMemRef &src) {
+  mlir::SmallVector<int64_t> res;
+  auto ptr = reinterpret_cast<int64_t *>(src._aligned) + src._offset;
+  for (auto i = 0; i < src._sizes[0]; ++i) {
+    for (auto j = 0; j < src._sizes[1]; ++j) {
+      auto val = ptr[i * src._strides[0] + j * src._strides[1]];
+      if (val < 0) {
+        break;
+      }
+      res.emplace_back(val);
+    }
+  }
+  return res;
+}
+
+mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     mlir::Value val, const std::string &team,
+                     const DynMemRef &splits, const DynMemRef &halos,
+                     const DynMemRef &offs) {
+  if (team.empty()) {
+    return val;
+  }
+  assert(splits._sizes && splits._strides);
+  assert(halos.empty() ||
+         (halos._sizes && halos._strides && halos._strides[1] == 1));
+  assert(offs.empty() ||
+         (offs._sizes && offs._strides && offs._strides[1] == 1));
+
+  auto splitAxes = fillFromPadded(builder, splits);
+
+  mlir::ArrayRef<int64_t> haloSizes;
+  ;
+  if (!halos.empty()) {
+    haloSizes = mlir::ArrayRef<int64_t>(
+        reinterpret_cast<int64_t *>(halos._aligned) + halos._offset,
+        halos._sizes[0] * halos._sizes[1]);
+  }
+
+  mlir::SmallVector<int64_t> shardedDimsOffsets;
+  if (!offs.empty()) {
+    shardedDimsOffsets = fillFlatFromPadded(builder, offs);
+  }
+
+  mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
+      loc, team, splitAxes, haloSizes, shardedDimsOffsets);
   return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
 }
 

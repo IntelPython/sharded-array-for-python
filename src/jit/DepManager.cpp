@@ -16,6 +16,7 @@
 namespace SHARPY {
 namespace jit {
 
+static bool FORCE_DIST = get_bool_env("SHARPY_FORCE_DIST");
 std::string DepManager::_fname = "sharpy_jit";
 
 DepManager::DepManager(jit::JIT &jit) : _jit(jit), _builder(&jit.context()) {
@@ -89,16 +90,9 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
   }
 };
 
-static ::mlir::RankedTensorType getTensorType(size_t ndims, intptr_t /*offset*/,
-                                              intptr_t *sizes,
-                                              intptr_t * /*strides*/,
+static ::mlir::RankedTensorType getTensorType(const shape_type &shape,
                                               ::mlir::Type elType) {
-  return mlir::RankedTensorType::get(::mlir::ArrayRef(sizes, ndims), elType);
-}
-
-static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
-                                              ::mlir::Type elType) {
-  return getTensorType(ndims, mr._offset, mr._sizes, mr._strides, elType);
+  return mlir::RankedTensorType::get(shape, elType);
 }
 
 ::mlir::Value DepManager::addDependent(::mlir::OpBuilder &builder,
@@ -111,10 +105,6 @@ static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
   size_t ndims = impl->ndims();
   ::mlir::SmallVector<int64_t> zeros(ndims, 0);
   auto elType(getMLIRType(builder, impl->dtype()));
-  auto loc = builder.getUnknownLoc();
-
-  ::mlir::OpBuilder::InsertionGuard g(_builder);
-  _builder.setInsertionPointToStart(&_func.front());
 
   auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
     intptr_t *buff = new intptr_t[memref_sz(ndims)];
@@ -126,10 +116,16 @@ static ::mlir::RankedTensorType getTensorType(size_t ndims, const DynMemRef &mr,
     return buff;
   };
 
-  auto typ = getTensorType(ndims, impl->owned_data(), elType);
+  auto loc = builder.getUnknownLoc();
+  ::mlir::OpBuilder::InsertionGuard g(builder);
+  builder.setInsertionPointToStart(&_func.front());
+
+  auto typ = getTensorType(impl->shape(), elType);
   _func.insertArgument(idx, typ, {}, loc);
   _inputs.push_back(storeMR(impl->owned_data()));
-  auto arg = shardNow(builder, loc, _func.getArgument(idx), impl->team());
+  auto arg = shardNow(builder, loc, _func.getArgument(idx), impl->team(),
+                      impl->split_axes(), impl->halo_sizes(),
+                      impl->sharded_dims_offsets());
   _inOut.emplace_back(InOut(guid, arg));
   _lastIn += 1;
 
@@ -170,20 +166,24 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   auto loc = builder.getUnknownLoc();
   uint64_t sz = 0;
   unsigned idx = 0;
+
   for (auto &x : _inOut) {
     ::mlir::Value value = x._value;
     if (value) {
-      bool isDist = false;
       auto rank =
           mlir::cast<::mlir::RankedTensorType>(value.getType()).getRank();
+      bool isDist = FORCE_DIST || (rank > 0 && getTransceiver()->nranks() > 1);
       ret_values.emplace_back(value);
-      _func.insertResult(idx, value.getType(), {});
+      _func.insertResult(idx++, value.getType(), {});
+      if (isDist) {
+        builder.setInsertionPointAfterValue(value);
+        auto sharding = builder.create<mlir::mesh::GetShardingOp>(loc, value);
+        ret_values.emplace_back(sharding);
+        _func.insertResult(idx++, sharding.getType(), {});
+      }
       x._rank = rank;
       x._isDist = isDist;
       sz += ndarray_sz(rank, isDist);
-      ++idx;
-      if (isDist && rank) {
-      }
     }
   }
   if (HAS_ITAC()) {
@@ -210,15 +210,28 @@ void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
   size_t pos = 0;
   for (auto &x : _inOut) {
     if (x._value) {
-      auto t_allocated = reinterpret_cast<void *>(output[pos]);
-      auto t_aligned = reinterpret_cast<void *>(output[pos + 1]);
-      intptr_t t_offset = output[pos + 2];
-      intptr_t *t_sizes = &output[pos + 3];
-      intptr_t *t_strides = &output[pos + 3 + x._rank];
-      pos += memref_sz(x._rank);
+      auto get_dynmemref = [](intptr_t *buff, size_t &pos, int rank,
+                              bool isDist) {
+        if (!isDist) {
+          return DynMemRef();
+        }
+        intptr_t *t_allocated = reinterpret_cast<intptr_t *>(buff[pos]);
+        intptr_t *t_aligned = reinterpret_cast<intptr_t *>(buff[pos + 1]);
+        intptr_t t_offset = buff[pos + 2];
+        intptr_t *t_sizes = &buff[pos + 3];
+        intptr_t *t_strides = &buff[pos + 3 + rank];
+        pos += memref_sz(rank);
+        return DynMemRef(rank, t_allocated, t_aligned, t_offset, t_sizes,
+                         t_strides);
+      };
+      auto data = get_dynmemref(output.data(), pos, x._rank, x._isDist);
+      auto splits = get_dynmemref(output.data(), pos, 2, x._isDist);
+      auto halos = get_dynmemref(output.data(), pos, 2, x._isDist);
+      auto offs = get_dynmemref(output.data(), pos, 2, x._isDist);
+
       if (x._setResFunc) {
-        x._setResFunc(x._rank, t_allocated, t_aligned, t_offset, t_sizes,
-                      t_strides, {});
+        x._setResFunc(x._rank, std::move(data), std::move(splits),
+                      std::move(halos), std::move(offs));
       }
       if (x._rank > 0 && x._isDist) {
       }

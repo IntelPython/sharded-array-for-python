@@ -105,13 +105,12 @@ struct DeferredReduceOp : public Deferred {
     auto res = createReduceOp(builder, loc, _op, outTyp, av, _dim);
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(), allocated,
-                                        aligned, offset, sizes, strides,
-                                        std::move(loffs)));
+                                        this->device(), this->team(),
+                                        std::move(data), std::move(splits),
+                                        std::move(halos), std::move(offs)));
               });
     return false;
   }

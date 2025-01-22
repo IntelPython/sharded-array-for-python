@@ -30,6 +30,7 @@ namespace SHARPY {
 
 class Transceiver;
 class NDArray;
+class DynMemRef;
 
 namespace jit {
 
@@ -60,6 +61,10 @@ inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
 
 mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
                      mlir::Value val, const std::string &team);
+mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+                     mlir::Value val, const std::string &team,
+                     const DynMemRef &splits, const DynMemRef &halos,
+                     const DynMemRef &offs);
 
 // initialize jit
 void init();

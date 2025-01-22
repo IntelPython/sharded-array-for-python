@@ -48,13 +48,12 @@ struct DeferredReshape : public Deferred {
         builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);
 
     dm.addVal(this->guid(), op,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 auto t =
                     mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), allocated, aligned, offset, sizes,
-                            strides, std::move(loffs));
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
                 if (_copy != COPY_ALWAYS) {
                   throw std::runtime_error("copy-free reshape not supported");
                   if (Registry::has(_a)) {
@@ -102,13 +101,12 @@ struct DeferredAsType : public Deferred {
     auto res = builder.create<::imex::ndarray::CastElemTypeOp>(
         loc, outType, av, ::imex::getIntAttr(builder, _copy, 1));
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 auto t =
-                    mk_tnsr(this->guid(), this->dtype(), this->shape(),
-                            this->device(), this->team(), allocated, aligned,
-                            offset, sizes, strides, std::move(loffs));
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
                 if (!this->_copy && Registry::has(_a)) {
                   t->set_base(Registry::get(_a).get());
                 } // else _a is a temporary and was dropped
@@ -162,13 +160,12 @@ struct DeferredToDevice : public Deferred {
         srcType.getShape(), srcType.getElementType(), envsAttr);
     auto res = builder.create<::imex::ndarray::CopyOp>(loc, outType, av);
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 auto t =
-                    mk_tnsr(this->guid(), this->dtype(), this->shape(),
-                            this->device(), this->team(), allocated, aligned,
-                            offset, sizes, strides, std::move(loffs));
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
                 this->set_value(std::move(t));
               });
     return false;
@@ -202,13 +199,12 @@ struct DeferredPermuteDims : public Deferred {
             ->getResult(0);
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 auto t =
                     mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), allocated, aligned, offset, sizes,
-                            strides, std::move(loffs));
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
                 this->set_value(std::move(t));
               });
 

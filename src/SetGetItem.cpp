@@ -177,19 +177,18 @@ struct DeferredSetItem : public Deferred {
     // insertsliceop has no return value, so we just create the op...
     auto res = builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
                                                               sizes, strides);
-    dm.addVal(
-        this->guid(), res,
-        [this, af](uint64_t rank, void *allocated, void *aligned,
-                   intptr_t offset, const intptr_t *sizes,
-                   const intptr_t *strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), allocated, aligned, offset, sizes,
-                           strides, std::move(loffs));
-          if (Registry::has(this->_a)) {
-            t->set_base(af.get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this, af](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                         DynMemRef &&halos, DynMemRef &&offs) {
+                auto t =
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
+                if (Registry::has(this->_a)) {
+                  t->set_base(af.get());
+                } // else _a is a temporary and was dropped
+                this->set_value(std::move(t));
+              });
     // // ... and use av as to later create the ndarray
     // dm.addReady(this->guid(), [this](id_type guid) {
     //   assert(this->guid() == guid);
@@ -296,13 +295,12 @@ struct DeferredGetItem : public Deferred {
                                                           sizes, strides);
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 auto t =
                     mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), allocated, aligned, offset, sizes,
-                            strides, std::move(loffs));
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
                 if (Registry::has(_a)) {
                   t->set_base(Registry::get(_a).get());
                 } // else _a is a temporary and was dropped

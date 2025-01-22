@@ -20,13 +20,11 @@ namespace SHARPY {
 
 NDArray::NDArray(id_type guid_, DTypeId dtype_, shape_type gShape,
                  const std::string &device_, const std::string &team_,
-                 void *allocated, void *aligned, intptr_t offset,
-                 const intptr_t *sizes, const intptr_t *strides,
-                 std::vector<int64_t> &&loffs, rank_type owner)
+                 DynMemRef &&lData, DynMemRef &&splits, DynMemRef &&halos,
+                 DynMemRef &&offs, rank_type owner)
     : ArrayMeta(guid_, dtype_, gShape, device_, team_), _owner(owner),
-      _lData(allocated ? gShape.size() : 0, allocated, aligned, offset, sizes,
-             strides),
-      _lOffsets(std::move(loffs)) {
+      _lData(std::move(lData)), _splitAxes(std::move(splits)),
+      _haloSizes(std::move(halos)), _shardedDimsOffsets(std::move(offs)) {
   if (ndims() == 0) {
     _owner = REPLICATED;
   }
@@ -72,8 +70,7 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
     : ArrayMeta(guid_, dtype_, {shape, shape + ndims}, device_, team_),
       _owner(NOOWNER),
       _lData(ndims, data, data, 0, reinterpret_cast<const intptr_t *>(shape),
-             reinterpret_cast<const intptr_t *>(strides)),
-      _lOffsets(ndims, 0) {}
+             reinterpret_cast<const intptr_t *>(strides)) {}
 
 void NDArray::set_base(const array_i::ptr_type &base) {
   _base = new SharedBaseObject<array_i::ptr_type>(base);
@@ -176,10 +173,10 @@ std::string NDArray::__repr__() const {
   auto gshp = ArrayMeta::shape();
   for (auto i = 0; i < nd; ++i)
     oss << gshp[i] << (i == nd - 1 ? "" : ", ");
-  oss << "), loff=(";
-  if (_lOffsets.size())
-    for (auto i = 0; i < nd; ++i)
-      oss << _lOffsets[i] << (i == nd - 1 ? "" : ", ");
+  // oss << "), loff=(";
+  // if (_lOffsets.size())
+  //   for (auto i = 0; i < nd; ++i)
+  //     oss << _lOffsets[i] << (i == nd - 1 ? "" : ", ");
   oss << "), lsz=(";
   for (auto i = 0; i < nd; ++i)
     oss << _lData._sizes[i] << (i == nd - 1 ? "" : ", ");
@@ -231,6 +228,13 @@ int64_t NDArray::__int__() const {
     res = static_cast<float>(ptr[this->_lData._offset]);
   });
   return res;
+}
+
+/// FIXME With the sharding from MLIR mesh dialect this is not straight-forward
+/// anymore.
+std::vector<int64_t> NDArray::local_offsets() const {
+  throw(std::runtime_error("NDArray::local_offsets() not implemented"));
+  return {};
 }
 
 void NDArray::replicate() {

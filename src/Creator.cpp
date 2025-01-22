@@ -96,14 +96,13 @@ struct DeferredFull : public Deferred {
     res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 assert(rank == this->rank());
                 this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(), allocated,
-                                        aligned, offset, sizes, strides,
-                                        std::move(loffs)));
+                                        this->device(), this->team(),
+                                        std::move(data), std::move(splits),
+                                        std::move(halos), std::move(offs)));
               });
     return false;
   }
@@ -160,15 +159,14 @@ struct DeferredArange : public Deferred {
     res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 assert(rank == 1);
-                assert(strides[0] == 1);
+                assert(data._strides[0] == 1);
                 this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(), allocated,
-                                        aligned, offset, sizes, strides,
-                                        std::move(loffs)));
+                                        this->device(), this->team(),
+                                        std::move(data), std::move(splits),
+                                        std::move(halos), std::move(offs)));
               });
     return false;
   }
@@ -217,15 +215,14 @@ struct DeferredLinspace : public Deferred {
     res = jit::shardNow(builder, loc, res, team());
 
     dm.addVal(this->guid(), res,
-              [this](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
+              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
                 assert(rank == 1);
-                assert(strides[0] == 1);
+                assert(data._strides[0] == 1);
                 this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(), allocated,
-                                        aligned, offset, sizes, strides,
-                                        std::move(loffs)));
+                                        this->device(), this->team(),
+                                        std::move(data), std::move(splits),
+                                        std::move(halos), std::move(offs)));
               });
     return false;
   }

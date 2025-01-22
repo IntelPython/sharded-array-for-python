@@ -215,6 +215,8 @@ struct DynMemRef {
     }
   }
 
+  bool empty() const { return _allocated == nullptr; }
+
   void markDeallocated() { _allocated = nullptr; }
 };
 } // namespace SHARPY

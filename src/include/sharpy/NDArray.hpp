@@ -30,7 +30,7 @@ class Transceiver;
 class NDArray : public array_i, protected ArrayMeta {
   mutable rank_type _owner = NOOWNER;
   DynMemRef _lData;
-  std::vector<int64_t> _lOffsets;
+  DynMemRef _splitAxes, _haloSizes, _shardedDimsOffsets;
   BaseObj *_base = nullptr;
 
 public:
@@ -47,9 +47,8 @@ public:
 
   // construct from a and MLIR-jitted execution
   NDArray(id_type guid, DTypeId dtype, shape_type gShape,
-          const std::string &device, const std::string &team, void *allocated,
-          void *aligned, intptr_t offset, const intptr_t *sizes,
-          const intptr_t *strides, std::vector<int64_t> &&loffs,
+          const std::string &device, const std::string &team, DynMemRef &&lData,
+          DynMemRef &&splits, DynMemRef &&halos, DynMemRef &&offs,
           rank_type owner = NOOWNER);
 
   NDArray(id_type guid, DTypeId dtype, const shape_type &shp,
@@ -171,9 +170,14 @@ public:
 
   /// @return locally owned data as DynMemref
   const DynMemRef &owned_data() const { return _lData; }
-
+  /// @return split axes
+  const DynMemRef &split_axes() const { return _splitAxes; }
+  /// @return halo sizes
+  const DynMemRef &halo_sizes() const { return _haloSizes; }
+  /// @return sharded dims offsets
+  const DynMemRef &sharded_dims_offsets() const { return _shardedDimsOffsets; }
   /// @return local offsets into global array
-  const std::vector<int64_t> &local_offsets() const { return _lOffsets; }
+  std::vector<int64_t> local_offsets() const;
   /// @return shape of local data
   const int64_t *local_shape() const { return _lData._sizes; }
   /// @return strides of local data

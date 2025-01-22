@@ -126,19 +126,18 @@ struct DeferredEWUnyOp : public Deferred {
     // positive op will be eliminated so it is equivalent to a view
     auto view = (_op == POSITIVE || _op == __POS__);
 
-    dm.addVal(
-        this->guid(), res,
-        [this, view](uint64_t rank, void *allocated, void *aligned,
-                     intptr_t offset, const intptr_t *sizes,
-                     const intptr_t *strides, std::vector<int64_t> &&loffs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), allocated, aligned, offset, sizes,
-                           strides, std::move(loffs));
-          if (view && Registry::has(_a)) {
-            t->set_base(Registry::get(_a).get());
-          }
-          this->set_value(std::move(t));
-        });
+    dm.addVal(this->guid(), res,
+              [this, view](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                           DynMemRef &&halos, DynMemRef &&offs) {
+                auto t =
+                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                            this->team(), std::move(data), std::move(splits),
+                            std::move(halos), std::move(offs));
+                if (view && Registry::has(_a)) {
+                  t->set_base(Registry::get(_a).get());
+                }
+                this->set_value(std::move(t));
+              });
     return false;
   }
 
