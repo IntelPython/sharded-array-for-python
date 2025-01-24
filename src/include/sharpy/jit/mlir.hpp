@@ -30,7 +30,7 @@ namespace SHARPY {
 
 class Transceiver;
 class NDArray;
-class DynMemRef;
+struct DynMemRef;
 
 namespace jit {
 

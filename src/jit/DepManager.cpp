@@ -211,8 +211,8 @@ void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
   for (auto &x : _inOut) {
     if (x._value) {
       auto get_dynmemref = [](intptr_t *buff, size_t &pos, int rank,
-                              bool isDist) {
-        if (!isDist) {
+                              bool enabled) {
+        if (!enabled) {
           return DynMemRef();
         }
         intptr_t *t_allocated = reinterpret_cast<intptr_t *>(buff[pos]);
@@ -224,7 +224,7 @@ void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
         return DynMemRef(rank, t_allocated, t_aligned, t_offset, t_sizes,
                          t_strides);
       };
-      auto data = get_dynmemref(output.data(), pos, x._rank, x._isDist);
+      auto data = get_dynmemref(output.data(), pos, x._rank, true);
       auto splits = get_dynmemref(output.data(), pos, 2, x._isDist);
       auto halos = get_dynmemref(output.data(), pos, 2, x._isDist);
       auto offs = get_dynmemref(output.data(), pos, 2, x._isDist);

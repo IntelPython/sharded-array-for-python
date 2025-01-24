@@ -39,6 +39,7 @@ public:
 
   const array_i::future_type &get() const { return _ftx; }
   void put(array_i::future_type &&f) {
+    Service::drop(get().guid());
     _ftx = std::forward<array_i::future_type>(f);
   }
 };

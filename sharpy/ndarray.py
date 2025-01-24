@@ -63,6 +63,7 @@ class ndarray:
             raise ValueError(
                 f"Mismatching data type in setitem: {value._t.dtype}, expecting {self._t.dtype}"
             )
-        self._t = self._t.__setitem__(
+        self._t.__setitem__(
             key, value._t if isinstance(value, ndarray) else value
         )
+        print(type(self._t))

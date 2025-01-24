@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 
 namespace SHARPY {
 
@@ -140,18 +141,28 @@ template <typename T> struct Unranked1DMemRefType {
 // LLVM/MLIR rank-dependent such as strides ans shape data gets copied into own
 // memory
 struct DynMemRef {
+  int64_t _nDims = 0;
   intptr_t _offset = 0;
   void *_allocated = nullptr;
   void *_aligned = nullptr;
   intptr_t *_sizes = nullptr;
   intptr_t *_strides = nullptr;
 
-  void validate(uint64_t ndims) const {
-    if (!((_allocated && _aligned && (ndims == 0 || (_sizes && _strides))) ||
-          (!_allocated && !_aligned && !_sizes && !_strides && ndims == 0))) {
+  int64_t ndims() const { return _nDims; }
+
+  template <typename T> const T *data() const {
+    return reinterpret_cast<T *>(_aligned) + _offset;
+  }
+  template <typename T> T *data() {
+    return reinterpret_cast<T *>(_aligned) + _offset;
+  }
+
+  void validate() const {
+    if (!((_allocated && _aligned && (_nDims == 0 || (_sizes && _strides))) ||
+          (!_allocated && !_aligned && !_sizes && !_strides && _nDims == 0))) {
       throw std::invalid_argument("Invalid nullptr in DynMemRef.");
     }
-    for (auto i = 0u; i < ndims; ++i) {
+    for (auto i = 0u; i < _nDims; ++i) {
       if (_sizes[i] < 0) {
         throw std::out_of_range("Invalid size<0 in DynMemRef.");
       }
@@ -170,28 +181,30 @@ struct DynMemRef {
 
   DynMemRef(uint64_t ndims, void *allocated, void *aligned, intptr_t offset,
             const intptr_t *sizes, const intptr_t *strides)
-      : _offset(offset), _allocated(allocated), _aligned(aligned) {
+      : _nDims(ndims), _offset(offset), _allocated(allocated),
+        _aligned(aligned) {
     if (ndims > 0) {
       _sizes = new intptr_t[ndims];
       _strides = new intptr_t[ndims];
       memcpy(_sizes, sizes, ndims * sizeof(*_sizes));
       memcpy(_strides, strides, ndims * sizeof(*_strides));
     }
-    validate(ndims);
+    validate();
   }
 
   DynMemRef(const DynMemRef &) = delete;
-  DynMemRef() = default;
   DynMemRef(DynMemRef &&src)
-      : _offset(src._offset), _allocated(src._allocated),
+      : _nDims(src._nDims), _offset(src._offset), _allocated(src._allocated),
         _aligned(src._aligned), _sizes(src._sizes), _strides(src._strides) {
     src._sizes = src._strides = nullptr;
     src._allocated = src._aligned = nullptr;
     src._offset = 0;
-  }
+  };
+  DynMemRef() = default;
 
   DynMemRef &operator=(const DynMemRef &src) = delete;
   DynMemRef &operator=(DynMemRef &&src) {
+    _nDims = src._nDims;
     _offset = src._offset;
     _allocated = src._allocated;
     _aligned = src._aligned;

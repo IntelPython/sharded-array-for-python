@@ -230,11 +230,43 @@ int64_t NDArray::__int__() const {
   return res;
 }
 
-/// FIXME With the sharding from MLIR mesh dialect this is not straight-forward
-/// anymore.
+// Get from sharded_dims_offsets if available.
+// Otherwise compute default offsets for given sharding.
 std::vector<int64_t> NDArray::local_offsets() const {
-  throw(std::runtime_error("NDArray::local_offsets() not implemented"));
-  return {};
+  assert(halo_sizes().empty() || sharded_dims_offsets().empty());
+
+  std::vector<int64_t> res(ndims(), 0);
+  if (split_axes().empty()) {
+    return res;
+  }
+
+  // auto splitPtr = split_axes().data<int16_t>();
+  // auto offPtr = sharded_dims_offsets().data<int64_t>();
+  // auto splitStride = split_axes()._strides[0];
+  // auto offStride = sharded_dims_offsets()._strides[0];
+  // // FIXME currently we support only a flat mesh
+  // auto meshShape = std::vector<int64_t>(1, getTransceiver()->nranks());
+
+  // for (auto d=0; d<ndims(); ++d) {
+  //   int64_t off = -1;
+  //   if (split_axes().ndims() > d) {
+  //     // only single split axis supported per dimension
+  //     assert(sharded_dims_offsets()._sizes[1] <= 1 || splitPtr[d * offStride
+  //     + 1] < 0); auto splitDim = splitPtr[d * splitStride]; if (splitDim >=
+  //     0) { // trailing axes <0 possible (padding)
+  //       if (sharded_dims_offsets().empty()) {
+  //         off = myOffInSplitDim(shape(), d, meshShape[splitDim]);
+  //       } else {
+  //         auto idx = myIdxInSplitDim(d, meshShape, splitDim);
+  //         off = offPtr[d * offStride + idx];
+  //         assert(off >= 0);
+  //       }
+  //       res[d] = off;
+  //     }
+  //   }
+  // }
+
+  return res;
 }
 
 void NDArray::replicate() {
