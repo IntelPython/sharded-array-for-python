@@ -230,6 +230,22 @@ int64_t NDArray::__int__() const {
   return res;
 }
 
+// get the index in a given split dimension of a meshgrid
+static inline int64_t myIdxInSplitAxis(int64_t splitAxis,
+                                       const std::vector<int64_t> &gridShape) {
+  int64_t linearIndex = getTransceiver()->rank();
+  for (int i = gridShape.size() - 1; i > splitAxis; --i) {
+    linearIndex /= gridShape[i];
+  }
+  return linearIndex % gridShape[splitAxis];
+}
+
+// get default offset in a given split dimension of a meshgrid
+static auto myOffInSplitAxis(int64_t shard, int64_t numShards, int64_t extend) {
+  return (shard * (extend / numShards)) +
+         std::max((shard - (numShards - (extend % numShards))), 0l);
+};
+
 // Get from sharded_dims_offsets if available.
 // Otherwise compute default offsets for given sharding.
 std::vector<int64_t> NDArray::local_offsets() const {
@@ -240,31 +256,34 @@ std::vector<int64_t> NDArray::local_offsets() const {
     return res;
   }
 
-  // auto splitPtr = split_axes().data<int16_t>();
-  // auto offPtr = sharded_dims_offsets().data<int64_t>();
-  // auto splitStride = split_axes()._strides[0];
-  // auto offStride = sharded_dims_offsets()._strides[0];
-  // // FIXME currently we support only a flat mesh
-  // auto meshShape = std::vector<int64_t>(1, getTransceiver()->nranks());
+  auto splitPtr = split_axes().data<int16_t>();
+  auto offPtr = sharded_dims_offsets().data<int64_t>();
+  auto splitStride = split_axes()._strides[0];
+  auto offStride = sharded_dims_offsets()._strides[0];
+  // FIXME currently we support only a flat mesh
+  auto meshShape = std::vector<int64_t>(1, getTransceiver()->nranks());
 
-  // for (auto d=0; d<ndims(); ++d) {
-  //   int64_t off = -1;
-  //   if (split_axes().ndims() > d) {
-  //     // only single split axis supported per dimension
-  //     assert(sharded_dims_offsets()._sizes[1] <= 1 || splitPtr[d * offStride
-  //     + 1] < 0); auto splitDim = splitPtr[d * splitStride]; if (splitDim >=
-  //     0) { // trailing axes <0 possible (padding)
-  //       if (sharded_dims_offsets().empty()) {
-  //         off = myOffInSplitDim(shape(), d, meshShape[splitDim]);
-  //       } else {
-  //         auto idx = myIdxInSplitDim(d, meshShape, splitDim);
-  //         off = offPtr[d * offStride + idx];
-  //         assert(off >= 0);
-  //       }
-  //       res[d] = off;
-  //     }
-  //   }
-  // }
+  for (auto d = 0; d < ndims(); ++d) {
+    int64_t off = -1;
+    int64_t splitIdx = 0;
+    if (split_axes().ndims() > d) {
+      // only single split axis supported per dimension
+      assert(sharded_dims_offsets()._sizes[1] <= 1 ||
+             splitPtr[d * offStride + 1] < 0);
+      auto splitAxis = splitPtr[d * splitStride];
+      if (splitAxis >= 0) { // trailing axes <0 possible (padding)
+        auto idx = myIdxInSplitAxis(splitAxis, meshShape);
+        if (sharded_dims_offsets().empty()) {
+          off = myOffInSplitAxis(idx, meshShape[splitAxis], shape()[d]);
+        } else {
+          off = offPtr[splitIdx * offStride + idx];
+          assert(off >= 0);
+          ++splitIdx;
+        }
+        res[d] = off;
+      }
+    }
+  }
 
   return res;
 }

@@ -228,7 +228,18 @@ struct DynMemRef {
     }
   }
 
-  bool empty() const { return _allocated == nullptr; }
+  bool empty() const {
+    if (_allocated == nullptr) {
+      return true;
+    }
+    assert(_sizes);
+    for (auto i = 0u; i < _nDims; ++i) {
+      if (_sizes[i] == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   void markDeallocated() { _allocated = nullptr; }
 };
