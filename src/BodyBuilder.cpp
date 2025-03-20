@@ -15,14 +15,15 @@ namespace SHARPY {
 // any genericOp body needs to close with a yield
 // we also add a cast op to "typ" if needed
 template <typename T>
-static void yield(mlir::OpBuilder &builder, ::mlir::Location loc,
-                  ::mlir::Type typ, T val) {
+static void yield(mlir::OpBuilder &builder, ::mlir::Type typ, T val) {
   auto res = val;
   if (typ != res.getType()) {
-    res = builder.create<::mlir::UnrealizedConversionCastOp>(loc, typ, res)
-              .getResult(0);
+    res =
+        builder
+            .create<::mlir::UnrealizedConversionCastOp>(val.getLoc(), typ, res)
+            .getResult(0);
   }
-  (void)builder.create<mlir::linalg::YieldOp>(loc, res);
+  (void)builder.create<mlir::linalg::YieldOp>(val.getLoc(), res);
 }
 
 /// Trivial binop builders have simple equivalents in Arith.
@@ -31,22 +32,20 @@ static void yield(mlir::OpBuilder &builder, ::mlir::Location loc,
 /// Currently unsigned int ops are not supported.
 template <typename IOP, typename FOP = void>
 static BodyType buildTrivialBinary(::mlir::Type typ) {
-  return [typ](mlir::OpBuilder &builder, ::mlir::Location loc,
+  return [typ](mlir::OpBuilder &builder, mlir::Location loc,
                ::mlir::ValueRange args) -> void {
     auto lhs = imex::createCast(loc, builder, args[0], typ);
     auto rhs = imex::createCast(loc, builder, args[1], typ);
     if (typ.isIntOrIndex()) {
       if constexpr (!std::is_same_v<IOP, void>) {
-        yield(builder, loc, typ,
-              builder.create<IOP>(loc, lhs, rhs).getResult());
+        yield(builder, typ, builder.create<IOP>(loc, lhs, rhs).getResult());
         return;
       } else
         assert(0 &&
                "Found integer type but binary op not defined for integers");
     } else if (typ.isIntOrIndexOrFloat()) {
       if constexpr (!std::is_same_v<FOP, void>) {
-        yield(builder, loc, typ,
-              builder.create<FOP>(loc, lhs, rhs).getResult());
+        yield(builder, typ, builder.create<FOP>(loc, lhs, rhs).getResult());
         return;
       } else
         assert(0 && "Found float type but binary op not defined for floats");

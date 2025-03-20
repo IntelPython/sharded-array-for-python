@@ -16,8 +16,7 @@
 namespace SHARPY {
 
 // convert id of our reduction op to id of imex::ndarray reduction op
-static mlir::Value createReduceOp(::mlir::OpBuilder &b,
-                                  const ::mlir::Location &loc,
+static mlir::Value createReduceOp(mlir::ImplicitLocOpBuilder &b,
                                   const ReduceOpId rop,
                                   mlir::ShapedType outType, mlir::Value a,
                                   dim_vec_type axes) {
@@ -71,14 +70,14 @@ static mlir::Value createReduceOp(::mlir::OpBuilder &b,
     throw std::invalid_argument("Unknown reduction operation.");
   }
 
-  mlir::Value iVal = b.create<mlir::arith::ConstantOp>(loc, iAttr);
+  mlir::Value iVal = b.create<mlir::arith::ConstantOp>(iAttr);
   auto bodyBuilder = getBodyBuilder(bop, elType);
-  auto empty = b.create<mlir::tensor::EmptyOp>(loc, outType.getShape(),
+  auto empty = b.create<mlir::tensor::EmptyOp>(outType.getShape(),
                                                outType.getElementType());
-  auto filled = b.create<mlir::linalg::FillOp>(loc, mlir::ValueRange{iVal},
+  auto filled = b.create<mlir::linalg::FillOp>(mlir::ValueRange{iVal},
                                                mlir::ValueRange{empty})
                     .getResult(0);
-  return b.create<mlir::linalg::ReduceOp>(loc, a, filled, axes, bodyBuilder)
+  return b.create<mlir::linalg::ReduceOp>(a, filled, axes, bodyBuilder)
       .getResult(0);
 }
 
@@ -93,7 +92,7 @@ struct DeferredReduceOp : public Deferred {
       : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, Registry::get(_a));
@@ -102,7 +101,7 @@ struct DeferredReduceOp : public Deferred {
     auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
         aTyp.cloneWith(shape(), aTyp.getElementType()));
     // reduction op
-    auto res = createReduceOp(builder, loc, _op, outTyp, av, _dim);
+    auto res = createReduceOp(builder, _op, outTyp, av, _dim);
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,

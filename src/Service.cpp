@@ -44,7 +44,7 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
     }
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     switch (_op) {
     case DROP: {
@@ -93,7 +93,7 @@ struct DeferredReplicate : public Deferred {
     set_value(a);
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     return true;
   }

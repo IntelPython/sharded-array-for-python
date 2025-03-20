@@ -69,8 +69,8 @@
 namespace SHARPY {
 namespace jit {
 
-mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
-                     mlir::Value val, const std::string &team) {
+mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
+                     const std::string &team) {
   if (team.empty()) {
     return val;
   }
@@ -81,12 +81,12 @@ mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
         builder.getContext(), mlir::ArrayRef<int16_t>{0}));
   }
   mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
-      loc, mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
-  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
+      mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
+  return builder.create<mlir::mesh::ShardOp>(val, sharding);
 }
 
 mlir::SmallVector<mlir::mesh::MeshAxesAttr>
-fillFromPadded(::mlir::OpBuilder &builder, const DynMemRef &src) {
+fillFromPadded(mlir::ImplicitLocOpBuilder &builder, const DynMemRef &src) {
   mlir::SmallVector<mlir::mesh::MeshAxesAttr> res;
   auto ptr = reinterpret_cast<int16_t *>(src._aligned) + src._offset;
   for (auto i = 0; i < src._sizes[0]; ++i) {
@@ -103,8 +103,8 @@ fillFromPadded(::mlir::OpBuilder &builder, const DynMemRef &src) {
   return res;
 }
 
-mlir::SmallVector<int64_t> fillFlatFromPadded(::mlir::OpBuilder &builder,
-                                              const DynMemRef &src) {
+mlir::SmallVector<int64_t>
+fillFlatFromPadded(mlir::ImplicitLocOpBuilder &builder, const DynMemRef &src) {
   mlir::SmallVector<int64_t> res;
   auto ptr = reinterpret_cast<int64_t *>(src._aligned) + src._offset;
   for (auto i = 0; i < src._sizes[0]; ++i) {
@@ -119,10 +119,9 @@ mlir::SmallVector<int64_t> fillFlatFromPadded(::mlir::OpBuilder &builder,
   return res;
 }
 
-mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
-                     mlir::Value val, const std::string &team,
-                     const DynMemRef &splits, const DynMemRef &halos,
-                     const DynMemRef &offs) {
+mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
+                     const std::string &team, const DynMemRef &splits,
+                     const DynMemRef &halos, const DynMemRef &offs) {
   if (team.empty()) {
     return val;
   }
@@ -148,8 +147,8 @@ mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
   }
 
   mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
-      loc, team, splitAxes, haloSizes, shardedDimsOffsets);
-  return builder.create<mlir::mesh::ShardOp>(loc, val, sharding);
+      team, splitAxes, haloSizes, shardedDimsOffsets);
+  return builder.create<mlir::mesh::ShardOp>(val, sharding);
 }
 
 static std::map<std::array<unsigned char, 20>,
@@ -169,8 +168,9 @@ std::vector<intptr_t> JIT::run(::mlir::ModuleOp &module,
     VT(VT_funcdef, "run", vtSHARPYClass, &vtRunSym);
     VT(VT_begin, vtEEngineSym);
 
-    ::mlir::OpBuilder builder(module->getContext());
-    ::mlir::OpBuilder::InsertionGuard guard(builder);
+    mlir::ImplicitLocOpBuilder builder(
+        mlir::UnknownLoc::get(module->getContext()), module->getContext());
+    mlir::ImplicitLocOpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPoint(module.getBody(),
                               std::prev(module.getBody()->end()));
     auto intTyp = builder.getIntegerType(32);
@@ -288,7 +288,8 @@ static const std::string cpu_pipeline =
     "canonicalize,"
     "one-shot-bufferize{bufferize-function-boundaries=1},"
     "expand-realloc,"
-    "func.func(buffer-deallocation)," // "ownership-based-buffer-deallocation,"
+    // "func.func(buffer-deallocation)," //
+    // "ownership-based-buffer-deallocation,"
     "canonicalize,"
     "buffer-deallocation-simplification,"
     "bufferization-lower-deallocations,"
@@ -406,6 +407,7 @@ JIT::JIT(const std::string &libidtr)
   _context.getOrLoadDialect<::mlir::linalg::LinalgDialect>();
   _context.getOrLoadDialect<::mlir::mesh::MeshDialect>();
   _context.getOrLoadDialect<::mlir::tosa::TosaDialect>();
+  _context.getOrLoadDialect<::mlir::DLTIDialect>();
   // create the pass pipeline from string
   if (::mlir::failed(::mlir::parsePassPipeline(pass_pipeline, _pm)))
     throw std::runtime_error("failed to parse pass pipeline");

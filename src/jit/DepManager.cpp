@@ -6,6 +6,7 @@
 #include "sharpy/itac.hpp"
 #include <cstdlib>
 #include <iostream>
+#include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
@@ -19,11 +20,29 @@ namespace jit {
 static bool FORCE_DIST = get_bool_env("SHARPY_FORCE_DIST");
 std::string DepManager::_fname = "sharpy_jit";
 
-DepManager::DepManager(jit::JIT &jit) : _jit(jit), _builder(&jit.context()) {
-  auto loc = _builder.getUnknownLoc();
+static void
+mkDLTIAttr(mlir::ImplicitLocOpBuilder b, mlir::Operation *op,
+           mlir::ArrayRef<std::pair<std::string, mlir::Attribute>> vals) {
+  mlir::SmallVector<mlir::DataLayoutEntryInterface> entries;
+  for (auto v : vals) {
+    entries.emplace_back(
+        mlir::DataLayoutEntryAttr::get(b.getStringAttr(v.first), v.second));
+  }
+  op->setAttr(mlir::DLTIDialect::kMapAttrName,
+              mlir::MapAttr::get(b.getContext(), entries));
+}
+
+DepManager::DepManager(jit::JIT &jit)
+    : _jit(jit),
+      _builder(mlir::UnknownLoc::get(&jit.context()), &jit.context()) {
+  auto loc = _builder.getLoc();
   _module = _builder.create<::mlir::ModuleOp>(loc);
+  mkDLTIAttr(_builder, _module,
+             {{"MPI:Implementation", _builder.getStringAttr("mpich")},
+              {"MPI:comm_world_rank",
+               _builder.getI32IntegerAttr(getTransceiver()->rank())}});
   auto dummyFuncType = _builder.getFunctionType({}, {});
-  _func = _builder.create<::mlir::func::FuncOp>(loc, _fname, dummyFuncType);
+  _func = _builder.create<::mlir::func::FuncOp>(_fname, dummyFuncType);
   auto &entryBlock = *_func.addEntryBlock();
   _builder.setInsertionPointToStart(&entryBlock);
 }
@@ -38,22 +57,11 @@ void DepManager::finalizeAndRun() {
   if (getTransceiver()) {
     int64_t nRanks = (int64_t)getTransceiver()->nranks();
     auto mesh = getTransceiver()->mesh();
-    ::mlir::OpBuilder::InsertionGuard g(_builder);
+    mlir::ImplicitLocOpBuilder::InsertionGuard g(_builder);
     _builder.setInsertionPointToStart(&_module.getRegion().front());
     auto meshOp = _builder.create<::mlir::mesh::MeshOp>(
         _builder.getUnknownLoc(), mesh, mlir::ArrayRef<int64_t>{nRanks});
     meshOp.setVisibility(mlir::SymbolTable::Visibility::Private);
-    (void)_builder.create<::mlir::memref::GlobalOp>(
-        _builder.getUnknownLoc(),
-        /*sym_name=*/"static_mpi_rank",
-        /*sym_visibility=*/_builder.getStringAttr("public"),
-        /*type=*/mlir::MemRefType::get({}, _builder.getIndexType()),
-        /*initial_value=*/
-        mlir::DenseIntElementsAttr::get(
-            mlir::RankedTensorType::get({}, _builder.getIndexType()),
-            {getTransceiver()->rank()}),
-        /*constant=*/true,
-        /*alignment=*/mlir::IntegerAttr());
   }
   _module.push_back(_func);
   if (osz > 0 || !input.empty()) {
@@ -67,6 +75,7 @@ void DepManager::finalizeAndRun() {
   } else {
     if (_jit.verbose())
       std::cerr << "\tskipping\n";
+    deliver({}, 0);
   }
 }
 
@@ -79,12 +88,12 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
   return nullptr;
 }
 
-::mlir::Value DepManager::getDependent(::mlir::OpBuilder &builder,
+::mlir::Value DepManager::getDependent(mlir::ImplicitLocOpBuilder &builder,
                                        const array_i::future_type &fut) {
   id_type guid = fut.guid();
   if (auto d = findInOut(guid); !d) {
     auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
-    return addDependent(builder, impl.get());
+    return addDependent(builder, impl.get(), guid);
   } else {
     return d->_value;
   }
@@ -95,9 +104,8 @@ static ::mlir::RankedTensorType getTensorType(const shape_type &shape,
   return mlir::RankedTensorType::get(shape, elType);
 }
 
-::mlir::Value DepManager::addDependent(::mlir::OpBuilder &builder,
-                                       const NDArray *impl) {
-  id_type guid = impl->guid();
+::mlir::Value DepManager::addDependent(mlir::ImplicitLocOpBuilder &builder,
+                                       const NDArray *impl, id_type guid) {
   if (findInOut(guid)) {
     throw std::runtime_error("Internal error: array already added");
   }
@@ -105,6 +113,9 @@ static ::mlir::RankedTensorType getTensorType(const shape_type &shape,
   size_t ndims = impl->ndims();
   ::mlir::SmallVector<int64_t> zeros(ndims, 0);
   auto elType(getMLIRType(builder, impl->dtype()));
+
+  std::cerr << "storeMR " << guid << " " << impl->owned_data()._allocated
+            << std::endl;
 
   auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
     intptr_t *buff = new intptr_t[memref_sz(ndims)];
@@ -117,13 +128,13 @@ static ::mlir::RankedTensorType getTensorType(const shape_type &shape,
   };
 
   auto loc = builder.getUnknownLoc();
-  ::mlir::OpBuilder::InsertionGuard g(builder);
+  mlir::ImplicitLocOpBuilder::InsertionGuard g(builder);
   builder.setInsertionPointToStart(&_func.front());
 
   auto typ = getTensorType(impl->shape(), elType);
   _func.insertArgument(idx, typ, {}, loc);
   _inputs.push_back(storeMR(impl->owned_data()));
-  auto arg = shardNow(builder, loc, _func.getArgument(idx), impl->team(),
+  auto arg = shardNow(builder, _func.getArgument(idx), impl->team(),
                       impl->split_axes(), impl->halo_sizes(),
                       impl->sharded_dims_offsets());
   _inOut.emplace_back(InOut(guid, arg));
@@ -137,11 +148,12 @@ std::vector<void *> DepManager::finalize_inputs() {
   return std::move(_inputs);
 }
 
-void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb) {
+void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb,
+                        bool always) {
   if (findInOut(guid)) {
     throw std::runtime_error("Internal error: array already added");
   }
-  auto tmp = _inOut.emplace_back(InOut(guid, val, cb));
+  auto tmp = _inOut.emplace_back(InOut(guid, val, cb, always));
 }
 
 void DepManager::addReady(id_type guid, ReadyFunc cb) {
@@ -156,14 +168,12 @@ void DepManager::drop(id_type guid) {
   auto x = findInOut(guid);
   if (x) {
     x->_value = nullptr;
-    x->_setResFunc = nullptr;
   }
 }
 
-uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
-  mlir::OpBuilder::InsertionGuard guard(builder);
+uint64_t DepManager::handleResult(mlir::ImplicitLocOpBuilder &builder) {
+  mlir::ImplicitLocOpBuilder::InsertionGuard guard(builder);
   std::vector<::mlir::Value> ret_values;
-  auto loc = builder.getUnknownLoc();
   uint64_t sz = 0;
   unsigned idx = 0;
 
@@ -177,7 +187,7 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
       _func.insertResult(idx++, value.getType(), {});
       if (isDist) {
         builder.setInsertionPointAfterValue(value);
-        auto sharding = builder.create<mlir::mesh::GetShardingOp>(loc, value);
+        auto sharding = builder.create<mlir::mesh::GetShardingOp>(value);
         ret_values.emplace_back(sharding);
         _func.insertResult(idx++, sharding.getType(), {});
       }
@@ -187,15 +197,15 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
     }
   }
   if (HAS_ITAC()) {
-    int vtExeSym, vtSHARPYClass;
+    int vtExeSym = 0, vtSHARPYClass = 0;
     VT(VT_classdef, "sharpy", &vtSHARPYClass);
     VT(VT_funcdef, "execute", vtSHARPYClass, &vtExeSym);
     ::mlir::Value s = builder.create<::mlir::arith::ConstantOp>(
-        loc, builder.getI32IntegerAttr(vtExeSym));
+        builder.getI32IntegerAttr(vtExeSym));
     auto end = builder.create<::mlir::func::CallOp>(
         builder.getUnknownLoc(), "VT_end",
         ::mlir::TypeRange(builder.getIntegerType(32)), ::mlir::ValueRange(s));
-    mlir::OpBuilder::InsertionGuard guard(builder);
+    mlir::ImplicitLocOpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(end->getBlock());
     (void)builder.create<::mlir::func::CallOp>(
         builder.getUnknownLoc(), "VT_begin",
@@ -206,20 +216,21 @@ uint64_t DepManager::handleResult(::mlir::OpBuilder &builder) {
   return 2 * sz;
 }
 
-void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
+void DepManager::deliver(const std::vector<intptr_t> &output, uint64_t sz) {
   size_t pos = 0;
   for (auto &x : _inOut) {
     if (x._value) {
-      auto get_dynmemref = [](intptr_t *buff, size_t &pos, int rank,
+      assert(output.size() && sz);
+      auto get_dynmemref = [](const intptr_t *buff, size_t &pos, int rank,
                               bool enabled) {
         if (!enabled) {
           return DynMemRef();
         }
-        intptr_t *t_allocated = reinterpret_cast<intptr_t *>(buff[pos]);
-        intptr_t *t_aligned = reinterpret_cast<intptr_t *>(buff[pos + 1]);
+        auto t_allocated = reinterpret_cast<intptr_t *>(buff[pos]);
+        auto t_aligned = reinterpret_cast<intptr_t *>(buff[pos + 1]);
         intptr_t t_offset = buff[pos + 2];
-        intptr_t *t_sizes = &buff[pos + 3];
-        intptr_t *t_strides = &buff[pos + 3 + rank];
+        auto t_sizes = &buff[pos + 3];
+        auto t_strides = &buff[pos + 3 + rank];
         pos += memref_sz(rank);
         return DynMemRef(rank, t_allocated, t_aligned, t_offset, t_sizes,
                          t_strides);
@@ -235,6 +246,8 @@ void DepManager::deliver(std::vector<intptr_t> &output, uint64_t sz) {
       }
       if (x._rank > 0 && x._isDist) {
       }
+    } else if (x._alwaysCallResFunc) {
+      x._setResFunc(x._rank, {}, {}, {}, {});
     }
     if (!x._readyFuncs.empty()) {
       for (auto cb : x._readyFuncs) {

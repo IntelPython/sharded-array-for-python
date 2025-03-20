@@ -15,7 +15,7 @@
 
 #include <mlir/Dialect/Mesh/IR/MeshOps.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
-#include <mlir/IR/Builders.h>
+#include <mlir/IR/ImplicitLocOpBuilder.h>
 
 namespace SHARPY {
 
@@ -60,40 +60,41 @@ struct DeferredFull : public Deferred {
   }
 
   template <typename T> struct ValAndDType {
-    static ::mlir::Value op(::mlir::OpBuilder &builder,
-                            const ::mlir::Location &loc, const PyScalar &val,
-                            ::mlir::Type &dtyp) {
+    static ::mlir::Value op(mlir::ImplicitLocOpBuilder &builder,
+                            const PyScalar &val, ::mlir::Type &dtyp) {
       dtyp = jit::getMLIRType(builder, DTYPE<T>::value);
 
       if (is_none(val)) {
         return {};
       } else if constexpr (std::is_floating_point_v<T>) {
-        return ::imex::createFloat(loc, builder, val._float, sizeof(T) * 8);
+        return ::imex::createFloat(builder.getLoc(), builder, val._float,
+                                   sizeof(T) * 8);
       } else if constexpr (std::is_same_v<bool, T>) {
-        return ::imex::createInt(loc, builder, val._int, 1);
+        return ::imex::createInt(builder.getLoc(), builder, val._int, 1);
       } else if constexpr (std::is_integral_v<T>) {
-        return ::imex::createInt(loc, builder, val._int, sizeof(T) * 8);
+        return ::imex::createInt(builder.getLoc(), builder, val._int,
+                                 sizeof(T) * 8);
       }
       throw std::invalid_argument("Unsupported dtype in dispatch");
       return {};
     };
   };
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
 
     mlir::Type dtyp;
-    ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, loc, _val, dtyp);
+    ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, _val, dtyp);
     auto envs = mkEnvs(builder, rank(), _device);
     mlir::Value res =
-        builder.create<::mlir::tensor::EmptyOp>(loc, shape(), dtyp, envs);
+        builder.create<::mlir::tensor::EmptyOp>(shape(), dtyp, envs);
     if (val) {
       res = builder
-                .create<mlir::linalg::FillOp>(loc, mlir::ValueRange{val},
+                .create<mlir::linalg::FillOp>(mlir::ValueRange{val},
                                               mlir::ValueRange{res})
                 .getResult(0);
     }
-    res = jit::shardNow(builder, loc, res, team());
+    res = jit::shardNow(builder, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
@@ -145,18 +146,19 @@ struct DeferredArange : public Deferred {
     }
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto _num = shape()[0];
-    auto start = ::imex::createFloat(loc, builder, _start);
-    auto stop = ::imex::createFloat(loc, builder, _start + _num * _step);
-    auto num = ::imex::createIndex(loc, builder, _num);
+    auto start = ::imex::createFloat(builder.getLoc(), builder, _start);
+    auto stop =
+        ::imex::createFloat(builder.getLoc(), builder, _start + _num * _step);
+    auto num = ::imex::createIndex(builder.getLoc(), builder, _num);
     auto dtyp = jit::getMLIRType(builder, dtype());
     auto envs = mkEnvs(builder, rank(), _device);
     auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
     mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
-        loc, outType, start, stop, num, false);
-    res = jit::shardNow(builder, loc, res, team());
+        outType, start, stop, num, false);
+    res = jit::shardNow(builder, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
@@ -202,17 +204,17 @@ struct DeferredLinspace : public Deferred {
                  team),
         _start(start), _end(end), _num(num), _endpoint(endpoint) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
-    auto start = ::imex::createFloat(loc, builder, _start);
-    auto stop = ::imex::createFloat(loc, builder, _end);
-    auto num = ::imex::createIndex(loc, builder, _num);
+    auto start = ::imex::createFloat(builder.getLoc(), builder, _start);
+    auto stop = ::imex::createFloat(builder.getLoc(), builder, _end);
+    auto num = ::imex::createIndex(builder.getLoc(), builder, _num);
     auto dtyp = jit::getMLIRType(builder, dtype());
     auto envs = mkEnvs(builder, rank(), _device);
     auto outType = mlir::RankedTensorType::get(shape(), dtyp, envs);
     mlir::Value res = builder.create<::imex::ndarray::LinSpaceOp>(
-        loc, outType, start, stop, num, _endpoint);
-    res = jit::shardNow(builder, loc, res, team());
+        outType, start, stop, num, _endpoint);
+    res = jit::shardNow(builder, res, team());
 
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,

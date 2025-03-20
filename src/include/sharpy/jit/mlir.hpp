@@ -15,8 +15,8 @@
 #include <mlir/Dialect/Shape/IR/Shape.h>
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/ExecutionEngine/ExecutionEngine.h>
-#include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/ImplicitLocOpBuilder.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
 
@@ -34,7 +34,8 @@ struct DynMemRef;
 
 namespace jit {
 
-inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
+inline ::mlir::Type getMLIRType(mlir::ImplicitLocOpBuilder &builder,
+                                DTypeId dt) {
   switch (dt) {
   case FLOAT64:
     return builder.getF64Type();
@@ -59,12 +60,11 @@ inline ::mlir::Type getMLIRType(::mlir::OpBuilder &builder, DTypeId dt) {
   }
 }
 
-mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
-                     mlir::Value val, const std::string &team);
-mlir::Value shardNow(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
-                     mlir::Value val, const std::string &team,
-                     const DynMemRef &splits, const DynMemRef &halos,
-                     const DynMemRef &offs);
+mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
+                     const std::string &team);
+mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
+                     const std::string &team, const DynMemRef &splits,
+                     const DynMemRef &halos, const DynMemRef &offs);
 
 // initialize jit
 void init();

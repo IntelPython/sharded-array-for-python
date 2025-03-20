@@ -43,7 +43,8 @@ public:
 
   // don't allow copying.
   NDArray(const NDArray &) = delete;
-  NDArray(NDArray &&) = default;
+  NDArray(id_type guid, const std::string &device_, const std::string &team_,
+          const array_i::ptr_type &base);
 
   // construct from a and MLIR-jitted execution
   NDArray(id_type guid, DTypeId dtype, shape_type gShape,
@@ -84,6 +85,8 @@ public:
 
   // @return pointer to raw data
   void *data();
+  // @return true if array points to no data
+  bool empty() const { return _lData.empty(); }
 
   /// @return true if array is a sliced
   bool is_sliced() const;

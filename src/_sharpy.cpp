@@ -226,7 +226,10 @@ PYBIND11_MODULE(_sharpy, m) {
       .def("to_device", &ManipOp::to_device)
       .def("__getitem__", &GetItem::__getitem__)
       .def("__setitem__", &SetItem::__setitem__)
-      .def("map", &SetItem::map);
+      .def("map", [](FutureArray &f, py::object &b) {
+        (void)SetItem::map(f, b);
+        sync_promises();
+      });
 #undef REPL_SYNC_RETURN
 #undef SYNC_RETURN
 

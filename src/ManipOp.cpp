@@ -13,7 +13,7 @@
 
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Tosa/IR/TosaOps.h>
-#include <mlir/IR/Builders.h>
+#include <mlir/IR/ImplicitLocOpBuilder.h>
 
 namespace SHARPY {
 
@@ -28,40 +28,40 @@ struct DeferredReshape : public Deferred {
       : Deferred(a.dtype(), shape, a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     ::mlir::SmallVector<::mlir::Value> shp(shape().size());
     for (auto i = 0ul; i < shape().size(); ++i) {
-      shp[i] = ::imex::createIndex(loc, builder, shape()[i]);
+      shp[i] = ::imex::createIndex(builder.getLoc(), builder, shape()[i]);
     }
-    auto copyA =
-        _copy == COPY_POSSIBLE
-            ? ::mlir::IntegerAttr()
-            : ::imex::getIntAttr(builder, COPY_ALWAYS ? true : false, 1);
+    auto copyA = _copy == COPY_POSSIBLE
+                     ? ::mlir::BoolAttr()
+                     : builder.getBoolAttr(COPY_ALWAYS ? true : false);
 
     auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
     auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
         aTyp.cloneWith(shape(), aTyp.getElementType()));
 
     auto op =
-        builder.create<::imex::ndarray::ReshapeOp>(loc, outTyp, av, shp, copyA);
+        builder.create<::imex::ndarray::ReshapeOp>(outTyp, av, shp, copyA);
 
-    dm.addVal(this->guid(), op,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                if (_copy != COPY_ALWAYS) {
-                  throw std::runtime_error("copy-free reshape not supported");
-                  if (Registry::has(_a)) {
-                    t->set_base(Registry::get(_a).get());
-                  } // else _a is a temporary and was dropped
-                }
-                this->set_value(std::move(t));
-              });
+    dm.addVal(
+        this->guid(), op,
+        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+               DynMemRef &&halos, DynMemRef &&offs) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), std::move(data), std::move(splits),
+                           std::move(halos), std::move(offs));
+          if (_copy != COPY_ALWAYS) {
+            throw std::runtime_error("copy-free reshape not supported");
+            if (Registry::has(_a)) {
+              t->set_base(Registry::get(_a).get());
+            } // else _a is a temporary and was dropped
+          }
+          this->set_value(std::move(t));
+        },
+        true);
 
     return false;
   }
@@ -86,7 +86,7 @@ struct DeferredAsType : public Deferred {
       : Deferred(dtype, a.shape(), a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto arType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
@@ -99,19 +99,22 @@ struct DeferredAsType : public Deferred {
     auto outType = ::mlir::cast<::mlir::RankedTensorType>(
         arType.cloneWith(std::nullopt, mlirElType));
     auto res = builder.create<::imex::ndarray::CastElemTypeOp>(
-        loc, outType, av, ::imex::getIntAttr(builder, _copy, 1));
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                if (!this->_copy && Registry::has(_a)) {
-                  t->set_base(Registry::get(_a).get());
-                } // else _a is a temporary and was dropped
-                this->set_value(std::move(t));
-              });
+        outType, av, ::imex::getIntAttr(builder, _copy, 1));
+    dm.addVal(
+        this->guid(), res,
+        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+               DynMemRef &&halos, DynMemRef &&offs) {
+          std::cerr << "callback" << std::endl;
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), std::move(data), std::move(splits),
+                           std::move(halos), std::move(offs));
+          if (!this->_copy && Registry::has(_a)) {
+            std::cerr << "setting base" << std::endl;
+            t->set_base(Registry::get(_a).get());
+          } // else _a is a temporary and was dropped
+          this->set_value(std::move(t));
+        },
+        true);
     return false;
   }
 
@@ -132,7 +135,7 @@ struct DeferredToDevice : public Deferred {
   DeferredToDevice(const array_i::future_type &a, const std::string &device)
       : Deferred(a.dtype(), a.shape(), device, a.team()), _a(a.guid()) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto srcType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
@@ -158,7 +161,7 @@ struct DeferredToDevice : public Deferred {
     auto envsAttr = ::imex::ndarray::EnvsAttr::get(builder.getContext(), envs);
     auto outType = mlir::RankedTensorType::get(
         srcType.getShape(), srcType.getElementType(), envsAttr);
-    auto res = builder.create<::imex::ndarray::CopyOp>(loc, outType, av);
+    auto res = builder.create<::imex::ndarray::CopyOp>(outType, av);
     dm.addVal(this->guid(), res,
               [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
                      DynMemRef &&halos, DynMemRef &&offs) {
@@ -188,14 +191,14 @@ struct DeferredPermuteDims : public Deferred {
       : Deferred(array.dtype(), shape, array.device(), array.team()),
         _array(array.guid()), _axes(axes) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto arrayValue = dm.getDependent(builder, Registry::get(_array));
     auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(arrayValue.getType());
-    mlir::Value out = builder.create<mlir::tensor::EmptyOp>(
-        loc, shape(), aTyp.getElementType());
+    mlir::Value out =
+        builder.create<mlir::tensor::EmptyOp>(shape(), aTyp.getElementType());
     auto res =
-        builder.create<mlir::linalg::TransposeOp>(loc, arrayValue, out, _axes)
+        builder.create<mlir::linalg::TransposeOp>(arrayValue, out, _axes)
             ->getResult(0);
 
     dm.addVal(this->guid(), res,

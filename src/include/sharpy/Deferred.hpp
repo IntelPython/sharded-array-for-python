@@ -16,7 +16,7 @@
 #include "array_i.hpp"
 
 namespace mlir {
-class OpBuilder;
+class ImplicitLocOpBuilder;
 class Location;
 } // namespace mlir
 
@@ -41,8 +41,7 @@ struct Runable {
   /// the runable might not generate MLIR and instead return true
   /// to request the scheduler to execute the run method instead.
   /// @return false on success and true to request execution of run()
-  virtual bool generate_mlir(::mlir::OpBuilder &, const ::mlir::Location &,
-                             jit::DepManager &) {
+  virtual bool generate_mlir(mlir::ImplicitLocOpBuilder &, jit::DepManager &) {
     throw(std::runtime_error("No MLIR support for this operation."));
     return false;
   };
@@ -152,9 +151,9 @@ struct DeferredLambda : public Runable {
 
   void run() override { _r(); }
 
-  bool generate_mlir(::mlir::OpBuilder &b, const ::mlir::Location &l,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &b,
                      jit::DepManager &d) override {
-    return _g(b, l, d);
+    return _g(b, d);
   }
 
   FactoryId factory() const override {

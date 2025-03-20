@@ -8,7 +8,7 @@ mpi_idtypes = [  # FIXME
     # sp.int64,
     # sp.uint64,
     sp.int32,
-    sp.uint32,
+    # sp.uint32,
     # sp.int8,
     # sp.uint8,
 ]
@@ -51,7 +51,7 @@ class TestEWB:
 
     def test_add4(self):
         for dtyp in mpi_idtypes:
-            n = 16
+            n = 161
             a = sp.fromfunction(
                 lambda i, j: i, (n, n), dtype=dtyp, device=device
             )

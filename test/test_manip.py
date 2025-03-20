@@ -47,6 +47,8 @@ class TestManip:
         b = a.astype(sp.int32)
         b[:3] = 5
         assert b.dtype == sp.int32
+        print(a)
+        print(b)
         assert numpy.allclose(sp.to_numpy(a), [5, 5, 5, 3, 4, 5, 6, 7])
 
     @pytest.mark.skipif(
@@ -60,6 +62,8 @@ class TestManip:
         b = a.astype(sp.int32, copy=True)
         b[:3] = 5
         assert b.dtype == sp.int32
+        print(a)
+        print(b)
         assert numpy.allclose(sp.to_numpy(a), [0, 1, 2, 3, 4, 5, 6, 7])
         assert numpy.allclose(sp.to_numpy(b), [5, 5, 5, 3, 4, 5, 6, 7])
 

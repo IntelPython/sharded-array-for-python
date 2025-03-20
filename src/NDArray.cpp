@@ -63,6 +63,18 @@ NDArray::NDArray(id_type guid_, const int64_t *shape, uint64_t N,
   assert(ndims() <= 1);
 }
 
+NDArray::NDArray(id_type guid, const std::string &device_,
+                 const std::string &team_, const array_i::ptr_type &base)
+    : ArrayMeta(guid, base->dtype(), base->shape(), device_, team_) {
+  auto from = dynamic_cast<NDArray *>(base.get());
+  _owner = from->_owner;
+  _lData = from->_lData;
+  _splitAxes = from->_splitAxes;
+  _haloSizes = from->_haloSizes;
+  _shardedDimsOffsets = from->_shardedDimsOffsets;
+  set_base(base);
+}
+
 // from numpy
 NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
                  const ssize_t *shape, const intptr_t *strides, void *data,
@@ -73,9 +85,13 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
              reinterpret_cast<const intptr_t *>(strides)) {}
 
 void NDArray::set_base(const array_i::ptr_type &base) {
+  std::cerr << "set_base" << " " << guid() << std::endl;
   _base = new SharedBaseObject<array_i::ptr_type>(base);
 }
-void NDArray::set_base(BaseObj *obj) { _base = obj; }
+void NDArray::set_base(BaseObj *obj) {
+  std::cerr << "set_base" << " " << guid() << std::endl;
+  _base = obj;
+}
 
 // **************************************************************************
 
@@ -96,17 +112,18 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
   if (!a->_base && a->isAllocated()) {
     // create MLIR to deallocate as deferred
     defer_del_lambda(
-        [a](::mlir::OpBuilder &builder, const ::mlir::Location &loc,
-            jit::DepManager &dm) {
+        [a](mlir::ImplicitLocOpBuilder &builder, jit::DepManager &dm) {
           assert(a);
           // don't do anything if runtime was shutdown
           if (finied) {
             std::cerr << "sharpy fini: detected possible memory leak\n";
           } else {
-            auto av = dm.addDependent(builder, a);
-            auto deleteOp = builder.create<::imex::ndarray::DeleteOp>(loc, av);
-            deleteOp->setAttr("bufferization.manual_deallocation",
-                              builder.getUnitAttr());
+            if (!a->empty()) {
+              auto av = dm.addDependent(builder, a, a->guid());
+              auto deleteOp = builder.create<::imex::ndarray::DeleteOp>(av);
+              deleteOp->setAttr("bufferization.manual_deallocation",
+                                builder.getUnitAttr());
+            }
             dm.drop(a->guid());
           }
           return false;
@@ -114,12 +131,7 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
         []() {});
 
     // actually delete pointer as a deferred to be executed *after* the above
-    defer_del_lambda(
-        [a](auto, auto, auto) {
-          delete a;
-          return false;
-        },
-        []() {});
+    defer_del_lambda([](auto, auto) { return true; }, [a]() { delete a; });
   } else {
     delete a;
   }
@@ -169,7 +181,7 @@ bool NDArray::is_sliced() const {
 std::string NDArray::__repr__() const {
   const auto nd = ndims();
   std::ostringstream oss;
-  oss << "ndarray{gs=(";
+  oss << "ndarray{guid=" << guid() << ", gs=(";
   auto gshp = ArrayMeta::shape();
   for (auto i = 0; i < nd; ++i)
     oss << gshp[i] << (i == nd - 1 ? "" : ", ");

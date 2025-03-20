@@ -13,8 +13,8 @@
 namespace SHARPY {
 
 // function type for building body for linalg::generic/reduce
-using BodyType = std::function<void(
-    mlir::OpBuilder &builder, ::mlir::Location loc, ::mlir::ValueRange args)>;
+using BodyType = std::function<void(mlir::OpBuilder &builder, mlir::Location,
+                                    ::mlir::ValueRange args)>;
 
 extern BodyType getBodyBuilder(EWBinOpId binOp, ::mlir::Type typ);
 

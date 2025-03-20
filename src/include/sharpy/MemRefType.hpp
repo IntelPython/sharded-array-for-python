@@ -202,7 +202,25 @@ struct DynMemRef {
   };
   DynMemRef() = default;
 
-  DynMemRef &operator=(const DynMemRef &src) = delete;
+  DynMemRef &operator=(const DynMemRef &src) {
+    if (this == &src) {
+      return *this;
+    }
+    _nDims = src._nDims;
+    _offset = src._offset;
+    _allocated = src._allocated;
+    _aligned = src._aligned;
+    if (_nDims > 0) {
+      _sizes = new intptr_t[_nDims];
+      _strides = new intptr_t[_nDims];
+      memcpy(_sizes, src._sizes, _nDims * sizeof(*_sizes));
+      memcpy(_strides, src._strides, _nDims * sizeof(*_strides));
+    } else {
+      _sizes = _strides = nullptr;
+    }
+    return *this;
+  };
+
   DynMemRef &operator=(DynMemRef &&src) {
     _nDims = src._nDims;
     _offset = src._offset;
@@ -232,7 +250,7 @@ struct DynMemRef {
     if (_allocated == nullptr) {
       return true;
     }
-    assert(_sizes);
+    assert(_sizes || _nDims == 0);
     for (auto i = 0u; i < _nDims; ++i) {
       if (_sizes[i] == 0) {
         return true;

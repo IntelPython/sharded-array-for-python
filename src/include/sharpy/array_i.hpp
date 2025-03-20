@@ -26,7 +26,7 @@ protected:
   DTypeId _dtype = DTYPE_LAST;
   shape_type _shape = {};
   std::string _device = {};
-  std::string _team = 0;
+  std::string _team = {};
 
 public:
   ArrayMeta(id_type id, DTypeId dt, const shape_type &shape,

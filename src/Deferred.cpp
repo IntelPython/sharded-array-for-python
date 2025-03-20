@@ -89,25 +89,26 @@ void process_promises(const std::string &libidtr) {
   VT(VT_begin, vtProcessSym);
 
   bool done = false;
-  jit::JIT jit(libidtr);
   std::vector<Runable::ptr_type> deleters;
+  jit::JIT jit(libidtr);
 
   do {
     // we need to keep runables/deferred/futures alive until we set their values
     // below
-    std::vector<Runable::ptr_type> runables;
+    std::vector<Runable::ptr_type> generators;
+    std::vector<Runable::ptr_type> runners;
 
     jit::DepManager dm(jit);
     auto &builder = dm.getBuilder();
-    auto loc = builder.getUnknownLoc();
     Runable::ptr_type d;
 
     if (!deleters.empty()) {
       for (auto &dl : deleters) {
-        if (dl->generate_mlir(builder, loc, dm)) {
-          assert(!"deleters must generate MLIR");
+        if (dl->generate_mlir(builder, dm)) {
+          runners.emplace_back(std::move(dl));
+        } else {
+          generators.emplace_back(std::move(dl));
         }
-        runables.emplace_back(std::move(dl));
       }
       deleters.clear();
     } else {
@@ -119,11 +120,12 @@ void process_promises(const std::string &libidtr) {
           if (d->isDeleter()) {
             deleters.emplace_back(std::move(d));
           } else {
-            if (d->generate_mlir(builder, loc, dm)) {
+            if (d->generate_mlir(builder, dm)) {
+              runners.emplace_back(std::move(d));
               break;
             };
             // keep alive for later set_value
-            runables.emplace_back(std::move(d));
+            generators.emplace_back(std::move(d));
           }
         } else {
           // signals system shutdown
@@ -133,15 +135,15 @@ void process_promises(const std::string &libidtr) {
       }
     }
 
-    if (!runables.empty()) {
+    if (!generators.empty()) {
       dm.finalizeAndRun();
     } // no else needed
 
     // now we execute the deferred action which could not be compiled
-    if (d) {
+    for (auto &r : runners) {
       py::gil_scoped_acquire acquire;
-      d->run();
-      d.reset();
+      r->run();
+      r.reset();
     }
   } while (!done);
 }

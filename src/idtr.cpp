@@ -18,8 +18,6 @@
 
 #define STRINGIFY(a) #a
 
-constexpr id_t UNKNOWN_GUID = -1;
-
 using container_type =
     std::unordered_map<SHARPY::id_type, std::unique_ptr<SHARPY::NDArray>>;
 
@@ -41,7 +39,7 @@ template <typename T> T *mr_to_ptr(void *ptr, intptr_t offset) {
 
 // abstract handle providing an abstract wait method
 struct WaitHandleBase {
-  virtual ~WaitHandleBase(){};
+  virtual ~WaitHandleBase() {};
   virtual void wait() = 0;
 };
 
@@ -219,26 +217,24 @@ void bufferize(void *cptr, SHARPY::DTypeId dtype, const int64_t *sizes,
   if (!cptr || !sizes || !strides || !tStarts || !tSizes) {
     return;
   }
-  dispatch(dtype, cptr,
-           [sizes, strides, tStarts, tSizes, nd, N, out](auto *ptr) {
-             auto buff = static_cast<decltype(ptr)>(out);
+  dispatch(dtype, cptr, [strides, tStarts, tSizes, nd, N, out](auto *ptr) {
+    auto buff = static_cast<decltype(ptr)>(out);
 
-             for (auto i = 0ul; i < N; ++i) {
-               auto szs = &tSizes[i * nd];
-               if (szs[0] > 0) {
-                 auto sts = &tStarts[i * nd];
-                 uint64_t off = 0;
-                 for (auto r = 0ul; r < nd; ++r) {
-                   off += sts[r] * strides[r];
-                 }
-                 SHARPY::forall(0, &ptr[off], szs, strides, nd,
-                                [&buff](const auto *in) {
-                                  *buff = *in;
-                                  ++buff;
-                                });
-               }
-             }
-           });
+    for (auto i = 0ul; i < N; ++i) {
+      auto szs = &tSizes[i * nd];
+      if (szs[0] > 0) {
+        auto sts = &tStarts[i * nd];
+        uint64_t off = 0;
+        for (auto r = 0ul; r < nd; ++r) {
+          off += sts[r] * strides[r];
+        }
+        SHARPY::forall(0, &ptr[off], szs, strides, nd, [&buff](const auto *in) {
+          *buff = *in;
+          ++buff;
+        });
+      }
+    }
+  });
 }
 
 /// copy contiguous block of data into a possibly strided array distributed to N
@@ -249,7 +245,7 @@ void unpackN(void *in, SHARPY::DTypeId dtype, const int64_t *sizes,
   if (!in || !sizes || !strides || !tStarts || !tSizes || !out) {
     return;
   }
-  dispatch(dtype, out, [sizes, strides, tStarts, tSizes, nd, N, in](auto *ptr) {
+  dispatch(dtype, out, [strides, tStarts, tSizes, nd, N, in](auto *ptr) {
     auto buff = static_cast<decltype(ptr)>(in);
 
     for (auto i = 0ul; i < N; ++i) {
@@ -525,7 +521,7 @@ WaitHandleBase *_idtr_copy_reshape(SHARPY::DTypeId sharpytype,
     if (isStrided) {
       unpack(rBuff, sharpytype, oDataShapePtr, oDataStridesPtr, oNDims,
              oDataPtr);
-      delete[](char *) rBuff;
+      delete[] (char *)rBuff;
     }
   };
   assert(sendbuff.empty() && sszs.empty() && soffs.empty() && rszs.empty() &&
@@ -1282,11 +1278,11 @@ void *_idtr_update_halo(SHARPY::DTypeId sharpytype, int64_t ndims,
   if (cIt == uhCache.end()) { // not in cache
     // update cache if requested
     cIt = uhCache
-              .insert_or_assign(
-                  key, std::move(getMetaData(
-                           nworkers, ndims, ownedOff, ownedShape, ownedStride,
-                           bbOff, bbShape, leftHaloShape, leftHaloStride,
-                           rightHaloShape, rightHaloStride, tc)))
+              .insert_or_assign(key, getMetaData(nworkers, ndims, ownedOff,
+                                                 ownedShape, ownedStride, bbOff,
+                                                 bbShape, leftHaloShape,
+                                                 leftHaloStride, rightHaloShape,
+                                                 rightHaloStride, tc))
               .first;
   }
   cache = &(cIt->second);

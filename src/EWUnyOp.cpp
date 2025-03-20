@@ -15,15 +15,15 @@
 namespace SHARPY {
 
 // convert id of our unary op to id of imex::ndarray unary op
-static mlir::Value createEWUnyOp(::mlir::OpBuilder &b,
-                                 const ::mlir::Location &loc,
+static mlir::Value createEWUnyOp(mlir::ImplicitLocOpBuilder &b,
+
                                  const EWUnyOpId uop, mlir::ShapedType outTyp,
                                  mlir::Value a) {
   // this works only for static shapes
   switch (uop) {
   case __ABS__:
   case ABS:
-    return b.create<mlir::tosa::AbsOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::AbsOp>(outTyp, a);
   case ACOS:
     assert(false && "ACOS not implemented.");
   case ACOSH:
@@ -37,17 +37,17 @@ static mlir::Value createEWUnyOp(::mlir::OpBuilder &b,
   case ATANH:
     assert(false && "ATANH not implemented.");
   case CEIL:
-    return b.create<mlir::tosa::CeilOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::CeilOp>(outTyp, a);
   case COS:
-    return b.create<mlir::tosa::CosOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::CosOp>(outTyp, a);
   case COSH:
     assert(false && "COSH not implemented.");
   case EXP:
-    return b.create<mlir::tosa::ExpOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::ExpOp>(outTyp, a);
   case EXPM1:
     assert(false && "EXPM1 not implemented.");
   case FLOOR:
-    return b.create<mlir::tosa::FloorOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::FloorOp>(outTyp, a);
   case ISFINITE:
     assert(false && "ISFINITE not implemented.");
   case ISINF:
@@ -55,7 +55,7 @@ static mlir::Value createEWUnyOp(::mlir::OpBuilder &b,
   case ISNAN:
     assert(false && "ISNAN not implemented.");
   case LOG:
-    return b.create<mlir::tosa::LogOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::LogOp>(outTyp, a);
   case LOG1P:
     assert(false && "LOG1P not implemented.");
   case LOG2:
@@ -64,41 +64,42 @@ static mlir::Value createEWUnyOp(::mlir::OpBuilder &b,
     assert(false && "LOG10 not implemented.");
   case ROUND: {
     mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
-        loc, outTyp.getShape(), outTyp.getElementType());
-    return b.create<mlir::linalg::RoundOp>(loc, outTyp, a, empty).getResult(0);
+        outTyp.getShape(), outTyp.getElementType());
+    return b.create<mlir::linalg::RoundOp>(outTyp, a, empty).getResult(0);
   }
   case SIGN:
     assert(false && "SIGN not implemented.");
   case SIN:
-    return b.create<mlir::tosa::SinOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::SinOp>(outTyp, a);
   case SINH:
     assert(false && "SINH not implemented.");
   case SQUARE: {
     mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
-        loc, outTyp.getShape(), outTyp.getElementType());
-    return b.create<mlir::linalg::SquareOp>(loc, outTyp, a, empty).getResult(0);
+        outTyp.getShape(), outTyp.getElementType());
+    return b.create<mlir::linalg::SquareOp>(outTyp, a, empty).getResult(0);
   }
   case SQRT: {
     mlir::Value empty = b.create<mlir::tensor::EmptyOp>(
-        loc, outTyp.getShape(), outTyp.getElementType());
-    b.create<mlir::linalg::SqrtOp>(loc, outTyp, a, empty).getResult(0);
+        outTyp.getShape(), outTyp.getElementType());
+    return b.create<mlir::linalg::SqrtOp>(outTyp, a, empty).getResult(0);
   }
   case TAN:
     assert(false && "TAN not implemented.");
   case TANH:
-    return b.create<mlir::tosa::TanhOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::TanhOp>(outTyp, a);
   case TRUNC:
     assert(false && "TRUNC not implemented.");
   case ERF:
-    return b.create<mlir::tosa::ErfOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::ErfOp>(outTyp, a);
   case LOGICAL_NOT:
-    return b.create<mlir::tosa::LogicalNotOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::LogicalNotOp>(outTyp, a);
   case __NEG__:
   case NEGATIVE:
-    return b.create<mlir::tosa::NegateOp>(loc, outTyp, a);
+    return b.create<mlir::tosa::NegateOp>(outTyp, a);
   case __POS__:
   case POSITIVE:
-    assert(false && "POSITIVE not implemented.");
+    // positive unary op is a no-op
+    return a;
   default:
     throw std::invalid_argument("Unknown/invalid elementwise unary operation");
   }
@@ -114,7 +115,7 @@ struct DeferredEWUnyOp : public Deferred {
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
 
@@ -122,22 +123,23 @@ struct DeferredEWUnyOp : public Deferred {
     auto outTyp = ::mlir::cast<::mlir::RankedTensorType>(
         aTyp.cloneWith(shape(), aTyp.getElementType()));
 
-    auto res = createEWUnyOp(builder, loc, _op, outTyp, av);
+    auto res = createEWUnyOp(builder, _op, outTyp, av);
     // positive op will be eliminated so it is equivalent to a view
     auto view = (_op == POSITIVE || _op == __POS__);
 
-    dm.addVal(this->guid(), res,
-              [this, view](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                           DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                if (view && Registry::has(_a)) {
-                  t->set_base(Registry::get(_a).get());
-                }
-                this->set_value(std::move(t));
-              });
+    dm.addVal(
+        this->guid(), res,
+        [this, view](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                     DynMemRef &&halos, DynMemRef &&offs) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), std::move(data), std::move(splits),
+                           std::move(halos), std::move(offs));
+          if (view && Registry::has(_a)) {
+            t->set_base(Registry::get(_a).get());
+          }
+          this->set_value(std::move(t));
+        },
+        true);
     return false;
   }
 

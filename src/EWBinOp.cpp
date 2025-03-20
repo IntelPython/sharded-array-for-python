@@ -18,7 +18,8 @@
 
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
 #include <mlir/Dialect/Tosa/IR/TosaOps.h>
-#include <mlir/IR/Builders.h>
+#include <mlir/Dialect/Tosa/Utils/ConversionUtils.h>
+#include <mlir/IR/ImplicitLocOpBuilder.h>
 
 namespace SHARPY {
 
@@ -63,13 +64,13 @@ static bool is_inplace_op(EWBinOpId op) {
 }
 
 // create a linalg.generic for the given binary operation
-static mlir::Value createLinalgGeneric(::mlir::OpBuilder &b,
-                                       const ::mlir::Location &loc,
+static mlir::Value createLinalgGeneric(mlir::ImplicitLocOpBuilder &b,
+
                                        const EWBinOpId bop,
                                        mlir::ShapedType outType,
                                        mlir::Value lhs, mlir::Value rhs) {
   // create output tensor with right dimensions
-  auto tensor = b.create<mlir::tensor::EmptyOp>(loc, outType.getShape(),
+  auto tensor = b.create<mlir::tensor::EmptyOp>(outType.getShape(),
                                                 outType.getElementType())
                     .getResult();
   auto lhsType = mlir::cast<mlir::ShapedType>(lhs.getType());
@@ -106,17 +107,46 @@ static mlir::Value createLinalgGeneric(::mlir::OpBuilder &b,
 
   return b
       .create<::mlir::linalg::GenericOp>(
-          loc, tensor.getType(), ::mlir::ValueRange{lhs, rhs}, tensor,
+          tensor.getType(), ::mlir::ValueRange{lhs, rhs}, tensor,
           ::mlir::ArrayRef<::mlir::AffineMap>{lhsMap, rhsMap, resMap},
           iterators, getBodyBuilder(bop, outType.getElementType()))
       .getResult(0);
 }
 
 // convert id of our binop to id of imex::ndarray binop
-static mlir::Value createEWBinOp(::mlir::OpBuilder &b,
-                                 const ::mlir::Location &loc,
+static mlir::Value createEWBinOp(mlir::ImplicitLocOpBuilder &b,
                                  const EWBinOpId bop, mlir::ShapedType outTyp,
                                  mlir::Value lhs, mlir::Value rhs) {
+#if 0
+  // If needed, expand 0d tensors to the right rank
+  mlir::ShapedType lType = mlir::cast<mlir::ShapedType>(lhs.getType());
+  mlir::ShapedType rType = mlir::cast<mlir::ShapedType>(rhs.getType());
+
+#ifdef USE_EXPAND_OP
+  auto expandShape = [&](mlir::Value from, mlir::ShapedType fromType, mlir::ShapedType toType) {
+    assert(fromType.getRank() == 0 && fromType.getRank() < toType.getRank());
+    mlir::SmallVector<int64_t> expShape(toType.getRank(), 1);
+    auto expType = toType.cloneWith(expShape, toType.getElementType());
+    return b.create<mlir::tensor::ExpandShapeOp>(expType, from, mlir::SmallVector<mlir::ReassociationIndices>());
+  };
+#else
+  auto expandShape = [&](mlir::Value from, mlir::ShapedType fromType, mlir::ShapedType toType) {
+    assert(fromType.getRank() == 0 && fromType.getRank() < toType.getRank());
+    mlir::SmallVector<int64_t> expShape(toType.getRank(), 1);
+    auto expType = toType.cloneWith(expShape, toType.getElementType());
+    auto one = b.create<mlir::arith::ConstantOp>(b.getIndexAttr(1));
+    mlir::SmallVector<mlir::Value> expSizes(toType.getRank(), one);
+    return b.create<imex::ndarray::ReshapeOp>(expType, from, expSizes, b.getBoolAttr(false));
+  };
+#endif
+
+  if (lType.getRank() < rType.getRank()) {
+    lhs = expandShape(lhs, lType, rType);
+  } else if (rType.getRank() < lType.getRank()) {
+    rhs = expandShape(rhs, rType, lType);
+  }
+#endif // 0
+
   // this works only for static shapes
   switch (bop) {
   // cases handled by tosa
@@ -124,74 +154,85 @@ static mlir::Value createEWBinOp(::mlir::OpBuilder &b,
   case ADD:
   case __RADD__:
   case __IADD__:
-    return b.create<mlir::tosa::AddOp>(loc, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, ADD, outTyp, lhs, rhs);
+    // return b.create<mlir::tosa::AddOp>(outTyp, lhs, rhs);
   case __SUB__:
   case SUBTRACT:
   case __RSUB__:
   case __ISUB__:
-    return b.create<mlir::tosa::SubOp>(loc, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, SUBTRACT, outTyp, lhs, rhs);
+    // return b.create<mlir::tosa::SubOp>(outTyp, lhs, rhs);
   case __MUL__:
   case MULTIPLY:
   case __RMUL__:
   case __IMUL__:
-    // return b.create<mlir::linalg::MulOp>(loc, mlir::ValueRange{lhs, rhs},
-    // b.create<mlir::tensor::EmptyOp>(loc, outTyp.getShape(),
-    // outTyp.getElementType()).getResult()).getResult(0);
-    return b.create<mlir::tosa::MulOp>(loc, outTyp, lhs, rhs, 0);
+    return createLinalgGeneric(b, MULTIPLY, outTyp, lhs, rhs);
+  //   { auto zero = b.create<mlir::arith::ConstantOp>(
+  //       b.getZeroAttr(b.getI8Type()));
+  //   auto shift = b.create<mlir::tensor::SplatOp>(zero,
+  //   mlir::ArrayRef<int64_t>(1)); return b.create<mlir::tosa::MulOp>(outTyp,
+  //   lhs, rhs, shift);
+  // }
   case __TRUEDIV__:
   case DIVIDE:
   case __RTRUEDIV__:
   case __ITRUEDIV__:
-    return b.create<mlir::tosa::MulOp>(
-        loc, outTyp, lhs,
-        b.create<mlir::tosa::ReciprocalOp>(loc, rhs.getType(), rhs), 0);
+    return createLinalgGeneric(b, DIVIDE, outTyp, lhs, rhs);
+    // { auto zero = b.create<mlir::arith::ConstantOp>(
+    //     b.getZeroAttr(b.getI8Type()));
+    // auto shift = b.create<mlir::tensor::SplatOp>(zero,
+    // mlir::ArrayRef<int64_t>(1)); return b.create<mlir::tosa::MulOp>(
+    //     outTyp, lhs,
+    //     b.create<mlir::tosa::ReciprocalOp>(rhs.getType(), rhs), shift);
+    // }
   case __POW__:
   case POWER:
   case POW:
   case __RPOW__:
   case __IPOW__:
-    return b.create<mlir::tosa::PowOp>(loc, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, POWER, outTyp, lhs, rhs);
+    // return b.create<mlir::tosa::PowOp>(outTyp, lhs, rhs);
   case __LSHIFT__:
   case BITWISE_LEFT_SHIFT:
   case __RLSHIFT__:
   case __ILSHIFT__:
-    return b.create<mlir::tosa::LogicalLeftShiftOp>(loc, outTyp, lhs, rhs);
+    return b.create<mlir::tosa::LogicalLeftShiftOp>(outTyp, lhs, rhs);
   case __RSHIFT__:
   case BITWISE_RIGHT_SHIFT:
   case __RRSHIFT__:
   case __IRSHIFT__:
-    return b.create<mlir::tosa::LogicalRightShiftOp>(loc, outTyp, lhs, rhs);
+    return b.create<mlir::tosa::LogicalRightShiftOp>(outTyp, lhs, rhs);
   case __AND__:
   case BITWISE_AND:
   case __RAND__:
   case __IAND__:
-    return b.create<mlir::tosa::BitwiseAndOp>(loc, outTyp, lhs, rhs);
+    return b.create<mlir::tosa::BitwiseAndOp>(outTyp, lhs, rhs);
   case __OR__:
   case BITWISE_OR:
   case __ROR__:
   case __IOR__:
-    return b.create<mlir::tosa::BitwiseOrOp>(loc, outTyp, lhs, rhs);
+    return b.create<mlir::tosa::BitwiseOrOp>(outTyp, lhs, rhs);
   case __XOR__:
   case BITWISE_XOR:
   case __RXOR__:
   case __IXOR__:
-    return b.create<mlir::tosa::BitwiseXorOp>(loc, outTyp, lhs, rhs);
+    return b.create<mlir::tosa::BitwiseXorOp>(outTyp, lhs, rhs);
   // cases handled by linalg
   case ATAN2:
-    createLinalgGeneric(b, loc, bop, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, bop, outTyp, lhs, rhs);
   case __FLOORDIV__:
   case FLOOR_DIVIDE:
   case __RFLOORDIV__:
   case __IFLOORDIV__:
-    createLinalgGeneric(b, loc, FLOOR_DIVIDE, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, FLOOR_DIVIDE, outTyp, lhs, rhs);
   case LOGADDEXP:
-    createLinalgGeneric(b, loc, bop, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, bop, outTyp, lhs, rhs);
   case __MOD__:
   case REMAINDER:
   case MODULO:
   case __RMOD__:
   case __IMOD__:
-    createLinalgGeneric(b, loc, MODULO, outTyp, lhs, rhs);
+    return createLinalgGeneric(b, MODULO, outTyp, lhs, rhs);
   default:
     throw std::invalid_argument("Unknown/invalid elementwise binary operation");
   }
@@ -211,7 +252,7 @@ struct DeferredEWBinOp : public Deferred {
                  broadcast(a.shape(), b.shape()), a.device(), a.team()),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto bv = dm.getDependent(builder, Registry::get(_b));
@@ -224,17 +265,17 @@ struct DeferredEWBinOp : public Deferred {
     auto isInplace = is_inplace_op(_op);
     mlir::Value res;
     if (isInplace || !is_reflected_op(_op)) {
-      res = createEWBinOp(builder, loc, _op, outTyp, av, bv);
+      res = createEWBinOp(builder, _op, outTyp, av, bv);
       if (isInplace) {
         // insertsliceop has no return value, so we just create the op...
         ::mlir::SmallVector<int64_t> offs(rank(), 0);
         ::mlir::SmallVector<int64_t> strds(rank(), 1);
-        (void)builder.create<::imex::ndarray::InsertSliceOp>(loc, av, res, offs,
+        (void)builder.create<::imex::ndarray::InsertSliceOp>(av, res, offs,
                                                              shape(), strds);
         res = av;
       }
     } else {
-      res = createEWBinOp(builder, loc, _op, outTyp, bv, av);
+      res = createEWBinOp(builder, _op, outTyp, bv, av);
     }
 
     dm.addVal(this->guid(), res,

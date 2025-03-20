@@ -75,7 +75,7 @@ struct DeferredFromLocal : public Deferred {
     set_value(std::move(res));
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     return true;
   }

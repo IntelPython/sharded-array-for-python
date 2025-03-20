@@ -19,7 +19,7 @@
 #include "sharpy/jit/DepManager.hpp"
 
 #include <imex/Dialect/NDArray/IR/NDArrayOps.h>
-#include <mlir/IR/Builders.h>
+#include <mlir/IR/ImplicitLocOpBuilder.h>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -91,7 +91,7 @@ struct DeferredGetLocals
     set_value(tpl.release());
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -139,7 +139,7 @@ struct DeferredGather
     set_value(res);
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -164,7 +164,7 @@ struct DeferredSetItem : public Deferred {
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _b(b.guid()), _slc(v, a.shape()) {}
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     auto af = Registry::get(_a);
@@ -175,20 +175,21 @@ struct DeferredSetItem : public Deferred {
     auto &strides = _slc.strides();
 
     // insertsliceop has no return value, so we just create the op...
-    auto res = builder.create<::imex::ndarray::InsertSliceOp>(loc, av, bv, offs,
+    auto res = builder.create<::imex::ndarray::InsertSliceOp>(av, bv, offs,
                                                               sizes, strides);
-    dm.addVal(this->guid(), res,
-              [this, af](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                         DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                if (Registry::has(this->_a)) {
-                  t->set_base(af.get());
-                } // else _a is a temporary and was dropped
-                this->set_value(std::move(t));
-              });
+    dm.addVal(
+        this->guid(), res,
+        [this, af](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+                   DynMemRef &&halos, DynMemRef &&offs) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), std::move(data), std::move(splits),
+                           std::move(halos), std::move(offs));
+          if (Registry::has(this->_a)) {
+            t->set_base(af.get());
+          } // else _a is a temporary and was dropped
+          this->set_value(std::move(t));
+        },
+        true);
     // // ... and use av as to later create the ndarray
     // dm.addReady(this->guid(), [this](id_type guid) {
     //   assert(this->guid() == guid);
@@ -202,7 +203,7 @@ struct DeferredSetItem : public Deferred {
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
     ser.template value<sizeof(_b)>(_b);
-    ser.template object(_slc);
+    ser.object(_slc);
   }
 };
 
@@ -214,10 +215,11 @@ struct DeferredMap : public Deferred {
 
   DeferredMap() = default;
   DeferredMap(const array_i::future_type &a, py::object &func)
-      : Deferred(a.dtype(), a.shape(), a.device(), a.team(), a.guid()),
-        _a(a.guid()), _func(func) {}
+      : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
+        _func(func) {}
 
   void run() override {
+    std::cerr << "map map map" << std::endl;
     auto aa = std::move(Registry::get(_a).get());
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
@@ -227,7 +229,7 @@ struct DeferredMap : public Deferred {
     auto lOffs = a_ptr->local_offsets();
     std::vector<int64_t> lIdx(nd);
     std::vector<int64_t> gIdx(nd);
-
+#if 0
     dispatch(a_ptr->dtype(), a_ptr->data(), [&](auto *ptr) {
       forall(
           0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), nd, lIdx,
@@ -245,11 +247,13 @@ struct DeferredMap : public Deferred {
                         typename std::remove_pointer<decltype(elPtr)>::type>();
           });
     });
+#endif
 
-    this->set_value(aa);
+    auto t = mk_tnsr(this->guid(), this->device(), this->team(), aa);
+    this->set_value(t);
   };
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     return true;
   }
@@ -279,7 +283,7 @@ struct DeferredGetItem : public Deferred {
     // set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
   }
 
-  bool generate_mlir(::mlir::OpBuilder &builder, const ::mlir::Location &loc,
+  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
                      jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     auto av = dm.getDependent(builder, Registry::get(_a));
@@ -291,21 +295,22 @@ struct DeferredGetItem : public Deferred {
         aTyp.cloneWith(shape(), aTyp.getElementType()));
 
     // now we can create the NDArray op using the above Values
-    auto res = builder.create<::imex::ndarray::SubviewOp>(loc, outTyp, av, offs,
+    auto res = builder.create<::imex::ndarray::SubviewOp>(outTyp, av, offs,
                                                           sizes, strides);
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                if (Registry::has(_a)) {
-                  t->set_base(Registry::get(_a).get());
-                } // else _a is a temporary and was dropped
-                this->set_value(std::move(t));
-              });
+    dm.addVal(
+        this->guid(), res,
+        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+               DynMemRef &&halos, DynMemRef &&offs) {
+          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
+                           this->team(), std::move(data), std::move(splits),
+                           std::move(halos), std::move(offs));
+          if (Registry::has(_a)) {
+            t->set_base(Registry::get(_a).get());
+          } // else _a is a temporary and was dropped
+          this->set_value(std::move(t));
+        },
+        true);
     return false;
   }
 
@@ -313,7 +318,7 @@ struct DeferredGetItem : public Deferred {
 
   template <typename S> void serialize(S &ser) {
     ser.template value<sizeof(_a)>(_a);
-    ser.template object(_slc);
+    ser.object(_slc);
   }
 };
 
