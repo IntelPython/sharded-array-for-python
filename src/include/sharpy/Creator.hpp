@@ -14,7 +14,7 @@
 namespace SHARPY {
 
 struct Creator {
-  static FutureArray *full(const shape_type &shape, const py::object &val,
+  static FutureArray *full(const shape_type &shape, py::object *val,
                            DTypeId dtype, const std::string &device,
                            const std::string &team);
   static FutureArray *arange(uint64_t start, uint64_t end, uint64_t step,

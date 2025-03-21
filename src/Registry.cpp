@@ -41,6 +41,7 @@ array_i::future_type get(id_type id) {
 
 void del(id_type id) {
   locker _l(_mutex);
+  std::cerr << "Registry::del(" << id << ")" << std::endl;
   _keeper.erase(id);
 }
 

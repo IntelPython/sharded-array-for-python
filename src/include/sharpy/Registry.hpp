@@ -6,13 +6,10 @@
 */
 
 #pragma once
-
 #include "array_i.hpp"
 
 namespace SHARPY {
 namespace Registry {
-
-constexpr static id_type NOGUID = -1;
 
 /// @return a new (unused) guid
 id_type get_guid();

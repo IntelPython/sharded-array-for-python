@@ -134,6 +134,7 @@ set(SHARPYSrcs
     ${PROJECT_SOURCE_DIR}/src/Registry.cpp
     ${PROJECT_SOURCE_DIR}/src/Service.cpp
     ${PROJECT_SOURCE_DIR}/src/SetGetItem.cpp
+    ${PROJECT_SOURCE_DIR}/src/SetResFuncImpls.cpp
 )
 set(IDTRSrcs
     ${PROJECT_SOURCE_DIR}/src/idtr.cpp

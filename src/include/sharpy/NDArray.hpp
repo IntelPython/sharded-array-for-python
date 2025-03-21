@@ -6,7 +6,6 @@
 #pragma once
 
 #include "MemRefType.hpp"
-#include "Registry.hpp"
 #include "Transceiver.hpp"
 #include "TypeDispatch.hpp"
 #include "array_i.hpp"

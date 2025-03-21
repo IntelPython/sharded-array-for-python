@@ -8,6 +8,7 @@
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/DepManager.hpp"
 #include <mlir/Dialect/Tosa/IR/TosaOps.h>
@@ -115,8 +116,8 @@ struct DeferredEWUnyOp : public Deferred {
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _op(op) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
 
     auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(av.getType());
@@ -127,20 +128,9 @@ struct DeferredEWUnyOp : public Deferred {
     // positive op will be eliminated so it is equivalent to a view
     auto view = (_op == POSITIVE || _op == __POS__);
 
-    dm.addVal(
-        this->guid(), res,
-        [this, view](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), std::move(data), std::move(splits),
-                           std::move(halos), std::move(offs));
-          if (view && Registry::has(_a)) {
-            t->set_base(Registry::get(_a).get());
-          }
-          this->set_value(std::move(t));
-        },
-        true);
-    return false;
+    dm.addVal(this, res, defaultSetResFunc, view ? _a : NOGUID);
+
+    return DONE;
   }
 
   FactoryId factory() const override { return F_EWUNYOP; }

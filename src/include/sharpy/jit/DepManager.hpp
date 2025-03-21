@@ -13,32 +13,38 @@
 #include <vector>
 
 namespace SHARPY {
+
+class Deferred;
+
 namespace jit {
 
 // function type used for reporting back array results generated
 // by Deferred::generate_mlir
-using SetResFunc =
-    std::function<void(uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                       DynMemRef &&halos, DynMemRef &&offs)>;
+using SetResFunc = std::function<void(
+    Deferred *deferred, uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
+    DynMemRef &&halos, DynMemRef &&offs, id_type base)>;
 using ReadyFunc = std::function<void(id_type guid)>;
 
 class DepManager {
 private:
   struct InOut {
     id_type _guid = 0;
+    id_type _aliasOf = NOGUID;
     ::mlir::Value _value = nullptr;
     SetResFunc _setResFunc;
-    int _rank = 0;
-    bool _isDist = false;
-    bool _alwaysCallResFunc = false;
+    Deferred *_deferred = nullptr;
     std::vector<ReadyFunc> _readyFuncs;
-    InOut(id_type guid = 0, const ::mlir::Value &value = nullptr,
-          const SetResFunc &setResFunc = nullptr,
-          bool alwaysCallResFunc = false, int rank = 0, bool isDist = false,
-          const std::vector<ReadyFunc> &readyFuncs = {})
-        : _guid(guid), _value(value), _setResFunc(setResFunc), _rank(rank),
-          _isDist(isDist), _alwaysCallResFunc(alwaysCallResFunc),
-          _readyFuncs(readyFuncs) {}
+    int _rank = 0;
+    int _numAliases = 0;
+    bool _isDist = false;
+    bool _isAlive = true;
+    InOut(id_type guid = 0, const ::mlir::Value &value = nullptr)
+        : _guid(guid), _value(value) {}
+    InOut(DepManager *dm, id_type guid = 0,
+          const ::mlir::Value &value = nullptr,
+          const SetResFunc &setResFunc = nullptr, Deferred *deferred = nullptr,
+          id_type aliasOf = NOGUID);
+    bool isResult() const { return _setResFunc && (_isAlive || _numAliases); }
   };
   using InOutList = std::vector<InOut>;
 
@@ -62,9 +68,10 @@ public:
                              const array_i::future_type &fut);
   ::mlir::Value addDependent(mlir::ImplicitLocOpBuilder &builder,
                              const NDArray *fut, id_type guid);
-  void addVal(id_type guid, ::mlir::Value val, SetResFunc cb,
-              bool always = false);
+  void addVal(Deferred *deferred, ::mlir::Value val, SetResFunc cb,
+              id_type aliasOf = NOGUID);
   void addReady(id_type guid, ReadyFunc cb);
+  // return true if guid was found and dropped
   void drop(id_type guid);
   uint64_t handleResult(mlir::ImplicitLocOpBuilder &builder);
   void deliver(const std::vector<intptr_t> &, uint64_t);

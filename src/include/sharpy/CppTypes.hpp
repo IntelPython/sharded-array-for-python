@@ -28,6 +28,9 @@ using OutputAdapter = bitsery::OutputBufferAdapter<Buffer>;
 using InputAdapter = bitsery::InputBufferAdapter<Buffer>;
 using Serializer = bitsery::Serializer<OutputAdapter>;
 using Deserializer = bitsery::Deserializer<InputAdapter>;
+using id_type = uint64_t;
+
+constexpr static id_type NOGUID = -1;
 
 /// @brief use this to provide a base object to the array
 // such a base object can own shared data
@@ -342,8 +345,6 @@ std::string to_string(const std::vector<V> &vals, char sep = ' ') {
   s += "}";
   return s;
 }
-
-using id_type = uint64_t;
 
 enum FactoryId : int {
   F_ARANGE,

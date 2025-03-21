@@ -75,9 +75,9 @@ struct DeferredFromLocal : public Deferred {
     set_value(std::move(res));
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
-    return true;
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
+    return STOP_AND_RUN;
   }
 
   FactoryId factory() const override { return F_FROMLOCALS; }

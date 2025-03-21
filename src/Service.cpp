@@ -27,14 +27,18 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
                                           Service::service_future_type> {
   enum Op : int { DROP, RUN, SERVICE_LAST };
 
-  id_type _a;
+  id_type _a, _dep;
   Op _op;
 
   DeferredService(Op op = SERVICE_LAST) : _a(), _op(op) {}
-  DeferredService(Op op, id_type id) : _a(id), _op(op) {}
+  DeferredService(Op op, id_type id, id_type dep = NOGUID)
+      : _a(id), _dep(dep), _op(op) {}
 
   void run() override {
     switch (_op) {
+    case DROP:
+      Registry::del(this->_a);
+      break;
     case RUN:
       set_value(true);
       break;
@@ -44,27 +48,26 @@ struct DeferredService : public DeferredT<Service::service_promise_type,
     }
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     switch (_op) {
     case DROP: {
       // drop from dep manager
       dm.drop(_a);
-      // and from registry
-      dm.addReady(_a, [this](id_type guid) {
-        assert(this->_a == guid);
-        Registry::del(guid);
+      dm.addReady(_dep == NOGUID ? _a : _dep, [this](id_type guid) {
+        assert((this->_dep == NOGUID ? this->_a : this->_dep) == guid);
+        Registry::del(this->_a);
       });
       break;
     }
     case RUN:
-      return true;
+      return STOP_AND_RUN;
     default:
       throw(std::invalid_argument(
           "MLIR generation for unkown service operation requested."));
     }
 
-    return false;
+    return DONE;
   }
 
   FactoryId factory() const override { return F_SERVICE; }
@@ -84,7 +87,7 @@ struct DeferredReplicate : public Deferred {
   DeferredReplicate(const array_i::future_type &a) : _a(a.guid()) {}
 
   void run() override {
-    const auto a = std::move(Registry::get(_a).get());
+    const auto a = Registry::get(_a).get();
     auto ary = dynamic_cast<NDArray *>(a.get());
     if (!ary) {
       throw std::invalid_argument("Expected NDArray in replicate.");
@@ -93,9 +96,9 @@ struct DeferredReplicate : public Deferred {
     set_value(a);
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
-    return true;
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
+    return STOP_AND_RUN;
   }
 
   FactoryId factory() const override { return F_REPLICATE; }
@@ -107,9 +110,10 @@ struct DeferredReplicate : public Deferred {
 
 // **************************************************************************
 
-void Service::drop(const id_type a) {
+void Service::drop(id_type a, id_type dep) {
   if (inited) {
-    defer<DeferredService>(DeferredService::DROP, a);
+    std::cerr << "Service::drop(" << a << ", " << dep << ")" << std::endl;
+    defer<DeferredService>(DeferredService::DROP, a, dep);
   }
 }
 

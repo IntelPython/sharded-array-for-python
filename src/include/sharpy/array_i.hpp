@@ -22,7 +22,7 @@ class NDSlice;
 ///   - team
 class ArrayMeta {
 protected:
-  id_type _guid = -1;
+  id_type _guid = NOGUID;
   DTypeId _dtype = DTYPE_LAST;
   shape_type _shape = {};
   std::string _device = {};
@@ -58,6 +58,8 @@ public:
   const std::string &team() const { return _team; }
 
   void set_guid(id_type guid) { _guid = guid; }
+
+  bool unset() { return _guid == NOGUID; }
 };
 
 ///

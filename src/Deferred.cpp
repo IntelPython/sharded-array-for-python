@@ -55,7 +55,7 @@ Deferred::future_type defer_array(Runable::ptr_type &&_d, bool is_global) {
     throw std::invalid_argument("Expected Deferred Array promise");
   if (is_global) {
     _dist(d);
-    if (d->guid() == Registry::NOGUID) {
+    if (d->guid() == NOGUID) {
       d->set_guid(Registry::get_guid());
     }
   }
@@ -120,9 +120,12 @@ void process_promises(const std::string &libidtr) {
           if (d->isDeleter()) {
             deleters.emplace_back(std::move(d));
           } else {
-            if (d->generate_mlir(builder, dm)) {
+            if (auto state = d->generate_mlir(builder, dm);
+                state != Runable::DONE) {
               runners.emplace_back(std::move(d));
-              break;
+              if (state == Runable::STOP_AND_RUN) {
+                break;
+              }
             };
             // keep alive for later set_value
             generators.emplace_back(std::move(d));

@@ -23,6 +23,8 @@ def rand(*shape, device="", team=1):
     data = np.random.rand(*shape)
     if isinstance(data, float):
         return data
+    print(data)
+    print(data.shape)
     return fromfunction(
         lambda *index: data[index],
         data.shape,

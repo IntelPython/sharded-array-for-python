@@ -6,6 +6,7 @@
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/DepManager.hpp"
@@ -80,8 +81,8 @@ struct DeferredFull : public Deferred {
     };
   };
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
 
     mlir::Type dtyp;
     ::mlir::Value val = dispatch<ValAndDType>(_dtype, builder, _val, dtyp);
@@ -96,16 +97,8 @@ struct DeferredFull : public Deferred {
     }
     res = jit::shardNow(builder, res, team());
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                assert(rank == this->rank());
-                this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(),
-                                        std::move(data), std::move(splits),
-                                        std::move(halos), std::move(offs)));
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_FULL; }
@@ -117,10 +110,10 @@ struct DeferredFull : public Deferred {
   }
 };
 
-FutureArray *Creator::full(const shape_type &shape, const py::object &val,
+FutureArray *Creator::full(const shape_type &shape, py::object *val,
                            DTypeId dtype, const std::string &device,
                            const std::string &team) {
-  auto v = mk_scalar(val, dtype);
+  auto v = mk_scalar(*val, dtype);
   return new FutureArray(
       defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
 }
@@ -146,8 +139,8 @@ struct DeferredArange : public Deferred {
     }
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto _num = shape()[0];
     auto start = ::imex::createFloat(builder.getLoc(), builder, _start);
     auto stop =
@@ -160,17 +153,8 @@ struct DeferredArange : public Deferred {
         outType, start, stop, num, false);
     res = jit::shardNow(builder, res, team());
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                assert(rank == 1);
-                assert(data._strides[0] == 1);
-                this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(),
-                                        std::move(data), std::move(splits),
-                                        std::move(halos), std::move(offs)));
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_ARANGE; }
@@ -204,8 +188,8 @@ struct DeferredLinspace : public Deferred {
                  team),
         _start(start), _end(end), _num(num), _endpoint(endpoint) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto start = ::imex::createFloat(builder.getLoc(), builder, _start);
     auto stop = ::imex::createFloat(builder.getLoc(), builder, _end);
     auto num = ::imex::createIndex(builder.getLoc(), builder, _num);
@@ -216,17 +200,8 @@ struct DeferredLinspace : public Deferred {
         outType, start, stop, num, _endpoint);
     res = jit::shardNow(builder, res, team());
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                assert(rank == 1);
-                assert(data._strides[0] == 1);
-                this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(),
-                                        std::move(data), std::move(splits),
-                                        std::move(halos), std::move(offs)));
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_ARANGE; }
@@ -259,7 +234,9 @@ std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
   if (py::isinstance<FutureArray>(b)) {
     return {b.cast<FutureArray *>(), false};
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
-    return {Creator::full({}, b, dtype, device, team), true};
+    return {
+        Creator::full({}, const_cast<py::object *>(&b), dtype, device, team),
+        true};
   }
   throw std::invalid_argument(
       "Invalid right operand to elementwise binary operation");

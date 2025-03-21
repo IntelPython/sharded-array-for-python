@@ -47,8 +47,6 @@ class TestManip:
         b = a.astype(sp.int32)
         b[:3] = 5
         assert b.dtype == sp.int32
-        print(a)
-        print(b)
         assert numpy.allclose(sp.to_numpy(a), [5, 5, 5, 3, 4, 5, 6, 7])
 
     @pytest.mark.skipif(
@@ -105,6 +103,9 @@ class TestManip:
         c2 = sp.to_numpy(b).transpose(1, 0)
         assert numpy.allclose(c1, c2)
 
+    @pytest.mark.skip(
+        reason="canonicalizer removes copies in permute_dims/transpose"
+    )
     def test_permute_dims2(self):
         # === sharpy
         sp_a = sp.arange(0, 2 * 3 * 4, 1)

@@ -30,6 +30,7 @@ extern void process_promises(const std::string &libidtr);
 
 // interface for promises/tasks to generate MLIR or execute immediately.
 struct Runable {
+  enum RunState { DONE, NEED_RUN, STOP_AND_RUN };
   using ptr_type = std::unique_ptr<Runable>;
   virtual ~Runable() {};
   /// actually execute, a deferred will set value of future
@@ -41,9 +42,10 @@ struct Runable {
   /// the runable might not generate MLIR and instead return true
   /// to request the scheduler to execute the run method instead.
   /// @return false on success and true to request execution of run()
-  virtual bool generate_mlir(mlir::ImplicitLocOpBuilder &, jit::DepManager &) {
+  virtual RunState generate_mlir(mlir::ImplicitLocOpBuilder &,
+                                 jit::DepManager &) {
     throw(std::runtime_error("No MLIR support for this operation."));
-    return false;
+    return STOP_AND_RUN;
   };
   virtual bool isDeleter() { return false; }
   virtual FactoryId factory() const = 0;
@@ -63,19 +65,19 @@ template <typename P, typename F> struct DeferredT : public P, public Runable {
   DeferredT() = default;
   DeferredT(const DeferredT<P, F> &) = delete;
   DeferredT(DTypeId dt, shape_type &&shape, std::string &&device,
-            std::string &&team, id_type guid = Registry::NOGUID)
+            std::string &&team, id_type guid = NOGUID)
       : P(guid, dt, std::forward<shape_type>(shape),
           std::forward<std::string>(device),
           team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
   DeferredT(DTypeId dt, shape_type &&shape, const std::string &device,
-            const std::string &team, id_type guid = Registry::NOGUID)
+            const std::string &team, id_type guid = NOGUID)
       : P(guid, dt, std::forward<shape_type>(shape), device,
           team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
   DeferredT(DTypeId dt, const shape_type &shape = {},
             const std::string &device = {}, const std::string &team = {},
-            id_type guid = Registry::NOGUID)
+            id_type guid = NOGUID)
       : P(guid, dt, shape, device,
           team.empty() ? std::string() : getTransceiver()->mesh()),
         Runable() {}
@@ -151,8 +153,8 @@ struct DeferredLambda : public Runable {
 
   void run() override { _r(); }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &b,
-                     jit::DepManager &d) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &b,
+                         jit::DepManager &d) override {
     return _g(b, d);
   }
 

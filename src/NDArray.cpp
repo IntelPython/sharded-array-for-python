@@ -85,7 +85,9 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
              reinterpret_cast<const intptr_t *>(strides)) {}
 
 void NDArray::set_base(const array_i::ptr_type &base) {
-  std::cerr << "set_base" << " " << guid() << std::endl;
+  auto from = dynamic_cast<NDArray *>(base.get());
+  std::cerr << "set_base" << " " << guid() << " -> " << from->guid()
+            << std::endl;
   _base = new SharedBaseObject<array_i::ptr_type>(base);
 }
 void NDArray::set_base(BaseObj *obj) {
@@ -126,12 +128,13 @@ void NDArray::NDADeleter::operator()(NDArray *a) const {
             }
             dm.drop(a->guid());
           }
-          return false;
+          return Runable::DONE;
         },
         []() {});
 
     // actually delete pointer as a deferred to be executed *after* the above
-    defer_del_lambda([](auto, auto) { return true; }, [a]() { delete a; });
+    defer_del_lambda([](auto, auto) { return Runable::NEED_RUN; },
+                     [a]() { delete a; });
   } else {
     delete a;
   }

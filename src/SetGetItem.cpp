@@ -13,6 +13,7 @@
 #include "sharpy/Mediator.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/NDSlice.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/Transceiver.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/UtilsAndTypes.hpp"
@@ -81,7 +82,7 @@ struct DeferredGetLocals
   }
 
   void run() override {
-    auto aa = std::move(Registry::get(_a).get());
+    auto aa = Registry::get(_a).get();
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
       throw std::invalid_argument("Expected NDArray in getlocals.");
@@ -91,9 +92,9 @@ struct DeferredGetLocals
     set_value(tpl.release());
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
-    return true;
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
+    return STOP_AND_RUN;
   }
 
   FactoryId factory() const override { return F_GETLOCALS; }
@@ -118,7 +119,7 @@ struct DeferredGather
     // gather
     // We simply create a local buffer, copy our local data to the right place
     // and then call AllGatherV via inplace operation.
-    auto aa = std::move(Registry::get(_a).get());
+    auto aa = Registry::get(_a).get();
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
       throw std::invalid_argument("Expected NDArray in gather.");
@@ -139,9 +140,9 @@ struct DeferredGather
     set_value(res);
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
-    return true;
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
+    return STOP_AND_RUN;
   }
 
   FactoryId factory() const override { return F_GATHER; }
@@ -164,8 +165,8 @@ struct DeferredSetItem : public Deferred {
       : Deferred(a.dtype(), a.shape(), a.device(), a.team()), _a(a.guid()),
         _b(b.guid()), _slc(v, a.shape()) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     auto af = Registry::get(_a);
     auto av = dm.getDependent(builder, af);
@@ -177,25 +178,13 @@ struct DeferredSetItem : public Deferred {
     // insertsliceop has no return value, so we just create the op...
     auto res = builder.create<::imex::ndarray::InsertSliceOp>(av, bv, offs,
                                                               sizes, strides);
-    dm.addVal(
-        this->guid(), res,
-        [this, af](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                   DynMemRef &&halos, DynMemRef &&offs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), std::move(data), std::move(splits),
-                           std::move(halos), std::move(offs));
-          if (Registry::has(this->_a)) {
-            t->set_base(af.get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        },
-        true);
+    dm.addVal(this, res, defaultSetResFunc, _a);
     // // ... and use av as to later create the ndarray
     // dm.addReady(this->guid(), [this](id_type guid) {
     //   assert(this->guid() == guid);
     //   this->set_value(Registry::get(this->_a).get());
     // });
-    return false;
+    return DONE;
   }
 
   FactoryId factory() const override { return F_SETITEM; }
@@ -220,7 +209,7 @@ struct DeferredMap : public Deferred {
 
   void run() override {
     std::cerr << "map map map" << std::endl;
-    auto aa = std::move(Registry::get(_a).get());
+    auto aa = Registry::get(_a).get();
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {
       throw std::invalid_argument("Expected NDArray in map.");
@@ -229,7 +218,6 @@ struct DeferredMap : public Deferred {
     auto lOffs = a_ptr->local_offsets();
     std::vector<int64_t> lIdx(nd);
     std::vector<int64_t> gIdx(nd);
-#if 0
     dispatch(a_ptr->dtype(), a_ptr->data(), [&](auto *ptr) {
       forall(
           0, ptr, a_ptr->local_shape(), a_ptr->local_strides(), nd, lIdx,
@@ -247,15 +235,14 @@ struct DeferredMap : public Deferred {
                         typename std::remove_pointer<decltype(elPtr)>::type>();
           });
     });
-#endif
 
     auto t = mk_tnsr(this->guid(), this->device(), this->team(), aa);
     this->set_value(t);
   };
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
-    return true;
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
+    return STOP_AND_RUN;
   }
 
   FactoryId factory() const override { return F_MAP; }
@@ -279,12 +266,12 @@ struct DeferredGetItem : public Deferred {
         _a(a.guid()), _slc(std::move(v)) {}
 
   void run() override {
-    // const auto a = std::move(Registry::get(_a).get());
+    // const auto a = Registry::get(_a).get();
     // set_value(std::move(TypeDispatch<x::GetItem>(a, _slc)));
   }
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     // get params and extract offsets/sizes/strides
     auto av = dm.getDependent(builder, Registry::get(_a));
     const auto &offs = _slc.offsets();
@@ -298,20 +285,8 @@ struct DeferredGetItem : public Deferred {
     auto res = builder.create<::imex::ndarray::SubviewOp>(outTyp, av, offs,
                                                           sizes, strides);
 
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-               DynMemRef &&halos, DynMemRef &&offs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), std::move(data), std::move(splits),
-                           std::move(halos), std::move(offs));
-          if (Registry::has(_a)) {
-            t->set_base(Registry::get(_a).get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        },
-        true);
-    return false;
+    dm.addVal(this, res, defaultSetResFunc, _a);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_GETITEM; }

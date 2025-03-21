@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "sharpy/jit/DepManager.hpp"
+#include "sharpy/Deferred.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/UtilsAndTypes.hpp"
 #include "sharpy/itac.hpp"
@@ -30,6 +31,24 @@ mkDLTIAttr(mlir::ImplicitLocOpBuilder b, mlir::Operation *op,
   }
   op->setAttr(mlir::DLTIDialect::kMapAttrName,
               mlir::MapAttr::get(b.getContext(), entries));
+}
+
+DepManager::InOut::InOut(DepManager *dm, id_type guid,
+                         const ::mlir::Value &value,
+                         const SetResFunc &setResFunc, Deferred *deferred,
+                         id_type aliasOf)
+    : _guid(guid), _aliasOf(aliasOf), _value(value), _setResFunc(setResFunc),
+      _deferred(deferred) {
+  // find the root base, assign it base and increase its alias count
+  if (aliasOf != NOGUID) {
+    InOut *base = this;
+    while (base->_aliasOf != NOGUID) {
+      base = dm->findInOut(base->_aliasOf);
+      assert(base);
+    }
+    ++base->_numAliases;
+    this->_aliasOf = base->_guid;
+  }
 }
 
 DepManager::DepManager(jit::JIT &jit)
@@ -91,11 +110,11 @@ DepManager::InOut *DepManager::findInOut(id_type guid) {
 ::mlir::Value DepManager::getDependent(mlir::ImplicitLocOpBuilder &builder,
                                        const array_i::future_type &fut) {
   id_type guid = fut.guid();
-  if (auto d = findInOut(guid); !d) {
+  if (auto d = findInOut(guid)) {
+    return d->_value;
+  } else {
     auto impl = std::dynamic_pointer_cast<NDArray>(fut.get());
     return addDependent(builder, impl.get(), guid);
-  } else {
-    return d->_value;
   }
 };
 
@@ -148,12 +167,13 @@ std::vector<void *> DepManager::finalize_inputs() {
   return std::move(_inputs);
 }
 
-void DepManager::addVal(id_type guid, ::mlir::Value val, SetResFunc cb,
-                        bool always) {
+void DepManager::addVal(Deferred *deferred, ::mlir::Value val, SetResFunc cb,
+                        id_type aliasOf) {
+  auto guid = deferred->guid();
   if (findInOut(guid)) {
     throw std::runtime_error("Internal error: array already added");
   }
-  auto tmp = _inOut.emplace_back(InOut(guid, val, cb, always));
+  auto tmp = _inOut.emplace_back(InOut(this, guid, val, cb, deferred, aliasOf));
 }
 
 void DepManager::addReady(id_type guid, ReadyFunc cb) {
@@ -165,9 +185,16 @@ void DepManager::addReady(id_type guid, ReadyFunc cb) {
 }
 
 void DepManager::drop(id_type guid) {
-  auto x = findInOut(guid);
-  if (x) {
-    x->_value = nullptr;
+  if (auto x = findInOut(guid)) {
+    if (!x->_isAlive) {
+      return;
+    }
+    x->_isAlive = false;
+    if (x->_aliasOf != NOGUID) {
+      auto b = findInOut(x->_aliasOf);
+      assert(b);
+      --b->_numAliases;
+    }
   }
 }
 
@@ -178,16 +205,15 @@ uint64_t DepManager::handleResult(mlir::ImplicitLocOpBuilder &builder) {
   unsigned idx = 0;
 
   for (auto &x : _inOut) {
-    ::mlir::Value value = x._value;
-    if (value) {
+    if (x.isResult()) {
       auto rank =
-          mlir::cast<::mlir::RankedTensorType>(value.getType()).getRank();
+          mlir::cast<::mlir::RankedTensorType>(x._value.getType()).getRank();
       bool isDist = FORCE_DIST || (rank > 0 && getTransceiver()->nranks() > 1);
-      ret_values.emplace_back(value);
-      _func.insertResult(idx++, value.getType(), {});
+      ret_values.emplace_back(x._value);
+      _func.insertResult(idx++, x._value.getType(), {});
       if (isDist) {
-        builder.setInsertionPointAfterValue(value);
-        auto sharding = builder.create<mlir::mesh::GetShardingOp>(value);
+        builder.setInsertionPointAfterValue(x._value);
+        auto sharding = builder.create<mlir::mesh::GetShardingOp>(x._value);
         ret_values.emplace_back(sharding);
         _func.insertResult(idx++, sharding.getType(), {});
       }
@@ -219,7 +245,7 @@ uint64_t DepManager::handleResult(mlir::ImplicitLocOpBuilder &builder) {
 void DepManager::deliver(const std::vector<intptr_t> &output, uint64_t sz) {
   size_t pos = 0;
   for (auto &x : _inOut) {
-    if (x._value) {
+    if (x.isResult()) {
       assert(output.size() && sz);
       auto get_dynmemref = [](const intptr_t *buff, size_t &pos, int rank,
                               bool enabled) {
@@ -240,19 +266,23 @@ void DepManager::deliver(const std::vector<intptr_t> &output, uint64_t sz) {
       auto halos = get_dynmemref(output.data(), pos, 2, x._isDist);
       auto offs = get_dynmemref(output.data(), pos, 2, x._isDist);
 
-      if (x._setResFunc) {
-        x._setResFunc(x._rank, std::move(data), std::move(splits),
-                      std::move(halos), std::move(offs));
+      auto base = NOGUID;
+      if (x._aliasOf != NOGUID) {
+        auto b = findInOut(x._aliasOf);
+        assert(b);
+        if (b->_isAlive || b->_numAliases) {
+          base = x._aliasOf;
+        }
       }
+      x._setResFunc(x._deferred, x._rank, std::move(data), std::move(splits),
+                    std::move(halos), std::move(offs), base);
       if (x._rank > 0 && x._isDist) {
       }
-    } else if (x._alwaysCallResFunc) {
-      x._setResFunc(x._rank, {}, {}, {}, {});
     }
-    if (!x._readyFuncs.empty()) {
-      for (auto cb : x._readyFuncs) {
-        cb(x._guid);
-      }
+  }
+  for (auto &x : _inOut) {
+    for (auto cb : x._readyFuncs) {
+      cb(x._guid);
     }
   }
   _inOut.clear();

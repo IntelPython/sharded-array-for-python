@@ -7,7 +7,9 @@
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/jit/DepManager.hpp"
+
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 
 #include <algorithm>
@@ -92,8 +94,8 @@ struct DeferredReduceOp : public Deferred {
       : Deferred(a.dtype(), {}, a.device(), a.team()), // FIXME rank
         _a(a.guid()), _dim(dim), _op(op) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     // FIXME reduction over individual dimensions is not supported
     auto av = dm.getDependent(builder, Registry::get(_a));
     // return type 0d with same dtype as input
@@ -103,15 +105,8 @@ struct DeferredReduceOp : public Deferred {
     // reduction op
     auto res = createReduceOp(builder, _op, outTyp, av, _dim);
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                        this->device(), this->team(),
-                                        std::move(data), std::move(splits),
-                                        std::move(halos), std::move(offs)));
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_REDUCEOP; }

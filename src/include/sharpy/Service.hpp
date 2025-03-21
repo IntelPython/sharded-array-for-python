@@ -24,6 +24,6 @@ struct Service {
   /// this is not blocking, use futures for synchronization
   static service_future_type run();
   /// signal that the given FutureArray is no longer needed and can be deleted
-  static void drop(id_type a);
+  static void drop(id_type a, id_type dep = NOGUID);
 };
 } // namespace SHARPY

@@ -13,6 +13,7 @@
 #include "sharpy/LinAlgOp.hpp"
 #include "sharpy/NDArray.hpp"
 #include "sharpy/Registry.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/DepManager.hpp"
 
@@ -252,8 +253,8 @@ struct DeferredEWBinOp : public Deferred {
                  broadcast(a.shape(), b.shape()), a.device(), a.team()),
         _a(a.guid()), _b(b.guid()), _op(op) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto bv = dm.getDependent(builder, Registry::get(_b));
 
@@ -278,20 +279,8 @@ struct DeferredEWBinOp : public Deferred {
       res = createEWBinOp(builder, _op, outTyp, bv, av);
     }
 
-    dm.addVal(this->guid(), res,
-              [this, isInplace](uint64_t rank, DynMemRef &&data,
-                                DynMemRef &&splits, DynMemRef &&halos,
-                                DynMemRef &&offs) {
-                if (isInplace) {
-                  this->set_value(Registry::get(this->_a).get());
-                } else {
-                  this->set_value(mk_tnsr(this->guid(), _dtype, this->shape(),
-                                          this->device(), this->team(),
-                                          std::move(data), std::move(splits),
-                                          std::move(halos), std::move(offs)));
-                }
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc, isInplace ? _a : NOGUID);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_EWBINOP; }

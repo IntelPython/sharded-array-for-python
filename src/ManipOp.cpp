@@ -8,6 +8,7 @@
 #include "sharpy/Deferred.hpp"
 #include "sharpy/Factory.hpp"
 #include "sharpy/NDArray.hpp"
+#include "sharpy/SetResFuncImpls.hpp"
 #include "sharpy/TypeDispatch.hpp"
 #include "sharpy/jit/DepManager.hpp"
 
@@ -28,8 +29,8 @@ struct DeferredReshape : public Deferred {
       : Deferred(a.dtype(), shape, a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     ::mlir::SmallVector<::mlir::Value> shp(shape().size());
     for (auto i = 0ul; i < shape().size(); ++i) {
@@ -46,24 +47,9 @@ struct DeferredReshape : public Deferred {
     auto op =
         builder.create<::imex::ndarray::ReshapeOp>(outTyp, av, shp, copyA);
 
-    dm.addVal(
-        this->guid(), op,
-        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-               DynMemRef &&halos, DynMemRef &&offs) {
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), std::move(data), std::move(splits),
-                           std::move(halos), std::move(offs));
-          if (_copy != COPY_ALWAYS) {
-            throw std::runtime_error("copy-free reshape not supported");
-            if (Registry::has(_a)) {
-              t->set_base(Registry::get(_a).get());
-            } // else _a is a temporary and was dropped
-          }
-          this->set_value(std::move(t));
-        },
-        true);
+    dm.addVal(this, op, defaultSetResFunc, _copy != COPY_ALWAYS ? _a : NOGUID);
 
-    return false;
+    return DONE;
   }
 
   FactoryId factory() const override { return F_RESHAPE; }
@@ -86,8 +72,8 @@ struct DeferredAsType : public Deferred {
       : Deferred(dtype, a.shape(), a.device(), a.team()), _a(a.guid()),
         _copy(copy) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto arType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
     if (!arType) {
@@ -100,22 +86,8 @@ struct DeferredAsType : public Deferred {
         arType.cloneWith(std::nullopt, mlirElType));
     auto res = builder.create<::imex::ndarray::CastElemTypeOp>(
         outType, av, ::imex::getIntAttr(builder, _copy, 1));
-    dm.addVal(
-        this->guid(), res,
-        [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-               DynMemRef &&halos, DynMemRef &&offs) {
-          std::cerr << "callback" << std::endl;
-          auto t = mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                           this->team(), std::move(data), std::move(splits),
-                           std::move(halos), std::move(offs));
-          if (!this->_copy && Registry::has(_a)) {
-            std::cerr << "setting base" << std::endl;
-            t->set_base(Registry::get(_a).get());
-          } // else _a is a temporary and was dropped
-          this->set_value(std::move(t));
-        },
-        true);
-    return false;
+    dm.addVal(this, res, defaultSetResFunc, _a);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_ASTYPE; }
@@ -135,8 +107,8 @@ struct DeferredToDevice : public Deferred {
   DeferredToDevice(const array_i::future_type &a, const std::string &device)
       : Deferred(a.dtype(), a.shape(), device, a.team()), _a(a.guid()) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto av = dm.getDependent(builder, Registry::get(_a));
     auto srcType = ::mlir::dyn_cast<::mlir::RankedTensorType>(av.getType());
     if (!srcType) {
@@ -162,16 +134,8 @@ struct DeferredToDevice : public Deferred {
     auto outType = mlir::RankedTensorType::get(
         srcType.getShape(), srcType.getElementType(), envsAttr);
     auto res = builder.create<::imex::ndarray::CopyOp>(outType, av);
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                this->set_value(std::move(t));
-              });
-    return false;
+    dm.addVal(this, res, defaultSetResFunc);
+    return DONE;
   }
 
   FactoryId factory() const override { return F_TODEVICE; }
@@ -191,8 +155,8 @@ struct DeferredPermuteDims : public Deferred {
       : Deferred(array.dtype(), shape, array.device(), array.team()),
         _array(array.guid()), _axes(axes) {}
 
-  bool generate_mlir(mlir::ImplicitLocOpBuilder &builder,
-                     jit::DepManager &dm) override {
+  RunState generate_mlir(mlir::ImplicitLocOpBuilder &builder,
+                         jit::DepManager &dm) override {
     auto arrayValue = dm.getDependent(builder, Registry::get(_array));
     auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(arrayValue.getType());
     mlir::Value out =
@@ -201,17 +165,9 @@ struct DeferredPermuteDims : public Deferred {
         builder.create<mlir::linalg::TransposeOp>(arrayValue, out, _axes)
             ->getResult(0);
 
-    dm.addVal(this->guid(), res,
-              [this](uint64_t rank, DynMemRef &&data, DynMemRef &&splits,
-                     DynMemRef &&halos, DynMemRef &&offs) {
-                auto t =
-                    mk_tnsr(this->guid(), _dtype, this->shape(), this->device(),
-                            this->team(), std::move(data), std::move(splits),
-                            std::move(halos), std::move(offs));
-                this->set_value(std::move(t));
-              });
+    dm.addVal(this, res, defaultSetResFunc);
 
-    return false;
+    return DONE;
   }
 
   FactoryId factory() const override { return F_PERMUTEDIMS; }
