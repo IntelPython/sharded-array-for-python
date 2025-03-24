@@ -159,11 +159,13 @@ struct DeferredPermuteDims : public Deferred {
                          jit::DepManager &dm) override {
     auto arrayValue = dm.getDependent(builder, Registry::get(_array));
     auto aTyp = ::mlir::cast<::mlir::RankedTensorType>(arrayValue.getType());
+    mlir::Value cpy = builder.create<mlir::tensor::EmptyOp>(
+        aTyp.getShape(), aTyp.getElementType());
+    cpy = builder.create<mlir::linalg::CopyOp>(arrayValue, cpy).getResult(0);
     mlir::Value out =
         builder.create<mlir::tensor::EmptyOp>(shape(), aTyp.getElementType());
-    auto res =
-        builder.create<mlir::linalg::TransposeOp>(arrayValue, out, _axes)
-            ->getResult(0);
+    auto res = builder.create<mlir::linalg::TransposeOp>(cpy, out, _axes)
+                   ->getResult(0);
 
     dm.addVal(this, res, defaultSetResFunc);
 

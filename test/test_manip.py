@@ -103,9 +103,6 @@ class TestManip:
         c2 = sp.to_numpy(b).transpose(1, 0)
         assert numpy.allclose(c1, c2)
 
-    @pytest.mark.skip(
-        reason="canonicalizer removes copies in permute_dims/transpose"
-    )
     def test_permute_dims2(self):
         # === sharpy
         sp_a = sp.arange(0, 2 * 3 * 4, 1)
