@@ -119,7 +119,7 @@ for func in api.api_categories["Creator"]:
     FUNC = func.upper()
     if func == "full":
         exec(
-            f"{func} = lambda shape, val, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, val, dtype, _validate_device(device), team))"
+            f"{func} = lambda shape, val, dtype=float64, device='', team=_team: ndarray(_csp.Creator.full(shape, val, dtype, _validate_device(device), str(team)))"
         )
     elif func == "empty":
         exec(

@@ -110,10 +110,10 @@ struct DeferredFull : public Deferred {
   }
 };
 
-FutureArray *Creator::full(const shape_type &shape, py::object *val,
+FutureArray *Creator::full(const shape_type &shape, const py::object &val,
                            DTypeId dtype, const std::string &device,
                            const std::string &team) {
-  auto v = mk_scalar(*val, dtype);
+  auto v = mk_scalar(val, dtype);
   return new FutureArray(
       defer<DeferredFull>(shape, v, dtype, device, mkTeam(team)));
 }
@@ -231,12 +231,10 @@ std::pair<FutureArray *, bool> Creator::mk_future(const py::object &b,
                                                   const std::string &device,
                                                   const std::string &team,
                                                   DTypeId dtype) {
-  if (py::isinstance<FutureArray>(b)) {
+  if (py::isinstance<FutureArray>(*b)) {
     return {b.cast<FutureArray *>(), false};
   } else if (py::isinstance<py::float_>(b) || py::isinstance<py::int_>(b)) {
-    return {
-        Creator::full({}, const_cast<py::object *>(&b), dtype, device, team),
-        true};
+    return {Creator::full({}, b, dtype, device, team), true};
   }
   throw std::invalid_argument(
       "Invalid right operand to elementwise binary operation");

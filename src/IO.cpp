@@ -23,7 +23,7 @@ struct DeferredFromLocal : public Deferred {
   DeferredFromLocal() = default;
   DeferredFromLocal(py::array npa)
       : Deferred(getDTypeId(npa.dtype()),
-                 {npa.shape(), npa.shape() + npa.ndim()}, {}, 0),
+                 {npa.shape(), npa.shape() + npa.ndim()}, {}, {}),
         _npa(npa) {}
 
   // get our DTypeId from py::dtype

@@ -188,6 +188,11 @@ PYBIND11_MODULE(_sharpy, m) {
 
   py::class_<Creator>(m, "Creator")
       .def("full", &Creator::full)
+      .def("full",
+           [](const shape_type &s, py::none *, DTypeId ty, const std::string &d,
+              const std::string &t) {
+             return Creator::full(s, py::object(py::none()), ty, d, t);
+           })
       .def("arange", &Creator::arange)
       .def("linspace", &Creator::linspace);
 

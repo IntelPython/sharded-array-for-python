@@ -1,11 +1,11 @@
 import numpy as np
 
 import sharpy as sp
-from sharpy import float64
+from sharpy import _team, float64
 from sharpy.numpy import fromfunction
 
 
-def uniform(low, high, size, device="", team=1):
+def uniform(low, high, size, device="", team=_team):
     data = np.random.uniform(low, high, size)
     if len(data.shape) == 0:
         sp_data = sp.full((), data[()], device=device, team=team)
@@ -19,7 +19,7 @@ def uniform(low, high, size, device="", team=1):
     )
 
 
-def rand(*shape, device="", team=1):
+def rand(*shape, device="", team=_team):
     data = np.random.rand(*shape)
     if isinstance(data, float):
         return data
