@@ -112,7 +112,6 @@ struct DeferredReplicate : public Deferred {
 
 void Service::drop(id_type a, id_type dep) {
   if (inited) {
-    std::cerr << "Service::drop(" << a << ", " << dep << ")" << std::endl;
     defer<DeferredService>(DeferredService::DROP, a, dep);
   }
 }

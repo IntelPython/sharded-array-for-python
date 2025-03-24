@@ -208,7 +208,6 @@ struct DeferredMap : public Deferred {
         _func(func) {}
 
   void run() override {
-    std::cerr << "map map map" << std::endl;
     auto aa = Registry::get(_a).get();
     auto a_ptr = std::dynamic_pointer_cast<NDArray>(aa);
     if (!a_ptr) {

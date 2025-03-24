@@ -85,15 +85,9 @@ NDArray::NDArray(id_type guid_, DTypeId dtype_, ssize_t ndims,
              reinterpret_cast<const intptr_t *>(strides)) {}
 
 void NDArray::set_base(const array_i::ptr_type &base) {
-  auto from = dynamic_cast<NDArray *>(base.get());
-  std::cerr << "set_base" << " " << guid() << " -> " << from->guid()
-            << std::endl;
   _base = new SharedBaseObject<array_i::ptr_type>(base);
 }
-void NDArray::set_base(BaseObj *obj) {
-  std::cerr << "set_base" << " " << guid() << std::endl;
-  _base = obj;
-}
+void NDArray::set_base(BaseObj *obj) { _base = obj; }
 
 // **************************************************************************
 

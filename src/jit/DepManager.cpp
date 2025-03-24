@@ -133,9 +133,6 @@ static ::mlir::RankedTensorType getTensorType(const shape_type &shape,
   ::mlir::SmallVector<int64_t> zeros(ndims, 0);
   auto elType(getMLIRType(builder, impl->dtype()));
 
-  std::cerr << "storeMR " << guid << " " << impl->owned_data()._allocated
-            << std::endl;
-
   auto storeMR = [ndims](const DynMemRef &mr) -> intptr_t * {
     intptr_t *buff = new intptr_t[memref_sz(ndims)];
     buff[0] = reinterpret_cast<intptr_t>(mr._allocated);
