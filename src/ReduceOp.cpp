@@ -104,6 +104,8 @@ struct DeferredReduceOp : public Deferred {
         aTyp.cloneWith(shape(), aTyp.getElementType()));
     // reduction op
     auto res = createReduceOp(builder, _op, outTyp, av, _dim);
+    // shard result, 0d tensors get replicated
+    res = jit::shardNow(builder, res, team(), true);
 
     dm.addVal(this, res, defaultSetResFunc);
     return DONE;

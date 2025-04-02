@@ -70,7 +70,7 @@ namespace SHARPY {
 namespace jit {
 
 mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
-                     const std::string &team) {
+                     const std::string &team, bool for_users) {
   if (team.empty()) {
     return val;
   }
@@ -82,7 +82,7 @@ mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
   }
   mlir::Value sharding = builder.create<mlir::mesh::ShardingOp>(
       mlir::FlatSymbolRefAttr::get(builder.getContext(), team), splitAxes);
-  return builder.create<mlir::mesh::ShardOp>(val, sharding);
+  return builder.create<mlir::mesh::ShardOp>(val, sharding, for_users);
 }
 
 mlir::SmallVector<mlir::mesh::MeshAxesAttr>

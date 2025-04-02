@@ -61,7 +61,7 @@ inline ::mlir::Type getMLIRType(mlir::ImplicitLocOpBuilder &builder,
 }
 
 mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
-                     const std::string &team);
+                     const std::string &team, bool for_users = false);
 mlir::Value shardNow(mlir::ImplicitLocOpBuilder &builder, mlir::Value val,
                      const std::string &team, const DynMemRef &splits,
                      const DynMemRef &halos, const DynMemRef &offs);
