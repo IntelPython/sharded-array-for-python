@@ -313,7 +313,9 @@ static const std::string cpu_pipeline =
     "convert-math-to-libm,"
     "convert-func-to-llvm,"
     "convert-to-llvm,"
-    "reconcile-unrealized-casts";
+    "reconcile-unrealized-casts,"
+    "canonicalize,"
+    "cse";
 
 static const std::string gpu_pipeline =
     "add-gpu-regions,"
