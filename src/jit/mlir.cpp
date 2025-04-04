@@ -269,7 +269,7 @@ JIT::createExecutionEngine(::mlir::ModuleOp &module) {
 }
 
 static const std::string cpu_pipeline =
-    "func.func(sharding-propagation),"
+    "func.func(sharding-propagation{traversal=forward}),"
     "coalesce-shard-ops,"
     "canonicalize,"
     "func.func(mesh-spmdization),"
@@ -320,7 +320,7 @@ static const std::string cpu_pipeline =
 static const std::string gpu_pipeline =
     "add-gpu-regions,"
     "canonicalize,"
-    "func.func(sharding-propagation),"
+    "func.func(sharding-propagation{traversal=forward}),"
     "coalesce-shard-ops,"
     "canonicalize,"
     "func.func(mesh-spmdization),"
